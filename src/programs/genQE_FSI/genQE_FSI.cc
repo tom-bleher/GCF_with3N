@@ -239,11 +239,14 @@ bool init(int argc, char ** argv)
   outtree->Branch("pLead_pre",pLead_pre,"pLead_pre[3]/D");
   outtree->Branch("pRec_pre",pRec_pre,"pRec_pre[3]/D");
   outtree->Branch("doFSI",&doFSI_flag,"doFSI/I");
-  // Per-leg absorption flags. True (1) when GENIE's cascade produced no
-  // surviving nucleon descendant for that leg (typically NN absorption).
-  // The event is NOT killed in that case; the GCF primary weight is kept.
-  // Selection of (e,e'pp) topology must require !lead_absorbed && !rec_absorbed
-  // (the post-FSI 4-momentum of an absorbed leg is the zero sentinel).
+  // Per-leg absorption flags (diagnostics only). True (1) when the ORIGINAL
+  // nucleon ceased to exist in the cascade (typically NN absorption). The
+  // event is NOT killed; the GCF primary weight is kept. The leg's saved
+  // 4-momentum is then its leading nucleon ejectum, promoted from the
+  // secondaries (what a detector would reconstruct as the leg); it is zero
+  // only if the absorption produced no nucleon ejecta at all. Topology
+  // selection must use the FINAL state (particle types and momenta), never
+  // these flags -- an experiment cannot veto on absorption.
   outtree->Branch("lead_absorbed",&lead_absorbed,"lead_absorbed/I");
   outtree->Branch("rec_absorbed", &rec_absorbed, "rec_absorbed/I");
   outtree->Branch("weight",&weight,"weight/D");

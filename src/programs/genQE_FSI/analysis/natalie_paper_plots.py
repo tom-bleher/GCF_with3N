@@ -60,17 +60,6 @@ M_AVG = 0.5 * (M_P + M_N)  # average nucleon mass
 PROTON = 2212
 NEUTRON = 2112
 
-# Nuclear masses for the energy-conservation candidate selection (econs mode).
-# All values are atomic masses minus the electrons, in GeV; sources are
-# AME2020 atomic-mass evaluations rounded to 4 dp.
-M_12C    = 11.1747   # target nucleus
-M_11B    = 10.2552   # (e,e'p) residual when a proton is removed
-M_11C    = 10.2581   # (e,e'p) residual when a neutron is removed (used as backup)
-M_10Be   =  9.3261   # (e,e'pp) residual when two protons are removed
-DEFAULT_ECONS_MA      = M_12C
-DEFAULT_ECONS_MRES_EEP  = M_11B
-DEFAULT_ECONS_MRES_EEPP = M_10Be
-
 # ---------------------------------------------------------------------------
 # T+SCX parameters — Eq. 3 of the paper
 #
@@ -424,301 +413,12 @@ def compute_best_recoil_kinematics(d):
     return d
 
 
-# ===================================================================
-#  Energy-conservation candidate selection (econs mode)
-# ===================================================================
-#
-# Loop over all above-kF protons in the event (gen-level lead, gen-level
-# recoil if proton, plus every FSI-secondary proton).  Per channel, keep
-# the event only if exactly ONE candidate (for e,e'p) or one PAIR (for
-# e,e'pp) satisfies energy conservation with respect to the assumed
-# residual nucleus.  Conservation is enforced via |m_miss - m_residual|
-# within a configurable tolerance, where
-#       m_miss  =  sqrt( E_miss^2  -  |p_miss|^2 )
-#       E_miss  =  E_beam + m_A - E_e' - sum(E_chosen_protons)
-#       p_miss  =  q - sum(p_chosen_protons)
-# When exactly one candidate (pair) passes, its 4-vector(s) replace
-# d["lead_post"] (and d["recoil_post"] for the pair case) so the
-# downstream kinematics use the chosen proton(s).  When 0 or >=2 candidates
-# (pairs) pass, the event is dropped (weight -> 0).
-#
-# Compatible with both samples that have FSI-secondary momentum branches
-# (sec_pdg, sec_px, sec_py, sec_pz) and samples without; in the latter
-# case only the gen-level lead/recoil are considered.
-
-_KMAX_PROTON_CANDIDATES = 12   # 2 main + up to 10 FSI-secondary protons / event
-
-
-def _collect_proton_candidates(d):
-    """Build padded per-event arrays of every proton candidate in the event.
-
-    A candidate is *any* final-state proton (no |p|>kF filter at this step
-    -- the existing SRC `pmiss_min` cut handles the momentum threshold
-    downstream).
-
-    Returns (cand_p4, cand_valid) where
-      cand_p4    : ndarray (n_events, KMAX, 4)  -- (px, py, pz, E)
-      cand_valid : ndarray (n_events, KMAX)     -- bool, True for real slots
-    Slot 0 is reserved for the gen-level lead, slot 1 for the gen-level
-    recoil, and slots 2.. for FSI-secondary protons (in tree order).  Slot
-    0 / 1 are masked invalid if the underlying nucleon is not a proton.
-    Vectorised throughout via awkward; runs ~ms even for 10M events.
-    """
-    n = len(d["weight"])
-    K = _KMAX_PROTON_CANDIDATES
-    cand_p4    = np.zeros((n, K, 4))
-    cand_valid = np.zeros((n, K), dtype=bool)
-
-    def _p3_mag(arr3): return np.sqrt(arr3[:, 0]**2 + arr3[:, 1]**2 + arr3[:, 2]**2)
-
-    # Slot 0: gen-level lead (proton-mass on-shell energy)
-    lp = d["lead_post"]
-    cand_p4[:, 0, 0] = lp[:, 0]
-    cand_p4[:, 0, 1] = lp[:, 1]
-    cand_p4[:, 0, 2] = lp[:, 2]
-    cand_p4[:, 0, 3] = np.sqrt(_p3_mag(lp)**2 + M_P**2)
-    cand_valid[:, 0] = (d["lead_type"] == PROTON)
-
-    # Slot 1: gen-level recoil
-    rp = d["recoil_post"]
-    cand_p4[:, 1, 0] = rp[:, 0]
-    cand_p4[:, 1, 1] = rp[:, 1]
-    cand_p4[:, 1, 2] = rp[:, 2]
-    cand_p4[:, 1, 3] = np.sqrt(_p3_mag(rp)**2 + M_P**2)
-    cand_valid[:, 1] = (d["rec_type"]  == PROTON)
-
-    # Slots 2..: FSI-secondary protons.  Vectorised via awkward:
-    #   1. filter the jagged arrays to keep only protons
-    #   2. pad to (K-2) entries per event, clip overflow
-    #   3. fill missing entries with 0 and build a corresponding valid mask.
-    sec_pdg = d.get("sec_pdg")
-    sec_px  = d.get("sec_px")
-    sec_py  = d.get("sec_py")
-    sec_pz  = d.get("sec_pz")
-    if sec_pdg is not None:
-        import awkward as ak
-        Kseco    = K - 2
-        proton   = (sec_pdg == PROTON)
-        spx_p    = sec_px[proton]
-        spy_p    = sec_py[proton]
-        spz_p    = sec_pz[proton]
-        # Pad to a rectangular (n, Kseco) layout.
-        spx_pad = ak.fill_none(ak.pad_none(spx_p, Kseco, axis=1, clip=True), 0.0)
-        spy_pad = ak.fill_none(ak.pad_none(spy_p, Kseco, axis=1, clip=True), 0.0)
-        spz_pad = ak.fill_none(ak.pad_none(spz_p, Kseco, axis=1, clip=True), 0.0)
-        n_proton = ak.to_numpy(ak.num(spx_p, axis=1))
-        spx_arr = ak.to_numpy(spx_pad)
-        spy_arr = ak.to_numpy(spy_pad)
-        spz_arr = ak.to_numpy(spz_pad)
-        vld_arr = (np.arange(Kseco)[None, :] < n_proton[:, None])
-        cand_p4   [:, 2:K, 0] = spx_arr
-        cand_p4   [:, 2:K, 1] = spy_arr
-        cand_p4   [:, 2:K, 2] = spz_arr
-        cand_p4   [:, 2:K, 3] = np.sqrt(spx_arr*spx_arr + spy_arr*spy_arr
-                                       + spz_arr*spz_arr + M_P*M_P)
-        cand_valid[:, 2:K]    = vld_arr
-    return cand_p4, cand_valid
-
-
-def _mmiss_single(electron, cand4, ebeam, m_A):
-    """Missing mass assuming `cand4` is THE detected proton in (e,e'p).
-
-    electron : (n, 4)   -- post-vertex electron 4-vec (px,py,pz,E)
-    cand4    : (n, 4)   -- candidate proton 4-vec (proton-mass on-shell)
-    Returns m_miss (signed: negative under the threshold), shape (n,).
-    """
-    # q = beam - electron (3-vector + energy)
-    qx = -electron[..., 0]
-    qy = -electron[..., 1]
-    qz = ebeam - electron[..., 2]
-    nu = ebeam - electron[..., 3]
-    # missing 4-mom = (nu + m_A - E_p, q - p_p)
-    Emiss_e = nu + m_A - cand4[..., 3]
-    pmiss_x = qx - cand4[..., 0]
-    pmiss_y = qy - cand4[..., 1]
-    pmiss_z = qz - cand4[..., 2]
-    pmiss_sq = pmiss_x*pmiss_x + pmiss_y*pmiss_y + pmiss_z*pmiss_z
-    mmiss_sq = Emiss_e**2 - pmiss_sq
-    return np.where(mmiss_sq > 0, np.sqrt(mmiss_sq), -np.sqrt(-mmiss_sq))
-
-
-def _mmiss_pair(electron, c1, c2, ebeam, m_A):
-    """Missing mass assuming `c1, c2` are THE detected pp pair in (e,e'pp)."""
-    qx = -electron[..., 0]
-    qy = -electron[..., 1]
-    qz = ebeam - electron[..., 2]
-    nu = ebeam - electron[..., 3]
-    Emiss_e = nu + m_A - c1[..., 3] - c2[..., 3]
-    pmiss_x = qx - c1[..., 0] - c2[..., 0]
-    pmiss_y = qy - c1[..., 1] - c2[..., 1]
-    pmiss_z = qz - c1[..., 2] - c2[..., 2]
-    pmiss_sq = pmiss_x*pmiss_x + pmiss_y*pmiss_y + pmiss_z*pmiss_z
-    mmiss_sq = Emiss_e**2 - pmiss_sq
-    return np.where(mmiss_sq > 0, np.sqrt(mmiss_sq), -np.sqrt(-mmiss_sq))
-
-
-def _mref_eep(d, ebeam, m_A):
-    """Per-event reference m_miss for (e,e'p): m_miss of the pre-FSI lead.
-
-    In PWIA pre = post, so the reference equals the m_miss the analysis would
-    compute on the native lead -- the cut is trivially satisfied with the
-    native candidate. In FSI it equals the energy balance the cascade was
-    handed; any candidate whose m_miss matches it ``recovers'' the original
-    knockout event regardless of which absolute nuclear mass the generator
-    used internally.
-    """
-    return _mmiss_single(d["electron"], d["lead_pre"], ebeam, m_A)
-
-
-def _mref_eepp(d, ebeam, m_A):
-    """Per-event reference m_miss for (e,e'pp): m_miss of the pre-FSI pair."""
-    return _mmiss_pair(d["electron"], d["lead_pre"], d["recoil_pre"], ebeam, m_A)
-
-
-def _econs_pick_eep(d, ebeam, m_A, tol):
-    """Find the unique proton consistent with (e,e'p) E-conservation,
-    measured against the pre-FSI lead's m_miss for this event.
-    """
-    cand4, cand_valid = _collect_proton_candidates(d)
-    n, K, _ = cand4.shape
-    electron = d["electron"]           # (n, 4)
-    elec_b   = electron[:, None, :]    # (n, 1, 4)
-    mmiss_all = _mmiss_single(elec_b, cand4, ebeam, m_A)        # (n, K)
-    mref      = _mref_eep(d, ebeam, m_A)                        # (n,)
-    passes    = cand_valid & (np.abs(mmiss_all - mref[:, None]) < tol)
-    npass     = passes.sum(axis=1)
-    mask_one  = (npass == 1)
-    chosen    = np.zeros((n, 4))
-    if mask_one.any():
-        idx = np.argmax(passes[mask_one], axis=1)
-        chosen[mask_one] = cand4[mask_one, idx]
-    return mask_one, chosen, npass
-
-
-def _econs_pick_eepp(d, ebeam, m_A, tol):
-    """Find the unique proton PAIR consistent with (e,e'pp) E-conservation,
-    measured against the pre-FSI (lead, recoil) pair's m_miss for this event.
-    """
-    cand4, cand_valid = _collect_proton_candidates(d)
-    n, K, _ = cand4.shape
-    electron = d["electron"]
-    mref     = _mref_eepp(d, ebeam, m_A)                        # (n,)
-    npass    = np.zeros(n, dtype=int)
-    chosen_i = np.full(n, -1, dtype=int)
-    chosen_j = np.full(n, -1, dtype=int)
-    for i in range(K):
-        valid_i = cand_valid[:, i]
-        if not valid_i.any():
-            continue
-        ci = cand4[:, i]                   # (n, 4)
-        for j in range(i + 1, K):
-            valid_j = cand_valid[:, j]
-            both = valid_i & valid_j
-            if not both.any():
-                continue
-            cj = cand4[:, j]
-            mmiss = _mmiss_pair(electron, ci, cj, ebeam, m_A)
-            ok = both & (np.abs(mmiss - mref) < tol)
-            if not ok.any():
-                continue
-            # Record: first match wins for indexing, but we still count
-            # all passes so we can drop events with > 1.
-            first_pass = ok & (npass == 0)
-            chosen_i[first_pass] = i
-            chosen_j[first_pass] = j
-            npass += ok.astype(int)
-    mask_one  = (npass == 1)
-    chosen_p1 = np.zeros((n, 4))
-    chosen_p2 = np.zeros((n, 4))
-    if mask_one.any():
-        rows = np.where(mask_one)[0]
-        chosen_p1[rows] = cand4[rows, chosen_i[rows]]
-        chosen_p2[rows] = cand4[rows, chosen_j[rows]]
-    return mask_one, chosen_p1, chosen_p2, npass
-
-
-class Sample:
-    """Per-sample container that exposes `.eep` and `.eepp` views.
-
-    In legacy mode both views point at the SAME underlying dict (the
-    behaviour before econs mode was added). In econs mode they point at
-    two different dicts, each with their own lead/recoil chosen by the
-    energy-conservation candidate selection for that channel.
-
-    The object also forwards `[key]` lookups to `.eepp` so any plot code
-    written for a single `d` still works on the eepp-side data by
-    default. Plot code that wants the eep-side data explicitly uses
-    `sample.eep`.
-    """
-    def __init__(self, d_eep, d_eepp):
-        self.eep  = d_eep
-        self.eepp = d_eepp
-
-    def __getitem__(self, k):
-        return self.eepp[k]
-
-    def get(self, k, default=None):
-        return self.eepp.get(k, default)
-
-    def __contains__(self, k):
-        return k in self.eepp
-
-
-def _S(x, channel):
-    """Pick the `channel`-side dict from either a Sample or a plain d."""
-    if isinstance(x, Sample):
-        return x.eep if channel == "eep" else x.eepp
-    return x
-
-
-def econs_resolve(d, channel, ebeam, m_A, tol, Ebeam_for_kin=None):
-    """Return a new dict that's `d` with lead_post / recoil_post (and types)
-    overwritten by the E-conservation-chosen proton(s) for `channel`
-    ('eep' or 'eepp'). Events whose pass-count is not exactly 1 get their
-    weight zeroed. Downstream kinematic columns are recomputed.
-
-    Acceptance criterion: a candidate (or pair) is accepted when its m_miss
-    matches the *pre-FSI* lead (resp. lead+recoil) m_miss within `tol`. This
-    makes the cut self-referential -- trivially satisfied in PWIA, and a
-    real "did the cascade preserve enough kinematics?" test in FSI.
-    """
-    import copy
-    d2 = copy.copy(d)                    # shallow copy is enough: we rewrite arrays
-    d2["lead_post"]  = d["lead_post"].copy()
-    d2["recoil_post"]= d["recoil_post"].copy()
-    d2["lead_type"]  = d["lead_type"].copy()
-    d2["rec_type"]   = d["rec_type"].copy()
-    d2["weight"]     = d["weight"].copy()
-
-    if channel == "eep":
-        mask_one, chosen_p4, npass = _econs_pick_eep(d2, ebeam, m_A, tol)
-        d2["lead_post"][mask_one] = chosen_p4[mask_one]
-        d2["lead_type"][mask_one] = PROTON
-        d2["weight"][~mask_one]   = 0.0
-        d2["econs_npass"]         = npass
-    elif channel == "eepp":
-        mask_one, p1, p2, npass = _econs_pick_eepp(d2, ebeam, m_A, tol)
-        d2["lead_post"][mask_one]  = p1[mask_one]
-        d2["recoil_post"][mask_one] = p2[mask_one]
-        d2["lead_type"][mask_one]  = PROTON
-        d2["rec_type"][mask_one]   = PROTON
-        d2["weight"][~mask_one]    = 0.0
-        d2["econs_npass"]          = npass
-    else:
-        raise ValueError(f"channel must be 'eep' or 'eepp', got {channel!r}")
-
-    # Recompute derived kinematics with the new lead/recoil.
-    if Ebeam_for_kin is None:
-        Ebeam_for_kin = ebeam
-    compute_kinematics(d2, Ebeam=Ebeam_for_kin)
-    compute_best_recoil_kinematics(d2)
-    return d2
-
-
 def _apply_detection_recoil(d):
     """Switch an FSI sample's (e,e'pp) recoil from the per-leg definition
     (the transported SRC partner) to the detection-based one (ANY detected
     second proton: gen recoil or FSI secondary, highest momentum wins).
+    This is the DEFAULT: the analysis emulates a measurement of the final
+    state; disable with --per-leg-recoil for generator-truth studies.
 
     Implemented by overwriting the per-leg recoil fields with their *_best
     counterparts computed by compute_best_recoil_kinematics /
@@ -829,17 +529,16 @@ def tscx_weight_eepp(d):
     pp = (lt == PROTON)  & (rt == PROTON)
     pn = (lt == PROTON)  & (rt == NEUTRON)
     np_= (lt == NEUTRON) & (rt == PROTON)
-    nn = (lt == NEUTRON) & (rt == NEUTRON)
     # P(final = (p,p)):
     #   (p,p): no flip = 1 - PP2NN - PP2NP - PP2PN  = 0.9081
     #   (p,n): recoil flips n->p  = PN2PP            = 0.041
     #   (n,p): lead   flips n->p  = NP2PP            = 0.035
-    #   (n,n): both   flip        = NN2PP            = 0.0029
+    #   (n,n): both-flip nn->pp is OMITTED, matching Eq. 3 of the paper
+    #          (three terms only; no sigma_(e,e'nn) contribution).
     T_NN = T_SCX["T_NN"]
     w[pp]  = (1.0 - T_SCX["PP2NN"] - T_SCX["PP2NP"] - T_SCX["PP2PN"]) * T_NN
     w[pn]  = T_SCX["PN2PP"] * T_NN
     w[np_] = T_SCX["NP2PP"] * T_NN
-    w[nn]  = T_SCX["NN2PP"] * T_NN
     return w
 
 
@@ -1384,7 +1083,6 @@ def figure2(pwia, fsi, outdir, clas=None):
     """Fig 2: Leading-proton momentum for 12C(e,e'p).
     Data shown only on right (SRC cuts) panel; sim is area-normalized to
     data (paper Fig 2 caption)."""
-    pwia = _S(pwia, "eep"); fsi = _S(fsi, "eep")
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.5))
     bins = np.linspace(0.5, 2.5, 31)   # 0.067 GeV/c bins (was 60 -> 30 bins)
 
@@ -1417,8 +1115,7 @@ def figure3(pwia, fsi, outdir, clas=None, clas_ev=None):
     `clas_ev` is provided; otherwise falls back to the stored Hists-file
     histograms `epp_mom1`/`epp_mom2` (40 / 17 bins).
 
-    Channel: (e,e'pp). Uses the eepp-side data when in econs mode."""
-    pwia = _S(pwia, "eepp"); fsi = _S(fsi, "eepp")
+    Channel: (e,e'pp)."""
     fig, axes = plt.subplots(2, 2, figsize=(10, 8))
     bins_lead = np.linspace(0.5, 2.5, 21)   # 0.10 GeV/c bin (was 41)
     bins_rec  = np.linspace(0.35, 1.2, 18)  # 0.05 GeV/c bin (matches epp_mom2)
@@ -1468,9 +1165,8 @@ def figure4(pwia, fsi, outdir, clas=None, clas_ev=None):
     (e,e'p) data comes from the Hists file (~5600 events, not in the raw
     event ntuple).  (e,e'pp) data is re-binned from the raw event file
     when `clas_ev` is provided."""
-    # Channel-specific views (legacy mode: both views are the same dict).
-    pwia_eep  = _S(pwia, "eep");  pwia_eepp = _S(pwia, "eepp")
-    fsi_eep   = _S(fsi,  "eep");  fsi_eepp  = _S(fsi,  "eepp")
+    pwia_eep = pwia_eepp = pwia
+    fsi_eep = fsi_eepp = fsi
     fig, axes = plt.subplots(2, 2, figsize=(10, 8))
     bins = np.linspace(0.4, 1.0, 13)   # 0.05 GeV/c bins
 
@@ -1518,9 +1214,8 @@ def figure5(pwia, fsi, outdir, clas=None):
     """Fig 5: (e,e'pp)/(e,e'p) ratio vs p_miss after SRC cuts.
     Paper: x=[0.4,1.0], y=[0,0.2], linear. Uses Natalie's pp_to_p TGraph
     for the measured ratio."""
-    # Channel-specific views (legacy mode: same dict for both).
-    pwia_eep  = _S(pwia, "eep");  pwia_eepp = _S(pwia, "eepp")
-    fsi_eep   = _S(fsi,  "eep");  fsi_eepp  = _S(fsi,  "eepp")
+    pwia_eep = pwia_eepp = pwia
+    fsi_eep = fsi_eepp = fsi
     fig, ax = plt.subplots(figsize=(6, 5))
 
     data_entry = _clas(clas, ("fig5_ratio", "src"))
@@ -1601,13 +1296,11 @@ def figure6(pwia, fsi, outdir, clas=None, clas_ev=None):
     """Fig 6: CM momentum components for 12C(e,e'pp) in the pmiss frame
     (z-axis along pmiss, q in x-z plane — Ref. [21] convention).
 
-    Channel: (e,e'pp). Uses the eepp-side data when in econs mode.
 
     Paper x-ranges: pcm_x,y in [-0.5,0.5], pcm_z in [-0.2,0.8],
     |pcm| in [0,0.8]. Data (bottom row, SRC cuts) is re-binned from the
     raw (e,e'pp) event file when `clas_ev` is provided.  Binning matches
     the paper (~20 bins per column)."""
-    pwia = _S(pwia, "eepp"); fsi = _S(fsi, "eepp")
     fig, axes = plt.subplots(2, 4, figsize=(16, 7))
 
     # (axis label, sim-key, xlim, bins)
@@ -1655,8 +1348,7 @@ def figure7(pwia, fsi, outdir, clas=None, clas_ev=None):
 
     Data (SRC-cut column) is re-binned from the raw (e,e'pp) event file
     when `clas_ev` is provided; otherwise uses the stored `epp_k` TH1D.
-    Channel: (e,e'pp). Uses the eepp-side data when in econs mode."""
-    pwia = _S(pwia, "eepp"); fsi = _S(fsi, "eepp")
+    Channel: (e,e'pp)."""
     fig, axes = plt.subplots(1, 2, figsize=(10, 4.5))
     bins = np.linspace(0.2, 1.0, 17)   # 0.05 GeV/c bins (was 21)
 
@@ -1750,10 +1442,6 @@ def _draw_gcf_mf(ax, fsi_src, fsi_mf, var_key, bins, *, channel,
     `data_entry` is None, to the first non-empty calculation). Data is
     overlaid as black points.
     """
-    # Pick the channel-specific dict in econs mode (legacy mode: same dict).
-    _side = "eepp" if channel == "epp" else "eep"
-    fsi_src = _S(fsi_src, _side)
-    fsi_mf  = _S(fsi_mf,  _side)
     if data_entry is not None and data_entry.get("edges") is not None:
         bins = data_entry["edges"]
 
@@ -1812,8 +1500,6 @@ def figure8(fsi_src, fsi_mf, outdir, clas=None, clas_ev=None):
     if fsi_mf is None:
         print("  [SKIP] fig8 — no MF sample provided")
         return
-    fsi_src = _S(fsi_src, "eepp"); fsi_mf = _S(fsi_mf, "eepp")
-
     fig, axes = plt.subplots(1, 4, figsize=(16, 4.5))
     components = [
         # (label, sim-key, xlim, bins, clas-map-key)  — data keys are the
@@ -1910,13 +1596,9 @@ def figure10(fsi_src, fsi_mf, outdir, clas=None):
         (identical to Fig 5's FULL definition) -- used for the GCF sample,
         matching the paper (its fig 10 GCF curve equals its fig 5 FULL).
         use_best_recoil=True: any second proton (best FSI secondary) --
-        required for the MF sample, which has no generator-level recoil.
-
-        In econs mode `sample` is a Sample with separate `.eep` / `.eepp`
-        views (different chosen leads/pairs); in legacy mode both views
-        are the same underlying dict."""
-        d_eep  = _S(sample, "eep")
-        d_eepp = _S(sample, "eepp")
+        required for the MF sample, which has no generator-level recoil."""
+        d_eep  = sample
+        d_eepp = sample
         src_eep   = apply_src_cuts(d_eep)
         src_eepp  = apply_src_cuts(d_eepp)
         if use_best_recoil:
@@ -1990,8 +1672,8 @@ def print_effective_transparencies(pwia, fsi):
     both samples had been thrown to the same integrated luminosity.
     """
     src = apply_src_cuts
-    pwia_eep  = _S(pwia, "eep");  pwia_eepp = _S(pwia, "eepp")
-    fsi_eep   = _S(fsi,  "eep");  fsi_eepp  = _S(fsi,  "eepp")
+    pwia_eep = pwia_eepp = pwia
+    fsi_eep = fsi_eepp = fsi
 
     # Luminosity scale relative to the eep-side total weight (matches
     # the paper definition; equivalent to using the eepp side since the
@@ -2087,37 +1769,15 @@ def main():
                               "percentile (e.g. 99.5), applied per sample. "
                               "Variance reduction at the cost of small bias."))
 
-    # ---- Energy-conservation candidate selection (econs mode) ----
-    parser.add_argument("--detection-recoil", action="store_true",
-                        help="Detection-based (e,e'pp) definition for FSI "
-                             "samples: the recoil is ANY detected second "
+    parser.add_argument("--per-leg-recoil", action="store_true",
+                        help="Use the generator-truth (e,e'pp) recoil for FSI "
+                             "samples: the recoil must be the transported SRC "
+                             "partner. Default (off) is the detection-based "
+                             "definition -- the recoil is ANY detected second "
                              "proton (gen recoil OR FSI-secondary, whichever "
                              "has the highest momentum), matching what an "
-                             "experiment measures. Default (off) is the "
-                             "per-leg definition: the recoil must be the "
-                             "transported SRC partner. PWIA and T+SCX are "
+                             "experiment measures. PWIA and T+SCX are "
                              "unaffected (no FSI secondaries).")
-    parser.add_argument("--econs", action="store_true",
-                        help=("Enable energy-conservation candidate selection. "
-                              "For (e,e'p)/(e,e'pp) the analysis loops over all "
-                              "above-kF protons in the event and keeps only "
-                              "events where exactly one proton (resp. pair) "
-                              "satisfies energy conservation with the assumed "
-                              "residual nucleus mass. The chosen proton(s) "
-                              "replace the gen-level lead/recoil; events with "
-                              "0 or >=2 passes are dropped (weight = 0)."))
-    parser.add_argument("--econs-mA", type=float, default=DEFAULT_ECONS_MA,
-                        help=f"target nucleus mass M_A in GeV (default {DEFAULT_ECONS_MA:.4f} = 12C)")
-    parser.add_argument("--econs-mres-eep", type=float, default=DEFAULT_ECONS_MRES_EEP,
-                        help=("(e,e'p) residual nucleus mass in GeV "
-                              f"(default {DEFAULT_ECONS_MRES_EEP:.4f} = 11B)"))
-    parser.add_argument("--econs-mres-eepp", type=float, default=DEFAULT_ECONS_MRES_EEPP,
-                        help=("(e,e'pp) residual nucleus mass in GeV "
-                              f"(default {DEFAULT_ECONS_MRES_EEPP:.4f} = 10Be)"))
-    parser.add_argument("--econs-tol-eep", type=float, default=0.05,
-                        help="(e,e'p) |m_miss - m_res| tolerance in GeV (default 0.05)")
-    parser.add_argument("--econs-tol-eepp", type=float, default=0.05,
-                        help="(e,e'pp) |m_miss - m_res| tolerance in GeV (default 0.05)")
     args = parser.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
@@ -2140,41 +1800,14 @@ def main():
         if acc is not None:
             apply_acceptance_best_recoil(d, acc)
 
-        if args.detection_recoil and is_fsi:
+        if (not args.per_leg_recoil) and is_fsi:
             _apply_detection_recoil(d)
             n_det = int(d["has_recoil_best"].sum()) if "has_recoil_best" in d \
                     else int((d["rec_type"] == PROTON).sum())
             print(f"    detection-recoil mode: {n_det} events with a "
                   f"detected second proton")
 
-        if not args.econs:
-            return Sample(d, d)
-
-        # Econs mode: build two channel-specific copies with E-conservation
-        # candidate selection applied. The lead/recoil arrays are rewritten
-        # to the chosen proton(s); events with 0 or >=2 passes get
-        # weight = 0.  Kinematics and acceptance are re-derived per channel.
-        d_eep  = econs_resolve(d, "eep",  args.ebeam,
-                               args.econs_mA, args.econs_tol_eep)
-        d_eepp = econs_resolve(d, "eepp", args.ebeam,
-                               args.econs_mA, args.econs_tol_eepp)
-        if acc is not None:
-            apply_acceptance_pipeline (d_eep,  acc, ebeam=args.ebeam)
-            apply_acceptance_pipeline (d_eepp, acc, ebeam=args.ebeam)
-            apply_acceptance_best_recoil(d_eep,  acc)
-            apply_acceptance_best_recoil(d_eepp, acc)
-        npass_eep  = d_eep.get("econs_npass")
-        npass_eepp = d_eepp.get("econs_npass")
-        n_tot = len(d["weight"])
-        if npass_eep is not None:
-            n_eep = int((npass_eep == 1).sum())
-            print(f"    econs (e,e'p):  pass=1: {n_eep:>7d} / {n_tot}  "
-                  f"(0: {int((npass_eep==0).sum())}, >=2: {int((npass_eep>=2).sum())})")
-        if npass_eepp is not None:
-            n_eepp = int((npass_eepp == 1).sum())
-            print(f"    econs (e,e'pp): pass=1: {n_eepp:>7d} / {n_tot}  "
-                  f"(0: {int((npass_eepp==0).sum())}, >=2: {int((npass_eepp>=2).sum())})")
-        return Sample(d_eep, d_eepp)
+        return d
 
     if not args.no_acceptance:
         if args.seed is None:

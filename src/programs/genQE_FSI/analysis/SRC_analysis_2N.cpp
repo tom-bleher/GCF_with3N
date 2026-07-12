@@ -237,10 +237,11 @@ int main(int argc, char **argv) {
     tree->Branch("recoilCX", &br_recoilCX, "recoilCX/O");
     tree->Branch("leadElastic", &br_leadElastic, "leadElastic/O");
     tree->Branch("recoilElastic", &br_recoilElastic, "recoilElastic/O");
-    // Per-leg absorption flags. Set when GENIE produced no surviving nucleon
-    // descendant for that leg. The event is KEPT with its GCF primary weight;
-    // the absorbed leg's lead_post / recoil_post is zero, and any surviving
-    // partner plus nucleon-typed secondaries still contribute to nAboveKF.
+    // Per-leg absorption flags (diagnostics only). Set when the ORIGINAL
+    // nucleon ceased to exist in the cascade. The event is KEPT with its GCF
+    // primary weight; lead_post / recoil_post then hold the leg's promoted
+    // leading nucleon ejectum (zero only if no nucleon ejecta exists).
+    // Analyses should select on the final state, not on these flags.
     tree->Branch("leadAbsorbed", &br_leadAbsorbed, "leadAbsorbed/O");
     tree->Branch("recAbsorbed",  &br_recAbsorbed,  "recAbsorbed/O");
 
