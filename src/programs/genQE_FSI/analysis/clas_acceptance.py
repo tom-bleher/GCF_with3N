@@ -245,7 +245,7 @@ class ClasAcceptance:
     reproducible momentum smearing."""
 
     def __init__(self, mapfile='Acceptance/map_eg2_adin.root', seed=42,
-                 electron_theta_min_deg=8.0, electron_theta_max_deg=45.0,
+                 electron_theta_min_deg=None, electron_theta_max_deg=None,
                  map_smoothing_radius=1):
         """map_smoothing_radius : minimum (2r+1)^3 box used in the *first*
         map_weight lookup pass.  The eg2 acceptance map has only ~10
@@ -274,13 +274,19 @@ class ClasAcceptance:
     # ---- fiducial cuts ---------------------------------------------------
     def accept_electron(self, px, py, pz):
         mom, th, ph = _vec_angles(px, py, pz)
-        # CLAS6 forward electron coverage: enforce both the sector-dependent
-        # θ_min (from the fiducial parametrization) AND a hard geometric
-        # window [e_th_min, e_th_max] for the overall angular acceptance.
+        # Faithful to Natalie's C++ accept_electron: the sector-dependent
+        # theta_min rejection is COMMENTED OUT there, so it is not applied
+        # here either (require_theta_min=False). An optional hard theta
+        # window can be requested via electron_theta_min/max_deg (default
+        # off -- not part of her function).
         wedge = _fiducial_pass(mom, th, ph,
                                _E_THETA, _E_A_LOW, _E_B_LOW, _E_A_HIGH, _E_B_HIGH,
-                               require_theta_min=True)
-        return wedge & (th >= self.e_th_min) & (th <= self.e_th_max)
+                               require_theta_min=False)
+        if self.e_th_min is not None:
+            wedge = wedge & (th >= self.e_th_min)
+        if self.e_th_max is not None:
+            wedge = wedge & (th <= self.e_th_max)
+        return wedge
 
     def accept_proton(self, px, py, pz):
         mom, th, ph = _vec_angles(px, py, pz)
@@ -405,10 +411,10 @@ def apply_acceptance_pipeline(d, acc, channel='epp',
                               smear_electron=True, smear_proton=True,
                               e_reso=RESO_ELECTRON, p_reso=RESO_PROTON,
                               min_prec=MIN_PREC, ebeam=None,
-                              include_electron_map_weight=False):
-    """If include_electron_map_weight=False (current default), the electron
-    map weight is dropped from w_ep / w_epp.  Binary fiducial mask on the
-    electron is still applied.  Set True to put it back."""
+                              include_electron_map_weight=True):
+    """include_electron_map_weight=True (default): the electron acceptance
+    map weight multiplies w_ep / w_epp, symmetric with the proton maps.
+    Set False to drop it (binary electron fiducial still applies)."""
     """Given an event dict from compute_kinematics(...), smear and apply
     CLAS acceptance.  Adds:
        d['acc_mask_ep']  — events pass (e,e'p)  fiducial e + p-lead cuts

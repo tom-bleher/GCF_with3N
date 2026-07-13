@@ -9,7 +9,7 @@
 # staggered 1 s apart so the auto-seeds differ.
 #
 # Usage:
-#   ./run_2N_parallel.sh [TOTAL] [OUTPUT] [DOFSI] [MODEL] [SIGCM] [WFMODE] [EBEAM] [FGMODE] [KF] [FSIINDEP]
+#   ./run_2N_parallel.sh [TOTAL] [OUTPUT] [DOFSI] [MODEL] [SIGCM] [WFMODE] [EBEAM] [FGMODE] [KF] [FSIINDEP] [RHOPOW]
 #
 #   TOTAL    total number of successful events        (default 1000000)
 #   OUTPUT   merged output .root file                 (default events/misc/events_2N.root)
@@ -21,6 +21,7 @@
 #   FGMODE   global or local (wf_mode 4 only)         (default global)
 #   KF       Fermi momentum in GeV/c                  (default 0.25)
 #   FSIINDEP 1 = independent per-nucleon FSI          (default 0 = shared remnant)
+#   RHOPOW   SRC-pair FSI vertex weight rho^n r^2      (default 2; 1 = Wright et al.)
 #
 # Environment overrides:
 #   JOBS=N    number of parallel workers   (default: all cores)
@@ -42,6 +43,7 @@ EBEAM="${7:-5.01}"
 FGMODE="${8:-global}"
 KF="${9:-0.25}"
 FSIINDEP="${10:-0}"
+RHOPOW="${11:-2}"
 FORCE="${FORCE:-0}"
 
 BINARY="$SCRIPT_DIR/build/SRC_analysis_2N"
@@ -74,6 +76,7 @@ GENIE_DIR="$SCRIPT_DIR/Generator-R-3_06_02"
 export GENIE="$GENIE_DIR"
 export GXMLPATH="$SCRIPT_DIR/config/genie_override:$GENIE_DIR/config/G18_10a:$GENIE_DIR/config"
 export GMSGCONF="$SCRIPT_DIR/config/quiet_messenger.xml"
+export LD_LIBRARY_PATH="$GENIE_DIR/lib:$HOME/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
 JOBS="${JOBS:-$(nproc)}"
 [[ "$JOBS" -gt "$TOTAL" ]] && JOBS="$TOTAL"
@@ -94,7 +97,7 @@ echo "   workers      : $JOBS  (each ~$base events; first $rem get +1)"
 echo "   output       : $OUTPUT"
 echo "   doFSI/model  : $DOFSI / $MODEL  (indep=$FSIINDEP)"
 echo "   sigmaCM / kF : $SIGCM / $KF GeV/c"
-echo "   wf_mode/fg   : $WFMODE / $FGMODE"
+echo "   wf_mode/fg   : $WFMODE / $FGMODE  (vertex rho^$RHOPOW)"
 echo "   Ebeam        : $EBEAM GeV"
 echo "   parts dir    : $PARTS_DIR"
 echo "=================================================================="
@@ -110,7 +113,7 @@ done
 launch_chunk() {
     local idx="$1" label="${2:-launched}"
     local part="${PARTS[$idx]}" log="${PARTS[$idx]%.root}.log" n="${SIZES[$idx]}"
-    "$BINARY" "$n" "$DOFSI" "$MODEL" "$part" "$SIGCM" "$WFMODE" "$EBEAM" "$FGMODE" "$KF" "$FSIINDEP" >"$log" 2>&1 &
+    "$BINARY" "$n" "$DOFSI" "$MODEL" "$part" "$SIGCM" "$WFMODE" "$EBEAM" "$FGMODE" "$KF" "$FSIINDEP" "$RHOPOW" >"$log" 2>&1 &
     PIDS[$idx]=$!
     echo "  $label worker $idx  pid=${PIDS[$idx]}  events=$n  -> $(basename "$part")"
     sleep 1   # stagger => distinct TRandom3(0) auto-seeds
@@ -156,9 +159,37 @@ echo "Merging ${#PARTS[@]} files with hadd -> $OUTPUT"
 "$HADD" -f "$OUTPUT" "${PARTS[@]}" > "$PARTS_DIR/hadd.log" 2>&1 || {
     echo "ERROR: hadd failed — see $PARTS_DIR/hadd.log" >&2; exit 1; }
 
-# Entry-count check (use genQE_FSI venv if present).
+# Merged metadata: sum the additive counters across the part metas and copy
+# the configuration keys from part 0, so the analysis can normalize by
+# generation attempts (n_events_attempts).
+META_OUT="$OUTPUT.meta.txt"
+first_meta=""
+for part in "${PARTS[@]}"; do
+    [[ -f "$part.meta.txt" ]] || { echo "WARNING: missing $part.meta.txt" >&2; continue; }
+    [[ -z "$first_meta" ]] && first_meta="$part.meta.txt"
+done
+if [[ -n "$first_meta" ]]; then
+    grep -v -E '^(total_weight|n_events_saved|n_events_attempts|n_events_target)=' "$first_meta" > "$META_OUT"
+    awk -F= '
+        /^total_weight=/      { w  += $2 }
+        /^n_events_saved=/    { ns += $2 }
+        /^n_events_attempts=/ { na += $2 }
+        /^n_events_target=/   { nt += $2 }
+        END {
+            printf "n_events_target=%d\n",  nt
+            printf "total_weight=%.10g\n",   w
+            printf "n_events_saved=%d\n",   ns
+            printf "n_events_attempts=%d\n", na
+        }' "${PARTS[@]/%/.meta.txt}" >> "$META_OUT" 2>/dev/null
+    echo "Merged metadata -> $META_OUT"
+else
+    echo "WARNING: no part metadata found; $META_OUT not written" >&2
+fi
+
+# Entry-count check (genQE_FSI venv, falling back to genQE_3N's).
 PYBIN=""
 [[ -x "$SCRIPT_DIR/.venv/bin/python" ]] && PYBIN="$SCRIPT_DIR/.venv/bin/python"
+[[ -z "$PYBIN" && -x "$SCRIPT_DIR/../genQE_3N/.venv/bin/python" ]] && PYBIN="$SCRIPT_DIR/../genQE_3N/.venv/bin/python"
 if [[ -n "$PYBIN" ]]; then
     "$PYBIN" - "$OUTPUT" "$TOTAL" <<'PY'
 import sys, uproot

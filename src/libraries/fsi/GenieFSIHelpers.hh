@@ -32,10 +32,17 @@ void ResolveGenieXMLPath();
 // compiled in. Used to build the local-Fermi-gas momentum distribution.
 double NuclearDensity(int A, double r_fm);
 
-// Sample a position inside the nucleus weighted by rho^2(r) * r^2.
-// Models the SRC pair location: pair density goes as the square of the
-// single-nucleon density.
+// Sample a position inside the nucleus weighted by rho^n(r) * r^2, where n
+// is the configured SRC-vertex rho power (default 2: pair density ~ square
+// of the one-body density; n=1 reproduces GENIE's one-body vertex, the
+// choice of Wright et al. -- REQUIRED for paper comparisons).
 TLorentzVector SampleSRCPosition(int A, TRandom3 *rnd);
+
+// Configure the SRC-pair vertex radial weight rho^n r^2 (n in [1,3]).
+// Also settable via env FSI_SRC_VERTEX_RHO_POWER; the programmatic setter
+// wins. Default 2.
+void SetSRCVertexRhoPower(int n);
+int  GetSRCVertexRhoPower();
 
 // Sample a position inside the nucleus weighted by rho^3(r) * r^2.
 // Models the SRC triplet location: triplet density goes as the cube of the

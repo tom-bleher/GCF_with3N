@@ -14,6 +14,7 @@
 #include "Framework/GHEP/GHepStatus.h"
 #include "Framework/Numerical/RandomGen.h"
 #include "Framework/ParticleData/PDGUtils.h"
+#include "Framework/ParticleData/PDGLibrary.h"
 #include "Framework/Interaction/Interaction.h"
 #include "Framework/Interaction/InitialState.h"
 #include "Physics/HadronTransport/HNIntranuke2018.h"
@@ -150,23 +151,41 @@ void ResolveGenieXMLPath()
 #endif
 }
 
+namespace {
+// SRC-pair vertex radial weight rho^n(r) r^2. Default n=2 (pair density);
+// n=1 reproduces GENIE's one-body vertex (the Wright et al. paper setup).
+int gSRCVertexRhoPower = 0;   // 0 = unresolved: env or default on first use
+int resolveSRCVertexRhoPower()
+{
+  if (gSRCVertexRhoPower >= 1) return gSRCVertexRhoPower;
+  const char *e = std::getenv("FSI_SRC_VERTEX_RHO_POWER");
+  int n = e ? std::atoi(e) : 2;
+  if (n < 1 || n > 3) n = 2;
+  if (e) fprintf(stderr, "SampleSRCPosition: rho power = %d (env override)\n", n);
+  gSRCVertexRhoPower = n;
+  return n;
+}
+}
+
+void SetSRCVertexRhoPower(int n)
+{
+  if (n >= 1 && n <= 3) gSRCVertexRhoPower = n;
+}
+
+int GetSRCVertexRhoPower()
+{
+  return resolveSRCVertexRhoPower();
+}
+
 TLorentzVector SampleSRCPosition(int A, TRandom3 *rnd)
 {
 #ifdef USE_FSI
-  // Default: pair position ~ rho^2(r) r^2 (pair density). Env override
-  // FSI_SRC_VERTEX_RHO_POWER=1 samples ~ rho(r) r^2 instead (single-nucleon
-  // density; GENIE's default vertex behavior, used by N. Wright) for
-  // geometry-sensitivity studies.
-  static const int rho_n = [](){
-    const char* e = std::getenv("FSI_SRC_VERTEX_RHO_POWER");
-    int n = e ? std::atoi(e) : 2;
-    if (n < 1 || n > 3) n = 2;
-    if (e) fprintf(stderr, "SampleSRCPosition: rho power = %d (env override)\n", n);
-    return n;
-  }();
+  const int rho_n = resolveSRCVertexRhoPower();
+  static int    cached_n    = -1;
   static int    cached_A    = -1;
   static double cached_Rmax = 0.;
   static double cached_fmax = 0.;
+  if (rho_n != cached_n) { cached_n = rho_n; cached_A = -1; }
   return SampleRadialPosition(A, rho_n, rnd, cached_A, cached_Rmax, cached_fmax);
 #else
   (void)A; (void)rnd;
@@ -412,7 +431,13 @@ bool ApplyGenieFSIToNucleons(int A_residual, int Z_residual,
 
   genie::GHepRecord evrec;
   const int pdg_tgt = genie::pdg::IonPdgCode(A_residual, Z_residual);
-  const double m_tgt = mN * static_cast<double>(A_residual);
+  // Physical residual-ion mass from GENIE's PDG library. Fallback to A*mN
+  // if the ion is unknown (the ~8 MeV/nucleon binding otherwise leaks into
+  // the remnant four-momentum handed to the cascade).
+  double m_tgt = mN * static_cast<double>(A_residual);
+  if (TParticlePDG *ion = genie::PDGLibrary::Instance()->Find(pdg_tgt)) {
+    if (ion->Mass() > 0.) m_tgt = ion->Mass();
+  }
 
   // Build event record for lepton-nucleus mode so GENIE skips
   // GenerateVertex() and trusts the pre-set SRC vertex on each hadron.

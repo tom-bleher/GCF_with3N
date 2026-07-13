@@ -4,6 +4,7 @@
 #include <vector>
 #include <algorithm>
 #include "QEGeneratorFSI.hh"
+#include "fsi/GenieFSIHelpers.hh"
 #include "nucleus/gcfNucleus.hh"
 #include "constants.hh"
 #include "TVector3.h"
@@ -51,6 +52,10 @@ CLI (positional; later args optional):
   argv[8] = fg_mode       (wf_mode 4 only: "global" [default] or "local")
   argv[9] = kF            (GeV/c; default 0.25; SRC/MF p_rel split, MF FG
                            ceiling, and the nAboveKF counting threshold)
+  argv[11] = vertex_rho_power (1-3; default 2. Radial weight rho^n r^2 of the
+                           SRC-pair FSI vertex. Use 1 for the Wright et al.
+                           paper convention: pair position follows the
+                           one-body density)
   argv[10] = fsi_indep    (0/1; default 0. 1 = independent FSI: each nucleon
                            transported through its own GENIE record with an
                            undepleted A-2 remnant, instead of the default
@@ -109,6 +114,10 @@ int main(int argc, char **argv) {
 
     bool fsi_indep = false;
     if (argc > 10) fsi_indep = (std::atoi(argv[10]) != 0);
+
+    int vertex_rho_power = 2;
+    if (argc > 11) vertex_rho_power = std::atoi(argv[11]);
+    fsi::SetSRCVertexRhoPower(vertex_rho_power);
 
     const char* fsi_model_name = (fsiModel == kHN2018) ? "hN" : "hA";
     std::string fsi_backend_str = std::string("ENABLED (GENIE ") + fsi_model_name + " intranuke cascade)";
@@ -446,6 +455,7 @@ int main(int argc, char **argv) {
             meta << "Ebeam=" << Ebeam << "\n";
             meta << "doFSI=" << (doFSI ? 1 : 0) << "\n";
             meta << "fsi_model=" << fsi_model_name << "\n";
+            meta << "src_vertex_rho_power=" << fsi::GetSRCVertexRhoPower() << "\n";
             meta << "total_weight=" << total_weight << "\n";
             meta << "n_events_saved=" << success_count << "\n";
             meta << "n_events_attempts=" << event_count << "\n";

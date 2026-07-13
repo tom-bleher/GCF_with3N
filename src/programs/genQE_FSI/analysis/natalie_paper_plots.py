@@ -460,9 +460,11 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
     # ---- acceptance masks & map weights on the CHOSEN particles ----
     d["acc_mask_ep"]  = out_ok_e & has_lead
     d["acc_mask_epp"] = out_ok_e & has_rec
+    w_e    = np.ones(n)
     w_lead = np.ones(n)
     w_rec  = np.ones(n)
     if acc is not None:
+        w_e = acc.map_weight(out_e3[:, 0], out_e3[:, 1], out_e3[:, 2], 'e')
         if has_lead.any():
             w_lead[has_lead] = acc.map_weight(
                 out_lead3[has_lead, 0], out_lead3[has_lead, 1],
@@ -471,8 +473,8 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
             w_rec[has_rec] = acc.map_weight(
                 out_rec3[has_rec, 0], out_rec3[has_rec, 1],
                 out_rec3[has_rec, 2], 'p')
-    d["acc_w_ep"]  = w_lead
-    d["acc_w_epp"] = w_lead * w_rec
+    d["acc_w_ep"]  = w_e * w_lead
+    d["acc_w_epp"] = w_e * w_lead * w_rec
 
     d["n_lead_cand"]   = out_nlead
     d["n_recoil_cand"] = out_nrec
@@ -1629,6 +1631,53 @@ def figure10(fsi_src, fsi_mf, outdir, clas=None):
 #  Effective transparency summary (text result from paper)
 # ===================================================================
 
+def figure_q2_diag(pwia, fsi, outdir, clas_ev=None):
+    """Diagnostic: post-cut Q^2 spectrum, sim vs data.
+
+    The paper's "Q^2 >~ 1.7 GeV^2" is DESCRIPTIVE, not a cut (the measured
+    events reach down to Q^2 = 1.27 GeV^2 and 28% sit below 1.7): this
+    figure checks that the simulation reproduces that population after the
+    (e,e'pp) SRC cuts + acceptance.
+    """
+    fig, ax = plt.subplots(figsize=(6, 5))
+    bins = np.linspace(1.0, 5.0, 21)
+
+    def _sim(d, label_key):
+        m = (select_eepp(d) & apply_src_cuts(d) & _acc_mask_epp(d)
+             & (d["prec"] > SRC_CUTS["precoil_min"]))
+        v = d["Q2_calc"][m]
+        w = (d["weight"] * _acc_w_epp(d))[m]
+        frac = w[v < 1.7].sum() / w.sum() if w.sum() > 0 else 0.0
+        print(f"  Q2 diag {LABELS[label_key]:>5s}: frac(Q2<1.7) = {frac:.3f}")
+        return make_hist(v, w, bins) + (label_key,)
+
+    hists = [_sim(pwia, "pwia"), _sim(fsi, "full")]
+    data_entry = None
+    if clas_ev is not None:
+        mask = clas_ev["src_mask_epp"]
+        v = clas_ev["Q2"][mask]
+        print(f"  Q2 diag  Data: frac(Q2<1.7) = {(v < 1.7).mean():.3f}")
+        data_entry = events_to_entry(clas_ev, "Q2", "src_mask_epp", bins)
+    ref_area = float(np.sum(data_entry["y"])) if data_entry is not None else None
+    hists = area_normalize(hists, ref_area=ref_area)
+    for c, h, key in hists:
+        draw_hist(ax, c, h, color=COLORS[key], linestyle=STYLES[key],
+                  label=LABELS[key], linewidth=LINEWIDTHS[key])
+    if data_entry is not None:
+        yerr = np.vstack([data_entry["yerr_lo"], data_entry["yerr_hi"]])
+        ax.errorbar(data_entry["x"], data_entry["y"], yerr=yerr, fmt="o",
+                    ms=4, color=COLORS["data"], label=LABELS["data"])
+    ax.set_xlabel(r"$Q^2$ [GeV$^2$]")
+    ax.set_ylabel("Counts")
+    ax.set_title(r"$^{12}$C(e,e'pp) — SRC cuts (diagnostic)")
+    ax.axvline(1.7, color="gray", linestyle=":", linewidth=1)
+    ax.legend()
+    fig.tight_layout()
+    fig.savefig(os.path.join(outdir, "figD_Q2_diagnostic.png"), dpi=200)
+    plt.close(fig)
+    print("  Saved figD_Q2_diagnostic.png")
+
+
 def print_effective_transparencies(pwia, fsi):
     """Compute and print effective transparencies (paper page 4-5).
 
@@ -1649,10 +1698,34 @@ def print_effective_transparencies(pwia, fsi):
     pwia_eep = pwia_eepp = pwia
     fsi_eep = fsi_eepp = fsi
 
-    # Luminosity scale relative to the eep-side total weight (matches
-    # the paper definition; equivalent to using the eepp side since the
-    # underlying generator weight is the same in both views).
-    lumi_scale = pwia_eep["weight"].sum() / fsi_eep["weight"].sum()
+    # Equal-luminosity normalization. The PWIA and FSI samples are two
+    # INDEPENDENT generator runs, so per-luminosity yields go as
+    # Sum(w_pass)/N_attempts. When both runs share the same generator
+    # configuration, FSI never modifies the primary weight, so
+    # Sum(w_total)/N_attempts is also equal between them and the Sigma-w
+    # ratio equals the attempts ratio; the attempts ratio from the
+    # metadata is the robust, auditable choice.
+    def _n_attempts(d):
+        meta = d.get("_meta") or {}
+        try:
+            return float(meta.get("n_events_attempts"))
+        except (TypeError, ValueError):
+            return None
+    att_p, att_f = _n_attempts(pwia_eep), _n_attempts(fsi_eep)
+    sumw_scale = pwia_eep["weight"].sum() / fsi_eep["weight"].sum()
+    if att_p and att_f:
+        lumi_scale = att_p / att_f
+        ratio = lumi_scale / sumw_scale
+        if not (0.9 < ratio < 1.1):
+            print(f"  WARNING: attempts-based luminosity scale differs from "
+                  f"the Sigma-w ratio by x{ratio:.3g} -- the PWIA and FSI "
+                  f"samples were NOT generated with identical configuration "
+                  f"(or generator versions). Transparencies are suspect.")
+    else:
+        lumi_scale = sumw_scale
+        print("  WARNING: n_events_attempts missing from metadata; falling "
+              "back to Sigma-w luminosity matching (only valid for "
+              "identically-configured samples).")
 
     # PWIA, inside CLAS acceptance (fiducial masks + map weights applied).
     m_eep_pwia  = select_eep(pwia_eep)  & src(pwia_eep)  & _acc_mask_ep(pwia_eep)
@@ -1695,11 +1768,12 @@ def print_effective_transparencies(pwia, fsi):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--pwia", default="events/pwia/events_2N_pwia_501_SRC.root",
+    parser.add_argument("--pwia", default="events/natalie/pwia_SRC.root",
                         help="PWIA SRC ROOT file (AV18 WF, p_rel>=kF; wf_mode=2)")
-    parser.add_argument("--fsi", default="events/hA/events_2N_fsi_hA_501_SRC.root",
-                        help="Full FSI SRC ROOT file (AV18 WF, p_rel>=kF; wf_mode=2)")
-    parser.add_argument("--fsi-mf", default="events/hA/events_2N_fsi_hA_501_MF.root",
+    parser.add_argument("--fsi", default="events/natalie/fsi_hA_SRC_rho1.root",
+                        help="Full FSI SRC ROOT file (AV18 WF, p_rel>=kF; "
+                             "wf_mode=2, hA, rho^1 pair vertex)")
+    parser.add_argument("--fsi-mf", default="events/natalie/fsi_hA_MF_localFG.root",
                         help=("FULL MF file: single struck nucleon from a Fermi "
                               "gas, GENIE hA FSI in the A-1 residual "
                               "(wf_mode=4). Used only for Figs 8-10. Pass empty "
@@ -1761,6 +1835,7 @@ def main():
             print(f"    metadata: wf_mode={meta.get('wf_mode_name')}  "
                   f"N_saved={meta.get('n_events_saved')}  "
                   f"Sigma_w={meta.get('total_weight')}")
+        d["_meta"] = meta
         flatlist_resolve(d, acc, args.ebeam, include_neutrons=include_neutrons)
         nl = d["n_lead_cand"]; nr = d["n_recoil_cand"]
         one = nl == 1
@@ -1861,6 +1936,7 @@ def main():
     figure5(pwia, fsi, args.outdir, clas=clas)
     figure6(pwia, fsi, args.outdir, clas=clas, clas_ev=clas_ev)
     figure7(pwia, fsi, args.outdir, clas=clas, clas_ev=clas_ev)
+    figure_q2_diag(pwia, fsi, args.outdir, clas_ev=clas_ev)
 
     # Figs 8-10 compare FULL GCF (AV18 SRC, p_rel>kF) to FULL MF (single
     # struck nucleon, Fermi gas). Both are pure-wavefunction FULL calculations.

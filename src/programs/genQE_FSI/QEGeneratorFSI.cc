@@ -597,7 +597,10 @@ double QEGeneratorFSI::eval_n_FG(double p) const
 
 // ---------------------------------------------------------------------------
 // build_local_FG_table — tabulate the local-Fermi-gas momentum distribution
-//   n(p) = (1/N) int d^3r Theta(kF(r) - p),   kF(r) = (3 pi^2 rho(r) / 2)^{1/3}
+//   n(p) = (1/N) int d^3r Theta(kF(r) - p),  kF(r) = (3 pi^2 (A/2) rho(r))^{1/3}
+// (per-isospin kF for a symmetric nucleus: GENIE's rho is normalised to 1,
+// so the species-q nucleon density is N_q rho ~ (A/2) rho -- the same
+// convention as fsi::LocalFermiMomentum used by the event sampler).
 // with rho from GENIE's density model, normalised so int n d^3p = 1. Cached
 // per nucleus; the momentum ceiling is kF at central density.
 void QEGeneratorFSI::build_local_FG_table()
@@ -613,7 +616,7 @@ void QEGeneratorFSI::build_local_FG_table()
     r[i] = (i + 0.5) * dr;
     double rho = fsi::NuclearDensity(fA, r[i]);   // fm^-3
     if (rho < 0.) rho = 0.;
-    double kF_fm = pow(1.5*M_PI*M_PI*rho, 1./3.);  // (3 pi^2 rho / 2)^{1/3} [fm^-1]
+    double kF_fm = pow(3.0*M_PI*M_PI*(0.5*fA)*rho, 1./3.);  // (3 pi^2 (A/2) rho)^{1/3} [fm^-1]
     kF[i] = hbarc * kF_fm;                          // GeV/c
     if (kF[i] > kFmax) kFmax = kF[i];
   }
