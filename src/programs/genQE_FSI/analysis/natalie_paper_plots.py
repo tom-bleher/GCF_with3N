@@ -343,6 +343,15 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
     K = _KMAX_CAND
     allowed = (PROTON, NEUTRON) if include_neutrons else (PROTON,)
 
+    # Preserve the GENERATED struck/partner isospins (lead/recoil slots as
+    # thrown) before the detector-style resolution overwrites lead_type /
+    # rec_type with the DETECTED final-state types. The T+SCX reweighting is
+    # a model correction applied to the generated PWIA pair, so it must use
+    # these generated isospins, not the detected recoil (which is 0 for the
+    # ~half of (e,e'p) events with no detected second nucleon).
+    d["gen_lead_type"] = np.asarray(d["lead_type"]).copy()
+    d["gen_rec_type"]  = np.asarray(d["rec_type"]).copy()
+
     out_e3    = np.zeros((n, 3))
     out_ok_e  = np.zeros(n, dtype=bool)
     out_lead3 = np.zeros((n, 3))
@@ -533,7 +542,8 @@ def tscx_weight_eep(d):
     lead-only-flip + both-flip (if initial lead = n).
     """
     w = np.zeros(len(d["weight"]))
-    lt, rt = d["lead_type"], d["rec_type"]
+    lt = d.get("gen_lead_type", d["lead_type"])
+    rt = d.get("gen_rec_type",  d["rec_type"])
     pp = (lt == PROTON)  & (rt == PROTON)
     pn = (lt == PROTON)  & (rt == NEUTRON)
     np_= (lt == NEUTRON) & (rt == PROTON)
@@ -557,7 +567,8 @@ def tscx_weight_eepp(d):
       w = P(final = (p, p)) * T_NN
     """
     w = np.zeros(len(d["weight"]))
-    lt, rt = d["lead_type"], d["rec_type"]
+    lt = d.get("gen_lead_type", d["lead_type"])
+    rt = d.get("gen_rec_type",  d["rec_type"])
     pp = (lt == PROTON)  & (rt == PROTON)
     pn = (lt == PROTON)  & (rt == NEUTRON)
     np_= (lt == NEUTRON) & (rt == PROTON)
