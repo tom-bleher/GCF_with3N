@@ -48,8 +48,7 @@ import matplotlib.pyplot as plt
 
 # clas_acceptance lives beside this script
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from clas_acceptance import (ClasAcceptance, apply_acceptance_pipeline,
-                             apply_acceptance_best_recoil)
+from clas_acceptance import ClasAcceptance, RESO_ELECTRON, RESO_PROTON
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -292,161 +291,192 @@ def compute_kinematics(d, Ebeam=6.0):
     return d
 
 
-def compute_best_recoil_kinematics(d):
-    """Per event, replace the generator-level recoil with the highest-|p|
-    proton from {recoil_post (if PROTON), all FSI secondaries with pdg=2212}.
+# ===================================================================
+#  Flat-list final-state selection (detector-style)
+# ===================================================================
+#
+# The generator's lead/recoil slots and parentRole tags are cascade
+# bookkeeping: after FSI (e.g. an elastic pp scatter) "which proton was
+# the original" is not an observable, so the analysis must not privilege
+# the slots. Every final-state proton (lead slot, recoil slot, FSI
+# secondaries) enters ONE flat candidate list, and the channels are built
+# the way the CLAS analyses built them from data (Cohen et al., PRL 121,
+# 092501):
+#   lead   = the UNIQUE detected proton consistent with absorbing q
+#            (theta_pq < 25 deg, 0.60 < p/q < 0.96); events with 0 or
+#            >=2 such protons are dropped;
+#   recoil = the UNIQUE other detected proton with p > 0.35 GeV/c
+#            ((e,e'pp) only; 0 -> stays (e,e'p), >=2 -> dropped from
+#            (e,e'pp), matching the measured sample where no event has
+#            more than one recoil candidate).
+# The same convention applies to EVERY sample (PWIA, FSI SRC, FSI MF) --
+# the MF sample simply contributes no recoil-slot candidate.
+#
+# For the PWIA sample the candidate list must include NEUTRONS
+# (include_neutrons=True): the T+SCX reweighting assigns each event the
+# probability that zero-angle SCX turns its (lead, recoil) isospins into
+# the measured proton final state, so neutron legs carry (e,e'p[n]) and
+# (e,e'[n]p) contributions with the same kinematics. The chosen
+# candidates' true types are kept in lead_type / rec_type, and the
+# measured-channel selections (select_eep / select_eepp) still demand
+# protons.
 
-    Adds *_best columns: prec_best, pcm_vec_best, pcm_mag_best,
-    pcm_x/y/z_best, prel_mag_best, has_recoil_best (bool).
+LEAD_ID = dict(theta_pq_max_deg=25.0, pq_min=0.60, pq_max=0.96)
 
-    For GCF events (high-p_rel SRC pair) the SRC partner is almost
-    always the max-p second proton, so *_best == * within numerical
-    noise.  For MF events (low-p_rel pair) the FSI cascade often emits
-    a faster proton; that becomes the recoil — matching the CLAS
-    observable (any second detected proton) and the paper's MF
-    treatment in figs 8 / 9 / 10.
+_KMAX_CAND = 12   # 2 slots + up to 10 FSI-secondary candidates per event
 
-    Requires sec_pdg, sec_px, sec_py, sec_pz (uproot library='np'
-    returns these as object arrays of per-event np.ndarrays).
+
+def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
+    """Detector-style event building on the flat final-state nucleon list.
+
+    Smears the electron and every candidate (when `acc` is given), applies
+    the LEAD_ID / exactly-one-recoil convention above, and overwrites d's
+    electron / q / lead_post / lead_type / recoil_post / rec_type plus the
+    acceptance masks (acc_mask_ep/epp) and map weights (acc_w_ep/epp).
+    All derived kinematic columns are recomputed. Adds diagnostics
+    d["n_lead_cand"], d["n_recoil_cand"]. Processes the candidate arrays
+    in chunks of `chunk` events to bound peak memory (the intermediates
+    are (n, K)-shaped).
     """
-    n = len(d["weight"])
-    rec_post = d["recoil_post"]                        # (n, 4)
-    rec_type = d["rec_type"]
-    sec_pdg  = d.get("sec_pdg")
-    sec_px   = d.get("sec_px")
-    sec_py   = d.get("sec_py")
-    sec_pz   = d.get("sec_pz")
-    if sec_pdg is None:
-        # No secondaries branch — fall back to gen-level recoil.
-        d["prec_best"]    = d["prec"]
-        d["pcm_vec_best"] = d["pcm_vec"]
-        d["pcm_mag_best"] = d["pcm_mag"]
-        d["pcm_x_best"]   = d["pcm_x"]
-        d["pcm_y_best"]   = d["pcm_y"]
-        d["pcm_z_best"]   = d["pcm_z"]
-        d["prel_mag_best"]= d["prel_mag"]
-        d["recoil_best"]  = rec_post[:, :3].copy()
-        d["has_recoil_best"] = (rec_type == PROTON)
-        return d
-
     import awkward as ak
-    best_px = np.zeros(n)
-    best_py = np.zeros(n)
-    best_pz = np.zeros(n)
-    best_p  = np.zeros(n)
-    has_rec = np.zeros(n, dtype=bool)
-
-    # Seed candidate with original recoil if it is a proton.
-    rec_is_p = (rec_type == PROTON)
-    if rec_is_p.any():
-        rp = np.sqrt(rec_post[rec_is_p, 0]**2 + rec_post[rec_is_p, 1]**2 + rec_post[rec_is_p, 2]**2)
-        idx = np.where(rec_is_p)[0]
-        best_px[idx] = rec_post[idx, 0]
-        best_py[idx] = rec_post[idx, 1]
-        best_pz[idx] = rec_post[idx, 2]
-        best_p [idx] = rp
-        has_rec[idx] = True
-
-    # Vectorised max-p proton among FSI secondaries.
-    proton_mask = (sec_pdg == 2212)
-    spx = sec_px[proton_mask]
-    spy = sec_py[proton_mask]
-    spz = sec_pz[proton_mask]
-    sp  = np.sqrt(spx**2 + spy**2 + spz**2)              # jagged
-
-    # Filter to events that have at least one secondary proton, so all
-    # subsequent ak ops are dense within that subset.
-    has_any = ak.num(sp) > 0
-    has_any_np = ak.to_numpy(has_any)
-    if has_any_np.any():
-        sp_f  = sp [has_any]
-        spx_f = spx[has_any]
-        spy_f = spy[has_any]
-        spz_f = spz[has_any]
-        amax  = ak.argmax(sp_f, axis=1, keepdims=True)
-        sp_max  = ak.to_numpy(ak.flatten(sp_f [amax]))
-        spx_max = ak.to_numpy(ak.flatten(spx_f[amax]))
-        spy_max = ak.to_numpy(ak.flatten(spy_f[amax]))
-        spz_max = ak.to_numpy(ak.flatten(spz_f[amax]))
-
-        sec_event_idx = np.where(has_any_np)[0]                  # global indices
-        do_replace    = sp_max > best_p[sec_event_idx]           # within subset
-        target_idx    = sec_event_idx[do_replace]
-        best_px[target_idx] = spx_max[do_replace]
-        best_py[target_idx] = spy_max[do_replace]
-        best_pz[target_idx] = spz_max[do_replace]
-        best_p [target_idx] = sp_max [do_replace]
-        has_rec[target_idx] = True
-
-    # Recompute (e,e'pp) kinematics with this best recoil.
-    pmiss_vec = d["pmiss_vec"]
-    qvec3     = np.column_stack([d["q"][:, i] for i in range(3)])
-    rec3_best = np.column_stack([best_px, best_py, best_pz])
-
-    pcm_vec_b = pmiss_vec + rec3_best                         # = lead - q + rec_best
-    pcm_mag_b = np.sqrt((pcm_vec_b**2).sum(axis=1))
-    prel_vec_b = 0.5 * (pmiss_vec - rec3_best)
-    prel_mag_b = np.sqrt((prel_vec_b**2).sum(axis=1))
-
-    # Pcm components in the pmiss frame (z = pmiss_hat, q in x-z plane).
-    pmiss_mag = d["pmiss"]
-    z_hat = pmiss_vec / (pmiss_mag[:, None] + 1e-30)
-    q_dot_z = (qvec3 * z_hat).sum(axis=1)
-    q_perp  = qvec3 - q_dot_z[:, None] * z_hat
-    q_perp_mag = np.sqrt((q_perp**2).sum(axis=1))
-    x_hat = q_perp / (q_perp_mag[:, None] + 1e-30)
-    y_hat = np.cross(z_hat, x_hat)
-
-    pcm_x_b = (pcm_vec_b * x_hat).sum(axis=1)
-    pcm_y_b = (pcm_vec_b * y_hat).sum(axis=1)
-    pcm_z_b = (pcm_vec_b * z_hat).sum(axis=1)
-
-    d["prec_best"]    = best_p
-    d["pcm_vec_best"] = pcm_vec_b
-    d["pcm_mag_best"] = pcm_mag_b
-    d["pcm_x_best"]   = pcm_x_b
-    d["pcm_y_best"]   = pcm_y_b
-    d["pcm_z_best"]   = pcm_z_b
-    d["prel_mag_best"]= prel_mag_b
-    d["recoil_best"]  = rec3_best
-    d["has_recoil_best"] = has_rec
-    return d
-
-
-def _apply_detection_recoil(d):
-    """Switch an FSI sample's (e,e'pp) recoil from the per-leg definition
-    (the transported SRC partner) to the detection-based one (ANY detected
-    second proton: gen recoil or FSI secondary, highest momentum wins).
-    This is the DEFAULT: the analysis emulates a measurement of the final
-    state; disable with --per-leg-recoil for generator-truth studies.
-
-    Implemented by overwriting the per-leg recoil fields with their *_best
-    counterparts computed by compute_best_recoil_kinematics /
-    apply_acceptance_best_recoil, so every downstream selection and figure
-    picks up the detected-proton definition automatically. The lead stays
-    per-leg: FSI secondaries essentially never pass the lead cuts
-    (0.62 < p/q < 0.92 needs p > ~1.2 GeV/c).
-    """
     n = len(d["weight"])
-    has = d.get("has_recoil_best")
-    if has is None:
-        return
-    d["rec_type"] = np.where(has, PROTON, 0).astype(d["rec_type"].dtype)
-    d["prec"] = d["prec_best"]
-    for key in ("pcm_vec", "pcm_mag", "pcm_x", "pcm_y", "pcm_z", "prel_mag"):
-        bkey = key + "_best"
-        if bkey in d:
-            d[key] = d[bkey]
-    # recoil 4-momentum (used by acceptance re-runs / any direct consumer)
-    rb = d.get("recoil_best")
-    if rb is not None:
-        E = np.sqrt((rb**2).sum(axis=1) + M_P**2)
-        d["recoil_post"] = np.column_stack([rb, E])
-    # acceptance evaluated on the detected second proton
-    if "acc_mask_epp_best" in d:
-        d["acc_mask_epp"] = d["acc_mask_epp_best"]
-    if "acc_w_epp_best" in d:
-        d["acc_w_epp"] = d["acc_w_epp_best"]
+    K = _KMAX_CAND
+    allowed = (PROTON, NEUTRON) if include_neutrons else (PROTON,)
+
+    out_e3    = np.zeros((n, 3))
+    out_ok_e  = np.zeros(n, dtype=bool)
+    out_lead3 = np.zeros((n, 3))
+    out_rec3  = np.zeros((n, 3))
+    out_ltype = np.zeros(n, dtype=np.int64)
+    out_rtype = np.zeros(n, dtype=np.int64)
+    out_nlead = np.zeros(n, dtype=np.int64)
+    out_nrec  = np.zeros(n, dtype=np.int64)
+
+    sec_pdg = d.get("sec_pdg")
+
+    for lo in range(0, n, chunk):
+        hi = min(lo + chunk, n)
+        m  = hi - lo
+        cand  = np.zeros((m, K, 3))
+        ctype = np.zeros((m, K), dtype=np.int64)
+
+        lt = d["lead_type"][lo:hi]
+        cand[:, 0, :] = d["lead_post"][lo:hi, :3]
+        ctype[:, 0] = np.where(np.isin(lt, allowed), lt, 0)
+        rt = d["rec_type"][lo:hi]
+        cand[:, 1, :] = d["recoil_post"][lo:hi, :3]
+        ctype[:, 1] = np.where(np.isin(rt, allowed), rt, 0)
+
+        if sec_pdg is not None:
+            Ksec = K - 2
+            spdg = sec_pdg[lo:hi]
+            keep = (spdg == PROTON)
+            if include_neutrons:
+                keep = keep | (spdg == NEUTRON)
+            for col, key in ((0, "sec_px"), (1, "sec_py"), (2, "sec_pz")):
+                padded = ak.fill_none(
+                    ak.pad_none(d[key][lo:hi][keep], Ksec, clip=True), 0.0)
+                cand[:, 2:, col] = ak.to_numpy(padded)
+            tpad = ak.fill_none(ak.pad_none(spdg[keep], Ksec, clip=True), 0)
+            ctype[:, 2:] = ak.to_numpy(tpad)
+
+        valid = ctype != 0
+
+        # ---- detector-resolution smearing ----
+        e3 = d["electron"][lo:hi, :3].copy()
+        if acc is not None:
+            ex, ey, ez, _ = acc.smear_mag(e3[:, 0], e3[:, 1], e3[:, 2],
+                                          RESO_ELECTRON)
+            e3 = np.column_stack([ex, ey, ez])
+            fx, fy, fz, _ = acc.smear_mag(cand[:, :, 0].ravel(),
+                                          cand[:, :, 1].ravel(),
+                                          cand[:, :, 2].ravel(), RESO_PROTON)
+            cand = np.stack([fx.reshape(m, K), fy.reshape(m, K),
+                             fz.reshape(m, K)], axis=2)
+
+        # ---- "detected" = valid candidate inside the CLAS proton fiducials.
+        # Neutron candidates (T+SCX bookkeeping) use the same proton
+        # fiducials: zero-angle SCX preserves the flipped leg's kinematics.
+        detected = valid
+        if acc is not None:
+            fid = acc.accept_proton(cand[:, :, 0].ravel(),
+                                    cand[:, :, 1].ravel(),
+                                    cand[:, :, 2].ravel()).reshape(m, K)
+            detected = detected & fid
+            ok_e = acc.accept_electron(e3[:, 0], e3[:, 1], e3[:, 2])
+        else:
+            ok_e = np.ones(m, dtype=bool)
+
+        # ---- q from the (smeared) electron ----
+        q3 = np.column_stack([-e3[:, 0], -e3[:, 1], ebeam - e3[:, 2]])
+        qmag = np.sqrt((q3**2).sum(axis=1))
+
+        # ---- lead identification: unique q-consistent detected nucleon ----
+        pmag = np.sqrt((cand**2).sum(axis=2))
+        cospq = (cand * q3[:, None, :]).sum(axis=2) / (pmag * qmag[:, None] + 1e-30)
+        theta_pq = np.degrees(np.arccos(np.clip(cospq, -1.0, 1.0)))
+        p_over_q = pmag / (qmag[:, None] + 1e-30)
+        lead_ok = (detected
+                   & (theta_pq < LEAD_ID["theta_pq_max_deg"])
+                   & (p_over_q > LEAD_ID["pq_min"])
+                   & (p_over_q < LEAD_ID["pq_max"]))
+        n_lead = lead_ok.sum(axis=1)
+        has_lead = (n_lead == 1)
+        rows = np.arange(m)
+        lead_idx = np.argmax(lead_ok, axis=1)
+
+        # ---- recoil: exactly one OTHER detected nucleon above 0.35 GeV/c ----
+        rec_pool = detected & (pmag > SRC_CUTS["precoil_min"])
+        rec_pool[rows, lead_idx] &= ~has_lead   # the chosen lead is not a recoil
+        n_rec = rec_pool.sum(axis=1)
+        has_rec = has_lead & (n_rec == 1)
+        rec_idx = np.argmax(rec_pool, axis=1)
+
+        out_e3[lo:hi]    = e3
+        out_ok_e[lo:hi]  = ok_e
+        out_lead3[lo:hi] = np.where(has_lead[:, None], cand[rows, lead_idx], 0.0)
+        out_rec3[lo:hi]  = np.where(has_rec[:, None],  cand[rows, rec_idx],  0.0)
+        out_ltype[lo:hi] = np.where(has_lead, ctype[rows, lead_idx], 0)
+        out_rtype[lo:hi] = np.where(has_rec,  ctype[rows, rec_idx],  0)
+        out_nlead[lo:hi] = n_lead
+        out_nrec[lo:hi]  = n_rec
+
+    has_lead = out_ltype != 0
+    has_rec  = out_rtype != 0
+    d["lead_type"] = out_ltype.astype(d["lead_type"].dtype)
+    d["rec_type"]  = out_rtype.astype(d["rec_type"].dtype)
+    d["lead_post"] = np.column_stack(
+        [out_lead3, np.sqrt((out_lead3**2).sum(axis=1) + M_P**2)])
+    d["recoil_post"] = np.column_stack(
+        [out_rec3, np.sqrt((out_rec3**2).sum(axis=1) + M_P**2)])
+
+    # ---- overwrite electron / q, recompute all derived kinematics ----
+    Ee = np.sqrt((out_e3**2).sum(axis=1))
+    d["electron"] = np.column_stack([out_e3, Ee])
+    d["q"] = np.column_stack([-out_e3[:, 0], -out_e3[:, 1],
+                              ebeam - out_e3[:, 2], ebeam - Ee])
+    compute_kinematics(d, Ebeam=ebeam)
+
+    # ---- acceptance masks & map weights on the CHOSEN particles ----
+    d["acc_mask_ep"]  = out_ok_e & has_lead
+    d["acc_mask_epp"] = out_ok_e & has_rec
+    w_lead = np.ones(n)
+    w_rec  = np.ones(n)
+    if acc is not None:
+        if has_lead.any():
+            w_lead[has_lead] = acc.map_weight(
+                out_lead3[has_lead, 0], out_lead3[has_lead, 1],
+                out_lead3[has_lead, 2], 'p')
+        if has_rec.any():
+            w_rec[has_rec] = acc.map_weight(
+                out_rec3[has_rec, 0], out_rec3[has_rec, 1],
+                out_rec3[has_rec, 2], 'p')
+    d["acc_w_ep"]  = w_lead
+    d["acc_w_epp"] = w_lead * w_rec
+
+    d["n_lead_cand"]   = out_nlead
+    d["n_recoil_cand"] = out_nrec
+    return d
 
 
 # ===================================================================
@@ -454,12 +484,12 @@ def _apply_detection_recoil(d):
 # ===================================================================
 
 def select_eep(d):
-    """(e,e'p) channel: lead nucleon is a proton (post-FSI)."""
+    """(e,e'p): flat-list lead exists and is a proton."""
     return d["lead_type"] == PROTON
 
 
 def select_eepp(d):
-    """(e,e'pp) channel: both lead and recoil are protons (post-FSI)."""
+    """(e,e'pp): flat-list lead and (unique) recoil exist and are protons."""
     return (d["lead_type"] == PROTON) & (d["rec_type"] == PROTON)
 
 
@@ -1388,54 +1418,25 @@ def figure7(pwia, fsi, outdir, clas=None, clas_ev=None):
 # Both go through the same CLAS acceptance + smearing pipeline. Each curve is
 # individually area-normalized to the data (where data exists).
 
-def _fsi_vals_wts(d, var_key, channel, cuts_mask, use_best_recoil=False):
-    """Return (values, weights) for a single FSI sample in a channel.
+def _fsi_vals_wts(d, var_key, channel, cuts_mask):
+    """Return (values, weights) for one sample in a channel ('ep'/'epp').
 
-    channel: 'ep' or 'epp'. Applies the usual proton ID, CLAS fiducial mask,
-    per-event acceptance map weight, and — for 'epp' — the precoil>0.35
-    GeV/c cut. `cuts_mask` should already incorporate `apply_src_cuts(d)`.
-
-    If use_best_recoil=True (figs 8/9-right/10), the (e,e'pp) selection
-    no longer requires rec_type=PROTON: instead it requires that there
-    exists ANY second proton (gen-level recoil OR FSI secondary) with
-    |p|>0.35.  The histogrammed `var_key` is also redirected to its
-    *_best counterpart when one exists, so pcm/prel/prec are computed
-    from the best-recoil candidate.
+    Applies the flat-list channel selection, CLAS fiducial mask, per-event
+    acceptance map weight and -- for 'epp' -- the precoil cut. `cuts_mask`
+    should already incorporate apply_src_cuts(d). Identical treatment for
+    the GCF and MF samples (both are flat-list resolved upstream).
     """
     if channel == "ep":
-        sel  = select_eep(d)
-        acc  = _acc_mask_ep(d)
-        wmap = _acc_w_ep(d)
-        m = sel & cuts_mask & acc
-        return d[var_key][m], d["weight"][m] * wmap[m]
-
-    # (e,e'pp)
-    if use_best_recoil:
-        # Lead is a proton (post-FSI); recoil = best non-lead proton.
-        prec_arr = d.get("prec_best", d["prec"])
-        has_rec  = d.get("has_recoil_best",
-                         (d["rec_type"] == PROTON))
-        sel = (d["lead_type"] == PROTON) & has_rec
-        # Use *_best variant for the histogrammed observable when present.
-        var_key_use = var_key + "_best" if (var_key + "_best") in d else var_key
-        # Acceptance evaluated on the best second proton (the gen-recoil mask
-        # rejects the entire mean-field sample, which has no gen recoil).
-        acc  = d.get("acc_mask_epp_best", _acc_mask_epp(d))
-        wmap = d.get("acc_w_epp_best",    _acc_w_epp(d))
-    else:
-        sel = select_eepp(d)
-        prec_arr = d["prec"]
-        var_key_use = var_key
-        acc  = _acc_mask_epp(d)
-        wmap = _acc_w_epp(d)
-    m = (sel & cuts_mask & acc
-         & (prec_arr > SRC_CUTS["precoil_min"]))
-    return d[var_key_use][m], d["weight"][m] * wmap[m]
+        m = select_eep(d) & cuts_mask & _acc_mask_ep(d)
+        return d[var_key][m], d["weight"][m] * _acc_w_ep(d)[m]
+    m = (select_eepp(d) & cuts_mask & _acc_mask_epp(d)
+         & (d["prec"] > SRC_CUTS["precoil_min"]))
+    return d[var_key][m], d["weight"][m] * _acc_w_epp(d)[m]
 
 
 def _draw_gcf_mf(ax, fsi_src, fsi_mf, var_key, bins, *, channel,
                  xlabel="", title="", data_entry=None, logy=False,
-                 ylabel="Counts", xlim=None, use_best_recoil=False):
+                 ylabel="Counts", xlim=None):
     """Plot FULL-GCF and FULL-MF overlays on the same axis after SRC cuts.
 
     Each curve is individually area-normalized to the data integral (or, if
@@ -1448,15 +1449,8 @@ def _draw_gcf_mf(ax, fsi_src, fsi_mf, var_key, bins, *, channel,
     src_cuts_gcf = apply_src_cuts(fsi_src)
     src_cuts_mf  = apply_src_cuts(fsi_mf)
 
-    # Asymmetric recoil definition, matching the paper's construction (its
-    # fig 10 GCF curve coincides with its fig 5 FULL curve): the GCF recoil
-    # is the transported SRC partner (same definition as figs 2-7), while
-    # the MF sample -- which has no generator-level recoil at all -- uses
-    # the best FSI-secondary proton.
-    v_gcf, w_gcf = _fsi_vals_wts(fsi_src, var_key, channel, src_cuts_gcf,
-                                 use_best_recoil=False)
-    v_mf,  w_mf  = _fsi_vals_wts(fsi_mf,  var_key, channel, src_cuts_mf,
-                                 use_best_recoil=use_best_recoil)
+    v_gcf, w_gcf = _fsi_vals_wts(fsi_src, var_key, channel, src_cuts_gcf)
+    v_mf,  w_mf  = _fsi_vals_wts(fsi_mf,  var_key, channel, src_cuts_mf)
 
     hists = [
         make_hist(v_gcf, w_gcf, bins) + ("gcf",),
@@ -1516,7 +1510,7 @@ def figure8(fsi_src, fsi_mf, outdir, clas=None, clas_ev=None):
         title = r"$^{12}$C(e,e'pp) — SRC cuts" if col == 0 else ""
         _draw_gcf_mf(axes[col], fsi_src, fsi_mf, comp_key, bins,
                      channel="epp", xlabel=xlabel, title=title,
-                     data_entry=de, xlim=xlim, use_best_recoil=True)
+                     data_entry=de, xlim=xlim)
 
     fig.tight_layout()
     fig.savefig(os.path.join(outdir, "fig8_pcm_GCF_vs_MF.png"), dpi=200)
@@ -1561,8 +1555,7 @@ def figure9(fsi_src, fsi_mf, outdir, clas=None, clas_ev=None):
                  channel="epp",
                  xlabel=r"$\theta(p_{\rm Miss},\,q)$ [deg]",
                  title=r"$^{12}$C(e,e'pp)",
-                 data_entry=de_epp, xlim=(120, 180),
-                 use_best_recoil=True)
+                 data_entry=de_epp, xlim=(120, 180))
 
     fig.tight_layout()
     fig.savefig(os.path.join(outdir, "fig9_theta_pmiss_q_GCF_vs_MF.png"), dpi=200)
@@ -1589,42 +1582,23 @@ def figure10(fsi_src, fsi_mf, outdir, clas=None):
         bins = np.linspace(0.4, 1.0, 14)
     centers = 0.5 * (bins[:-1] + bins[1:])
 
-    def _ratio(sample, use_best_recoil):
+    def _ratio(d):
         """Weighted pmiss histograms for (e,e'p) and (e,e'pp), returns ratio.
-
-        use_best_recoil=False: the recoil is the transported SRC partner
-        (identical to Fig 5's FULL definition) -- used for the GCF sample,
-        matching the paper (its fig 10 GCF curve equals its fig 5 FULL).
-        use_best_recoil=True: any second proton (best FSI secondary) --
-        required for the MF sample, which has no generator-level recoil."""
-        d_eep  = sample
-        d_eepp = sample
-        src_eep   = apply_src_cuts(d_eep)
-        src_eepp  = apply_src_cuts(d_eepp)
-        if use_best_recoil:
-            prec_arr = d_eepp.get("prec_best", d_eepp["prec"])
-            has_rec  = d_eepp.get("has_recoil_best", (d_eepp["rec_type"] == PROTON))
-            acc_epp  = d_eepp.get("acc_mask_epp_best", _acc_mask_epp(d_eepp))
-            w_acc_epp= d_eepp.get("acc_w_epp_best",    _acc_w_epp(d_eepp))
-        else:
-            prec_arr = d_eepp["prec"]
-            has_rec  = (d_eepp["rec_type"] == PROTON)
-            acc_epp  = _acc_mask_epp(d_eepp)
-            w_acc_epp= _acc_w_epp(d_eepp)
-        m_ep  = select_eep(d_eep)  & src_eep  & _acc_mask_ep(d_eep)
-        m_epp = ((d_eepp["lead_type"] == PROTON) & has_rec
-                 & src_eepp & acc_epp
-                 & (prec_arr > SRC_CUTS["precoil_min"]))
-        w_ep  = d_eep ["weight"] * _acc_w_ep(d_eep)
-        w_epp = d_eepp["weight"] * w_acc_epp
-        h_ep,  _ = np.histogram(d_eep ["pmiss"][m_ep],  bins=bins, weights=w_ep [m_ep])
-        h_epp, _ = np.histogram(d_eepp["pmiss"][m_epp], bins=bins, weights=w_epp[m_epp])
+        Flat-list selection -- identical for the GCF and MF samples."""
+        src_m = apply_src_cuts(d)
+        m_ep  = select_eep(d) & src_m & _acc_mask_ep(d)
+        m_epp = (select_eepp(d) & src_m & _acc_mask_epp(d)
+                 & (d["prec"] > SRC_CUTS["precoil_min"]))
+        w_ep  = d["weight"] * _acc_w_ep(d)
+        w_epp = d["weight"] * _acc_w_epp(d)
+        h_ep,  _ = np.histogram(d["pmiss"][m_ep],  bins=bins, weights=w_ep [m_ep])
+        h_epp, _ = np.histogram(d["pmiss"][m_epp], bins=bins, weights=w_epp[m_epp])
         return np.divide(h_epp, h_ep,
                          out=np.zeros_like(h_epp, dtype=float),
                          where=h_ep > 0)
 
-    r_gcf = _ratio(fsi_src, use_best_recoil=False)
-    r_mf  = _ratio(fsi_mf,  use_best_recoil=True)
+    r_gcf = _ratio(fsi_src)
+    r_mf  = _ratio(fsi_mf)
 
     ax.plot(centers, r_gcf, color=COLORS["gcf"], linestyle=STYLES["gcf"],
             label=LABELS["gcf"], linewidth=LINEWIDTHS["gcf"])
@@ -1769,44 +1743,32 @@ def main():
                               "percentile (e.g. 99.5), applied per sample. "
                               "Variance reduction at the cost of small bias."))
 
-    parser.add_argument("--per-leg-recoil", action="store_true",
-                        help="Use the generator-truth (e,e'pp) recoil for FSI "
-                             "samples: the recoil must be the transported SRC "
-                             "partner. Default (off) is the detection-based "
-                             "definition -- the recoil is ANY detected second "
-                             "proton (gen recoil OR FSI-secondary, whichever "
-                             "has the highest momentum), matching what an "
-                             "experiment measures. PWIA and T+SCX are "
-                             "unaffected (no FSI secondaries).")
     args = parser.parse_args()
 
     os.makedirs(args.outdir, exist_ok=True)
 
-    def _load_and_preprocess(label, path, acc=None, is_fsi=False):
+    def _load_and_preprocess(label, path, acc=None, include_neutrons=False):
         print(f"Loading {label}: {path}")
         d = load_tree(path)
-        print(f"  {len(d['weight'])} events loaded")
+        n_raw = len(d["weight"])
+        keep = d["weight"] > 0
+        if not keep.all():
+            for k in list(d.keys()):
+                d[k] = d[k][keep]
+        print(f"  {n_raw} rows loaded, {int(keep.sum())} with weight > 0 kept")
         meta = load_meta(path)
         if meta is not None:
             print(f"    metadata: wf_mode={meta.get('wf_mode_name')}  "
                   f"N_saved={meta.get('n_events_saved')}  "
                   f"Sigma_w={meta.get('total_weight')}")
-        compute_kinematics(d, Ebeam=args.ebeam)
-        if acc is not None:
-            apply_acceptance_pipeline(d, acc, ebeam=args.ebeam)
-            print(f"    (e,e'p)  fiducial: {d['acc_mask_ep'].sum()} / {len(d['weight'])}")
-            print(f"    (e,e'pp) fiducial: {d['acc_mask_epp'].sum()} / {len(d['weight'])}")
-        compute_best_recoil_kinematics(d)
-        if acc is not None:
-            apply_acceptance_best_recoil(d, acc)
-
-        if (not args.per_leg_recoil) and is_fsi:
-            _apply_detection_recoil(d)
-            n_det = int(d["has_recoil_best"].sum()) if "has_recoil_best" in d \
-                    else int((d["rec_type"] == PROTON).sum())
-            print(f"    detection-recoil mode: {n_det} events with a "
-                  f"detected second proton")
-
+        flatlist_resolve(d, acc, args.ebeam, include_neutrons=include_neutrons)
+        nl = d["n_lead_cand"]; nr = d["n_recoil_cand"]
+        one = nl == 1
+        print(f"    flat-list lead:   1: {int(one.sum())}   0: {int((nl==0).sum())}"
+              f"   >=2: {int((nl>=2).sum())} (dropped)")
+        print(f"    flat-list recoil (lead events):  1: {int((one&(nr==1)).sum())}"
+              f"   0: {int((one&(nr==0)).sum())}"
+              f"   >=2: {int((one&(nr>=2)).sum())} (dropped from eepp)")
         return d
 
     if not args.no_acceptance:
@@ -1825,14 +1787,13 @@ def main():
 
     # GCF SRC samples (AV18, p_rel>kF): the PWIA / T+SCX / FULL curves of
     # Figs 2-7 and the FULL GCF reference of Figs 8-10. No SRC/MF mixing.
-    pwia = _load_and_preprocess("PWIA (SRC)", args.pwia, acc)
-    fsi  = _load_and_preprocess("FSI  (SRC)", args.fsi,  acc, is_fsi=True)
+    pwia = _load_and_preprocess("PWIA (SRC)", args.pwia, acc, include_neutrons=True)
+    fsi  = _load_and_preprocess("FSI  (SRC)", args.fsi,  acc)
 
     # Single-nucleon mean-field sample (Figs 8-10 only). FULL only.
     fsi_mf = None
     if args.fsi_mf:
-        fsi_mf = _load_and_preprocess("FSI  (MF, single nucleon)", args.fsi_mf, acc,
-                                      is_fsi=True)
+        fsi_mf = _load_and_preprocess("FSI  (MF, single nucleon)", args.fsi_mf, acc)
 
     # Optional weight cap (variance reduction), applied per sample.
     if args.weight_cap_percentile is not None:
