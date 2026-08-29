@@ -201,14 +201,18 @@ def plot(d, args):
     if args.xB_max is not None:
         mask_base &= (d["xB"] < args.xB_max)
         cut_desc += f", xB<{args.xB_max}"
+    # Unified (e,e'pp) selection, identical to plot_fig5_theta_heatmap_pair.py:
+    # lead cuts, pmiss window, xB, and the RECONSTRUCTED third nucleon above kF.
+    p3_mag = np.linalg.norm(d["p3"], axis=1)
     mask_src = (mask_base
                 & (d["theta_pq"] < 8.0) & (d["pN_over_q"] > 0.75)
-                & (d["pmiss"] > 0.25) & (d["pmiss"] < 0.9) & (d["xB"] < 1.2))
+                & (d["pmiss"] > 0.25) & (d["pmiss"] < 0.9) & (d["xB"] < 1.2)
+                & (p3_mag > args.kf))
 
     mask = mask_base.copy()
     if args.src_cuts:
         mask = mask_src.copy()
-        cut_desc += ", SRC(thpq<8,pN/q>0.75,0.25<pmiss<0.9,xB<1.2)"
+        cut_desc += f", SRC(thpq<8,pN/q>0.75,0.25<pmiss<0.9,xB<1.2,|p3|>{args.kf})"
     if args.interplane_max is not None:
         mask &= (d["interplane"] < args.interplane_max)
         cut_desc += f", interplane<{args.interplane_max}"
