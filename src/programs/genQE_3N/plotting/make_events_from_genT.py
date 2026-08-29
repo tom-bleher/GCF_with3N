@@ -83,7 +83,8 @@ def convert(input_path, output_path, ebeam, kf, chunk="200 MB"):
         # angle of each detected proton to q; +inf for everything else
         dot_q = (px * qx[:, None] + py * qy[:, None] + pz * qz[:, None])
         cosang = dot_q / (pmag * qmag[:, None] + 1e-30)
-        ang = np.arccos(np.clip(cosang, -1, 1))
+        # np.clip is not a ufunc, so it chokes on jagged arrays; min/max are.
+        ang = np.arccos(np.minimum(np.maximum(cosang, -1.0), 1.0))
         ang_masked = ak.where(is_p_det, ang, np.inf)
         lead_idx = ak.argmin(ang_masked, axis=1, keepdims=True)
 
@@ -126,10 +127,20 @@ def convert(input_path, output_path, ebeam, kf, chunk="200 MB"):
             "nNucleonAboveKF": nNucleon,
         }
         if first:
-            fout["events"] = out
+            # mktree, not plain assignment: assignment writes an RNTuple in
+            # recent uproot, which the TTree-based figure scripts cannot read.
+            fout.mktree("events", {
+                "weight": "f8",
+                "electron": ("f8", (4,)),
+                "q": ("f8", (4,)),
+                "lead": ("f8", (4,)),
+                "recoil": ("f8", (4,)),
+                "Q2": "f8", "xB": "f8", "nu": "f8", "pmiss": "f8",
+                "scattering_angle": "f8",
+                "nProtonAboveKF": "i4", "nNucleonAboveKF": "i4",
+            })
             first = False
-        else:
-            fout["events"].extend(out)
+        fout["events"].extend(out)
 
     # carry the attempts histogram through for per-attempt normalization
     if "hAttempts" in fin:
