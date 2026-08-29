@@ -99,6 +99,7 @@ if [[ -d "$GENIE_DIR" ]]; then
     fi
     QUIET="$SCRIPT_DIR/../genQE_FSI/config/quiet_messenger.xml"
     [[ -f "$QUIET" ]] && export GMSGCONF="$QUIET"
+    export LD_LIBRARY_PATH="$GENIE_DIR/lib:$HOME/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 else
     echo "WARNING: $GENIE_DIR not found; relying on existing GENIE env from profile." >&2
 fi
