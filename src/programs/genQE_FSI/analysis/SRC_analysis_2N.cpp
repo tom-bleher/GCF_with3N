@@ -51,7 +51,7 @@ CLI (positional; later args optional):
   argv[7] = Ebeam         (GeV; default 5.01 = CLAS/Hall-B Ref [28])
   argv[8] = fg_mode       (wf_mode 4 only: "global" [default] or "local")
   argv[9] = kF            (GeV/c; default 0.25; SRC/MF p_rel split, MF FG
-                           ceiling, and the nAboveKF counting threshold)
+                           ceiling, and the detected-nucleon counting threshold)
   argv[11] = vertex_rho_power (1-3; default 2. Radial weight rho^n r^2 of the
                            SRC-pair FSI vertex. Use 1 for the Wright et al.
                            paper convention: pair position follows the
@@ -154,7 +154,6 @@ int main(int argc, char **argv) {
     myGen->EnableFSI(doFSI);
     if (doFSI) {
         myGen->SetFSIModel(fsiModel);
-        myGen->SetFSITuning(250.);
         myGen->SetIndependentFSI(fsi_indep);
     }
 
@@ -195,37 +194,44 @@ int main(int argc, char **argv) {
 
     // Branch variables — scalars
     Double_t br_weight;
-    Int_t br_lead_type, br_rec_type;
+    Int_t br_gen_lead_type, br_gen_rec_type;
     Int_t br_doFSI;
     Double_t br_Q2, br_xB, br_nu, br_pmiss, br_scattering_angle;
-    Int_t br_nAboveKF;
+    Int_t br_nProtonAboveKF, br_nNucleonAboveKF;
     Double_t br_rho;  // wavefunction (spectral function S(pRel))
 
     // 4-vectors as {px, py, pz, E}
-    Double_t br_electron[4], br_lead_post[4], br_recoil_post[4], br_q[4];
+    Double_t br_electron[4], br_q[4];
+    Double_t br_lead[4], br_recoil[4];
     Double_t br_lead_pre[4], br_recoil_pre[4];
 
-    // FSI event stats
-    Int_t br_nSecondaries, br_nPions, br_nPiPlus, br_nPiMinus, br_nPiZero;
-    Bool_t br_leadCX, br_recoilCX, br_leadElastic, br_recoilElastic;
-    Bool_t br_leadAbsorbed = false, br_recAbsorbed = false;
+    // Post-FSI final state: flat particle list (GENIE's cascade output
+    // verbatim; the generated nucleon(s) when FSI is off).
+    static const Int_t kMaxPart = 100;
+    Int_t br_nPart;
+    Int_t br_part_pdg[kMaxPart], br_part_parentRole[kMaxPart], br_part_rescatterCode[kMaxPart];
+    Double_t br_part_px[kMaxPart], br_part_py[kMaxPart], br_part_pz[kMaxPart], br_part_E[kMaxPart];
 
-    // Variable-length FSI secondaries
-    static const Int_t kMaxSec = 50;
-    Int_t br_nSec;
-    Int_t br_sec_pdg[kMaxSec], br_sec_parentRole[kMaxSec], br_sec_rescatterCode[kMaxSec];
-    Double_t br_sec_px[kMaxSec], br_sec_py[kMaxSec], br_sec_pz[kMaxSec], br_sec_E[kMaxSec];
-
-    // Set up branches
+    // Set up branches.
+    //
+    // DETECTION-BASED (e,e'pp) EVENT BUILDING — identical rule to the 3N
+    // pipeline (make_events_from_genT.py):
+    //   * detected proton = final-state particle with pdg 2212 and |p| > kF
+    //   * lead   = the detected proton closest in angle to q
+    //   * recoil = the highest-momentum other detected proton
+    //   * pmiss  = |p_lead - q| (from the DETECTED lead)
+    // The paper's lead-identification cuts (theta_pq < 8 deg, p_lead > 0.75
+    // |q|), the (e,e'pp) requirement nProtonAboveKF == 2, and all other
+    // kinematic cuts are applied downstream in the figure scripts.
     tree->Branch("weight", &br_weight, "weight/D");
-    tree->Branch("lead_type", &br_lead_type, "lead_type/I");
-    tree->Branch("rec_type", &br_rec_type, "rec_type/I");
+    tree->Branch("gen_lead_type", &br_gen_lead_type, "gen_lead_type/I");
+    tree->Branch("gen_rec_type", &br_gen_rec_type, "gen_rec_type/I");
     tree->Branch("doFSI", &br_doFSI, "doFSI/I");
 
     tree->Branch("electron", br_electron, "electron[4]/D");
-    tree->Branch("lead_post", br_lead_post, "lead_post[4]/D");
-    tree->Branch("recoil_post", br_recoil_post, "recoil_post[4]/D");
     tree->Branch("q", br_q, "q[4]/D");
+    tree->Branch("lead", br_lead, "lead[4]/D");
+    tree->Branch("recoil", br_recoil, "recoil[4]/D");
     tree->Branch("lead_pre", br_lead_pre, "lead_pre[4]/D");
     tree->Branch("recoil_pre", br_recoil_pre, "recoil_pre[4]/D");
 
@@ -234,34 +240,18 @@ int main(int argc, char **argv) {
     tree->Branch("nu", &br_nu, "nu/D");
     tree->Branch("pmiss", &br_pmiss, "pmiss/D");
     tree->Branch("scattering_angle", &br_scattering_angle, "scattering_angle/D");
-    tree->Branch("nAboveKF", &br_nAboveKF, "nAboveKF/I");
+    tree->Branch("nProtonAboveKF", &br_nProtonAboveKF, "nProtonAboveKF/I");
+    tree->Branch("nNucleonAboveKF", &br_nNucleonAboveKF, "nNucleonAboveKF/I");
     tree->Branch("rho", &br_rho, "rho/D");
 
-    tree->Branch("nSecondaries", &br_nSecondaries, "nSecondaries/I");
-    tree->Branch("nPions", &br_nPions, "nPions/I");
-    tree->Branch("nPiPlus", &br_nPiPlus, "nPiPlus/I");
-    tree->Branch("nPiMinus", &br_nPiMinus, "nPiMinus/I");
-    tree->Branch("nPiZero", &br_nPiZero, "nPiZero/I");
-    tree->Branch("leadCX", &br_leadCX, "leadCX/O");
-    tree->Branch("recoilCX", &br_recoilCX, "recoilCX/O");
-    tree->Branch("leadElastic", &br_leadElastic, "leadElastic/O");
-    tree->Branch("recoilElastic", &br_recoilElastic, "recoilElastic/O");
-    // Per-leg absorption flags (diagnostics only). Set when the ORIGINAL
-    // nucleon ceased to exist in the cascade. The event is KEPT with its GCF
-    // primary weight; lead_post / recoil_post then hold the leg's promoted
-    // leading nucleon ejectum (zero only if no nucleon ejecta exists).
-    // Analyses should select on the final state, not on these flags.
-    tree->Branch("leadAbsorbed", &br_leadAbsorbed, "leadAbsorbed/O");
-    tree->Branch("recAbsorbed",  &br_recAbsorbed,  "recAbsorbed/O");
-
-    tree->Branch("nSec", &br_nSec, "nSec/I");
-    tree->Branch("sec_pdg", br_sec_pdg, "sec_pdg[nSec]/I");
-    tree->Branch("sec_parentRole", br_sec_parentRole, "sec_parentRole[nSec]/I");
-    tree->Branch("sec_rescatterCode", br_sec_rescatterCode, "sec_rescatterCode[nSec]/I");
-    tree->Branch("sec_px", br_sec_px, "sec_px[nSec]/D");
-    tree->Branch("sec_py", br_sec_py, "sec_py[nSec]/D");
-    tree->Branch("sec_pz", br_sec_pz, "sec_pz[nSec]/D");
-    tree->Branch("sec_E", br_sec_E, "sec_E[nSec]/D");
+    tree->Branch("nPart", &br_nPart, "nPart/I");
+    tree->Branch("part_pdg", br_part_pdg, "part_pdg[nPart]/I");
+    tree->Branch("part_parentRole", br_part_parentRole, "part_parentRole[nPart]/I");
+    tree->Branch("part_rescatterCode", br_part_rescatterCode, "part_rescatterCode[nPart]/I");
+    tree->Branch("part_px", br_part_px, "part_px[nPart]/D");
+    tree->Branch("part_py", br_part_py, "part_py[nPart]/D");
+    tree->Branch("part_pz", br_part_pz, "part_pz[nPart]/D");
+    tree->Branch("part_E", br_part_E, "part_E[nPart]/D");
 
     // Set the doFSI flag (constant for all events in this run)
     br_doFSI = doFSI ? 1 : 0;
@@ -272,11 +262,9 @@ int main(int argc, char **argv) {
     int events_zero_weight = 0;
     double total_weight = 0.0;
 
-    // FSI summary accumulators
-    int events_with_any_cx = 0, events_with_any_pion = 0, events_with_extra_nucleons = 0;
-    double weight_with_any_cx = 0.0, weight_with_any_pion = 0.0, weight_with_extra_nucleons = 0.0;
-    double weight_nucleons_above_kF_lt2 = 0.0, weight_nucleons_above_kF_eq2 = 0.0, weight_nucleons_above_kF_ge3 = 0.0;
-    int events_nucleons_above_kF_lt2 = 0, events_nucleons_above_kF_eq2 = 0, events_nucleons_above_kF_ge3 = 0;
+    // Summary accumulators: detected-proton multiplicity ((e,e'pp) = exactly 2)
+    double weight_protons_above_kF_lt2 = 0.0, weight_protons_above_kF_eq2 = 0.0, weight_protons_above_kF_ge3 = 0.0;
+    int events_protons_above_kF_lt2 = 0, events_protons_above_kF_eq2 = 0, events_protons_above_kF_ge3 = 0;
 
     const int progress_interval = 10000;
     std::cout << "Starting event loop: " << n_target_events << " events requested..." << std::endl;
@@ -308,80 +296,86 @@ int main(int argc, char **argv) {
         } else {
             TLorentzVector q_for_pRel(0.0, 0.0, Ebeam, Ebeam);
             q_for_pRel -= v_k_target;
-            TLorentzVector pre_lead   = doFSI ? myGen->GetPreFSILead()   : v_Lead_target;
-            TLorentzVector pre_recoil = doFSI ? myGen->GetPreFSIRecoil() : v_Rec_target;
-            TVector3 p_lead_init(pre_lead.X() - q_for_pRel.X(),
-                                 pre_lead.Y() - q_for_pRel.Y(),
-                                 pre_lead.Z() - q_for_pRel.Z());
-            TVector3 p_recoil_init(pre_recoil.X(), pre_recoil.Y(), pre_recoil.Z());
+            // v_Lead_target / v_Rec_target are the GENERATED (pre-FSI)
+            // nucleons: FSI no longer modifies the out-parameters.
+            TVector3 p_lead_init(v_Lead_target.X() - q_for_pRel.X(),
+                                 v_Lead_target.Y() - q_for_pRel.Y(),
+                                 v_Lead_target.Z() - q_for_pRel.Z());
+            TVector3 p_recoil_init(v_Rec_target.X(), v_Rec_target.Y(), v_Rec_target.Z());
             double pRel_mag = 0.5 * (p_lead_init - p_recoil_init).Mag();
             br_rho_final = myNucleus->get_S(pRel_mag, lead_type, rec_type);
         }
 
         total_weight += weight;
 
-        // ---- FSI event stats ----
-        const auto &fsi_stats = myGen->GetLastFSIEventStats();
-        br_leadCX = fsi_stats.leadChargeExchange;
-        br_recoilCX = fsi_stats.recoilChargeExchange;
-        br_leadElastic = fsi_stats.leadElasticLike;
-        br_recoilElastic = fsi_stats.recoilElasticLike;
-        br_leadAbsorbed = doFSI && myGen->IsLeadAbsorbed();
-        br_recAbsorbed  = doFSI && myGen->IsRecAbsorbed();
-        br_nSecondaries = fsi_stats.nSecondaries;
-        br_nPions = fsi_stats.nPionsTotal;
-        br_nPiPlus = fsi_stats.nPiPlus;
-        br_nPiMinus = fsi_stats.nPiMinus;
-        br_nPiZero = fsi_stats.nPiZero;
-
-        // Summary counters
-        if (br_leadCX || br_recoilCX) { events_with_any_cx++; weight_with_any_cx += weight; }
-        if (br_nPions > 0) { events_with_any_pion++; weight_with_any_pion += weight; }
-
-        // ---- FSI secondaries ----
-        const auto &secs = myGen->GetLastFSISecondaries();
-        br_nSec = std::min(static_cast<int>(secs.size()), kMaxSec);
-        int nNucleonSec = 0;
-        for (int i = 0; i < br_nSec; i++) {
-            br_sec_pdg[i] = secs[i].pdg;
-            br_sec_parentRole[i] = secs[i].parentRole;
-            br_sec_rescatterCode[i] = secs[i].rescatterCode;
-            br_sec_px[i] = secs[i].p4.X();
-            br_sec_py[i] = secs[i].p4.Y();
-            br_sec_pz[i] = secs[i].p4.Z();
-            br_sec_E[i] = secs[i].p4.T();
-            if (secs[i].pdg == 2212 || secs[i].pdg == 2112) nNucleonSec++;
+        // ---- Post-FSI final state: flat particle list ----
+        const auto &parts = myGen->GetFinalStateParticles();
+        br_nPart = std::min(static_cast<int>(parts.size()), kMaxPart);
+        for (int i = 0; i < br_nPart; i++) {
+            br_part_pdg[i] = parts[i].pdg;
+            br_part_parentRole[i] = parts[i].parentRole;
+            br_part_rescatterCode[i] = parts[i].rescatterCode;
+            br_part_px[i] = parts[i].p4.X();
+            br_part_py[i] = parts[i].p4.Y();
+            br_part_pz[i] = parts[i].p4.Z();
+            br_part_E[i] = parts[i].p4.T();
         }
-        if (nNucleonSec > 0) { events_with_extra_nucleons++; weight_with_extra_nucleons += weight; }
 
-        // ---- Count nucleons above kF ----
-        int nAboveKF = 0;
-        if (v_Lead_target.Vect().Mag() > kF) nAboveKF++;
-        if (v_Rec_target.Vect().Mag() > kF) nAboveKF++;
-        for (const auto &sec : secs) {
-            if ((sec.pdg == 2212 || sec.pdg == 2112) && sec.p4.Vect().Mag() > kF)
-                nAboveKF++;
-        }
-        br_nAboveKF = nAboveKF;
-
-        if (nAboveKF < 2) { weight_nucleons_above_kF_lt2 += weight; events_nucleons_above_kF_lt2++; }
-        else if (nAboveKF == 2) { weight_nucleons_above_kF_eq2 += weight; events_nucleons_above_kF_eq2++; }
-        else { weight_nucleons_above_kF_ge3 += weight; events_nucleons_above_kF_ge3++; }
-
-        // ---- Kinematics ----
+        // ---- Electron kinematics ----
         TLorentzVector vbeam_target(0.0, 0.0, Ebeam, Ebeam);
         TLorentzVector q = vbeam_target - v_k_target;
-        TVector3 p1 = v_Lead_target.Vect() - q.Vect();  // pmiss (reconstructed initial lead)
         double Q2 = -q.Mag2();
         double nu = vbeam_target.T() - v_k_target.T();
         double xB = (nu > 0) ? (Q2 / (2 * mN * nu)) : -1.0;
-        double pmiss = p1.Mag();
         double scattering_angle = v_k_target.Vect().Theta() * 180. / M_PI;
+
+        // ---- Detection-based (e,e'pp) event building ----
+        // Detected proton = final-state proton with |p| > kF. Lead = the
+        // detected proton closest in angle to q; recoil = the
+        // highest-momentum other detected proton. Identical rule to the 3N
+        // converter (make_events_from_genT.py).
+        int nProtonAboveKF = 0, nNucleonAboveKF = 0;
+        int lead_idx = -1, rec_idx = -1;
+        double best_angle = 1.e9, best_rec_p = -1.;
+        for (size_t i = 0; i < parts.size(); ++i) {
+            const bool isP = (parts[i].pdg == 2212);
+            const bool isN = (parts[i].pdg == 2112);
+            if (!(isP || isN)) continue;
+            if (parts[i].p4.Vect().Mag() <= kF) continue;
+            nNucleonAboveKF++;
+            if (!isP) continue;
+            nProtonAboveKF++;
+            const double ang = parts[i].p4.Vect().Angle(q.Vect());
+            if (ang < best_angle) { best_angle = ang; lead_idx = (int)i; }
+        }
+        for (size_t i = 0; i < parts.size(); ++i) {
+            if ((int)i == lead_idx) continue;
+            if (parts[i].pdg != 2212) continue;
+            if (parts[i].p4.Vect().Mag() <= kF) continue;
+            if (parts[i].p4.Vect().Mag() > best_rec_p) {
+                best_rec_p = parts[i].p4.Vect().Mag();
+                rec_idx = (int)i;
+            }
+        }
+        const TLorentzVector v_lead_det = (lead_idx >= 0) ? parts[lead_idx].p4
+                                                          : TLorentzVector();
+        const TLorentzVector v_rec_det  = (rec_idx >= 0)  ? parts[rec_idx].p4
+                                                          : TLorentzVector();
+        br_nProtonAboveKF = nProtonAboveKF;
+        br_nNucleonAboveKF = nNucleonAboveKF;
+
+        if (nProtonAboveKF < 2) { weight_protons_above_kF_lt2 += weight; events_protons_above_kF_lt2++; }
+        else if (nProtonAboveKF == 2) { weight_protons_above_kF_eq2 += weight; events_protons_above_kF_eq2++; }
+        else { weight_protons_above_kF_ge3 += weight; events_protons_above_kF_ge3++; }
+
+        // pmiss from the DETECTED lead (measurement-faithful).
+        TVector3 p1 = v_lead_det.Vect() - q.Vect();
+        double pmiss = (lead_idx >= 0) ? p1.Mag() : -1.0;
 
         // ---- Fill branch variables ----
         br_weight = weight;
-        br_lead_type = lead_type;
-        br_rec_type = rec_type;
+        br_gen_lead_type = lead_type;
+        br_gen_rec_type = rec_type;
         br_Q2 = Q2;
         br_xB = xB;
         br_nu = nu;
@@ -392,30 +386,21 @@ int main(int argc, char **argv) {
         br_electron[0] = v_k_target.X(); br_electron[1] = v_k_target.Y();
         br_electron[2] = v_k_target.Z(); br_electron[3] = v_k_target.T();
 
-        br_lead_post[0] = v_Lead_target.X(); br_lead_post[1] = v_Lead_target.Y();
-        br_lead_post[2] = v_Lead_target.Z(); br_lead_post[3] = v_Lead_target.T();
-
-        br_recoil_post[0] = v_Rec_target.X(); br_recoil_post[1] = v_Rec_target.Y();
-        br_recoil_post[2] = v_Rec_target.Z(); br_recoil_post[3] = v_Rec_target.T();
-
         br_q[0] = q.X(); br_q[1] = q.Y();
         br_q[2] = q.Z(); br_q[3] = q.T();
 
-        // Pre-FSI momenta
-        if (doFSI) {
-            TLorentzVector pre_lead = myGen->GetPreFSILead();
-            TLorentzVector pre_recoil = myGen->GetPreFSIRecoil();
-            br_lead_pre[0] = pre_lead.X(); br_lead_pre[1] = pre_lead.Y();
-            br_lead_pre[2] = pre_lead.Z(); br_lead_pre[3] = pre_lead.T();
-            br_recoil_pre[0] = pre_recoil.X(); br_recoil_pre[1] = pre_recoil.Y();
-            br_recoil_pre[2] = pre_recoil.Z(); br_recoil_pre[3] = pre_recoil.T();
-        } else {
-            // No FSI: pre = post
-            br_lead_pre[0] = br_lead_post[0]; br_lead_pre[1] = br_lead_post[1];
-            br_lead_pre[2] = br_lead_post[2]; br_lead_pre[3] = br_lead_post[3];
-            br_recoil_pre[0] = br_recoil_post[0]; br_recoil_pre[1] = br_recoil_post[1];
-            br_recoil_pre[2] = br_recoil_post[2]; br_recoil_pre[3] = br_recoil_post[3];
-        }
+        br_lead[0] = v_lead_det.X(); br_lead[1] = v_lead_det.Y();
+        br_lead[2] = v_lead_det.Z(); br_lead[3] = v_lead_det.T();
+
+        br_recoil[0] = v_rec_det.X(); br_recoil[1] = v_rec_det.Y();
+        br_recoil[2] = v_rec_det.Z(); br_recoil[3] = v_rec_det.T();
+
+        // Generated (pre-FSI) nucleons: the generate_event out-parameters are
+        // unmodified by FSI in the flat-list scheme.
+        br_lead_pre[0] = v_Lead_target.X(); br_lead_pre[1] = v_Lead_target.Y();
+        br_lead_pre[2] = v_Lead_target.Z(); br_lead_pre[3] = v_Lead_target.T();
+        br_recoil_pre[0] = v_Rec_target.X(); br_recoil_pre[1] = v_Rec_target.Y();
+        br_recoil_pre[2] = v_Rec_target.Z(); br_recoil_pre[3] = v_Rec_target.T();
 
         // ---- Density branch: AV18 S(pRel) for pair modes, n_FG(p1) for MF ----
         // Computed above (see br_rho_final).
@@ -476,24 +461,13 @@ int main(int argc, char **argv) {
               << "  Events with weight = 0:            " << events_zero_weight << "\n"
               << "  Generation efficiency:             " << gen_eff << "%\n"
               << "  Total weight:                      " << total_weight << "\n"
-              << "\n--- FSI summary ---\n";
-    if (doFSI) {
-        std::cout << "  Charge exchange:      " << events_with_any_cx
-                  << " events (" << (100.0 * weight_with_any_cx / total_weight) << "% weight)\n"
-                  << "  Pion production:      " << events_with_any_pion
-                  << " events (" << (100.0 * weight_with_any_pion / total_weight) << "% weight)\n"
-                  << "  Extra nucleon sec.:   " << events_with_extra_nucleons
-                  << " events (" << (100.0 * weight_with_extra_nucleons / total_weight) << "% weight)\n";
-    } else {
-        std::cout << "  (FSI disabled)\n";
-    }
-    std::cout << "\n--- Final nucleon multiplicity above kF=" << kF << " GeV/c ---\n"
-              << "  <2 above kF:   " << events_nucleons_above_kF_lt2
-              << "  (wfrac " << (100.0 * weight_nucleons_above_kF_lt2 / total_weight) << "%)\n"
-              << "  =2 above kF:   " << events_nucleons_above_kF_eq2
-              << "  (wfrac " << (100.0 * weight_nucleons_above_kF_eq2 / total_weight) << "%)\n"
-              << "  >=3 above kF:  " << events_nucleons_above_kF_ge3
-              << "  (wfrac " << (100.0 * weight_nucleons_above_kF_ge3 / total_weight) << "%)\n"
+              << "\n--- Detected-proton multiplicity above kF=" << kF << " GeV/c ---\n"
+              << "  <2 protons:   " << events_protons_above_kF_lt2
+              << "  (wfrac " << (100.0 * weight_protons_above_kF_lt2 / total_weight) << "%)\n"
+              << "  =2 protons:   " << events_protons_above_kF_eq2
+              << "  (wfrac " << (100.0 * weight_protons_above_kF_eq2 / total_weight) << "%)  [(e,e'pp)]\n"
+              << "  >=3 protons:  " << events_protons_above_kF_ge3
+              << "  (wfrac " << (100.0 * weight_protons_above_kF_ge3 / total_weight) << "%)\n"
               << "========================================\n"
               << "Output written to: " << output_filename << "\n";
 

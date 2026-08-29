@@ -10,11 +10,17 @@
 // QEGeneratorFSI_3N — 3N quasi-elastic generator with GENIE FSI.
 //
 // Wraps QEGenerator_3N. After the parent samples the (N1, N2, N3) final state
-// it transports each of the three outgoing nucleons through GENIE's
-// intranuclear cascade (hN or hA mode), using a single shared SRC-triplet
-// position sampled from rho^3(r). Pauli blocking is handled inside GENIE's
-// cascade (blocked collisions are rerolled); no additional post-FSI momentum
-// cut is applied here.
+// it transports the three outgoing nucleons through GENIE's intranuclear
+// cascade (hN or hA mode), using a single shared SRC-triplet position sampled
+// from rho^3(r). Pauli blocking is handled inside GENIE's cascade (blocked
+// collisions are rerolled); no additional post-FSI momentum cut is applied.
+//
+// The FSI output is purely a particle list (GetFinalStateParticles()): GENIE's
+// stable final state verbatim, with no lead/recoil designation and no
+// absorption special-casing. The generated (pre-FSI) nucleons are returned
+// through the generate_event_with_FSI out-parameters unchanged. Which
+// final-state particle is "lead" or "recoil" is a detection-level choice made
+// downstream from particle types and momenta alone.
 //
 // The transport medium is the residual nucleus (A_res = A - 3,
 // Z_res = Z - n_protons_in_triplet).
@@ -27,9 +33,11 @@ public:
                     int A = 12, int Z = 6);
   ~QEGeneratorFSI_3N();
 
-  // Generate one event. Identical signature to QEGenerator_3N::generate_event,
-  // but applies FSI to the three outgoing nucleons before returning. The
-  // pre-FSI 4-momenta are cached and accessible via GetPreFSI*().
+  // Generate one event. Identical signature to QEGenerator_3N::generate_event.
+  // The out-parameters hold the GENERATED (pre-FSI) nucleons; the post-FSI
+  // final state is available via GetFinalStateParticles(). With FSI disabled
+  // (or skipped for an unphysical residual) the particle list is simply the
+  // three generated nucleons.
   void generate_event_with_FSI(double &weight,
                                int &N1_type, int &N2_type, int &N3_type,
                                TLorentzVector &vk_target,
@@ -43,8 +51,8 @@ public:
   void SetFSIModel(FSIModel m)               { fFSIModel = m; }
 
   // Independent-FSI mode: transport each nucleon through its own GENIE
-  // record with an undepleted A-3 remnant (the pre-rewrite behaviour),
-  // instead of the default shared depleting remnant in a single record.
+  // record with an undepleted A-3 remnant, instead of the default shared
+  // depleting remnant in a single record.
   void SetIndependentFSI(bool i = true)      { fIndependentFSI = i; }
   bool IndependentFSI() const                { return fIndependentFSI; }
 
@@ -53,29 +61,17 @@ public:
   // (A, Z used by ApplyFSI for GENIE transport).
   void SetTargetNucleus(int A, int Z);
 
-  const TLorentzVector & GetPreFSILead() const { return fPreLead; }
-  const TLorentzVector & GetPreFSIN2()   const { return fPreN2;   }
-  const TLorentzVector & GetPreFSIN3()   const { return fPreN3;   }
-  const std::vector<FSISecondary> & GetLastFSISecondaries() const { return fSec; }
+  // Post-FSI final state of the last generated event: a flat particle list
+  // (parentRole = 0/1/2 for descendants of N1/N2/N3, diagnostic only).
+  const std::vector<FSIParticle> & GetFinalStateParticles() const { return fParticles; }
 
   bool   FSIEnabled() const { return fDoFSI; }
   FSIModel CurrentFSIModel() const { return fFSIModel; }
 
-  // Per-leg absorption flags from the last FSI call.
-  //
-  // True when GENIE's cascade produced no surviving nucleon descendant for
-  // that leg (typically NN absorption). The event is NOT killed in that
-  // case: the GCF primary cross section still applies and the surviving
-  // legs / secondaries are still physically observable. Selection of
-  // (e,e'pp) or (e,e'ppp) topologies must check these flags downstream.
-  bool IsN1Absorbed() const { return fN1Absorbed; }
-  bool IsN2Absorbed() const { return fN2Absorbed; }
-  bool IsN3Absorbed() const { return fN3Absorbed; }
-
 private:
-  void ApplyFSI(int &N1_type, int &N2_type, int &N3_type,
-                TLorentzVector &v1, TLorentzVector &v2, TLorentzVector &v3,
-                double &weight);
+  void ApplyFSI(int N1_type, int N2_type, int N3_type,
+                const TLorentzVector &v1, const TLorentzVector &v2,
+                const TLorentzVector &v3);
 
   TRandom3  *fRand;          // mirrors parent's myRand for use here
   bool       fDoFSI;
@@ -84,13 +80,7 @@ private:
   int        fA;
   int        fZ;
 
-  TLorentzVector fPreLead;
-  TLorentzVector fPreN2;
-  TLorentzVector fPreN3;
-  std::vector<FSISecondary> fSec;
-  bool fN1Absorbed = false;
-  bool fN2Absorbed = false;
-  bool fN3Absorbed = false;
+  std::vector<FSIParticle> fParticles;
 };
 
 #endif

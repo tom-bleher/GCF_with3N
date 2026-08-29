@@ -12,16 +12,22 @@
 
 // QEGeneratorFSI — QE generator with Final State Interactions (FSI)
 //
-// Extends gcfGenerator to apply nuclear FSI to the outgoing SRC nucleon pair
-// using GENIE's intranuclear cascade (hN or hA mode).
+// Extends gcfGenerator to transport the outgoing SRC nucleon pair (or a
+// single mean-field nucleon) through GENIE's intranuclear cascade (hN or hA
+// mode).
 //
 // hN (HNIntranuke2018): Full intranuclear cascade with hadron-nucleon
 //   cross sections and medium corrections. More accurate.
 // hA (HAIntranuke2018): Effective cascade using hadron-nucleus cross sections.
 //   Faster (~5-10x), suitable for systematics studies.
 //
-// Pauli blocking is applied post-FSI: if the final-state nucleon momentum
-// falls below the Fermi momentum the event is rejected (weight -> 0).
+// The FSI output is purely a particle list (GetFinalStateParticles()):
+// GENIE's stable final state verbatim, with no lead/recoil designation and
+// no absorption special-casing. The generated (pre-FSI) nucleons are
+// returned through the generate_event out-parameters unchanged. Which
+// final-state particle is "lead" or "recoil" is a detection-level choice
+// made downstream from types and momenta alone. Pauli blocking is handled
+// inside GENIE's cascade; no additional momentum cut is applied here.
 
 class QEGeneratorFSI: public gcfGenerator
 {
@@ -30,7 +36,9 @@ class QEGeneratorFSI: public gcfGenerator
                  TRandom3 * thisRand);
   ~QEGeneratorFSI();
 
-  // Event generators (same interface as QEGenerator)
+  // Event generators (same interface as QEGenerator). The out-parameters
+  // hold the GENERATED (pre-FSI) nucleons; the post-FSI final state is in
+  // GetFinalStateParticles().
   void generate_event(double &weight, int &lead_type, int &rec_type,
                       TLorentzVector &vk_target,
                       TLorentzVector &vLead_target,
@@ -67,8 +75,8 @@ class QEGeneratorFSI: public gcfGenerator
   // distribution (no correlated pair), transported through GENIE FSI in the
   // A-1 residual. No gen-level recoil is emitted: rec_type is set to a
   // non-nucleon sentinel and vRec is zero, so any second proton in an
-  // (e,e'pp) analysis must originate from FSI secondaries — the correct MF
-  // picture. FSI is still toggled by EnableFSI().
+  // (e,e'pp) analysis must originate from the FSI particle list — the
+  // correct MF picture. FSI is still toggled by EnableFSI().
   enum FermiGasMode { kGlobalFG, kLocalFG };
   void generate_event_MF(double &weight, int &lead_type, int &rec_type,
                          TLorentzVector &vk_target,
@@ -93,70 +101,23 @@ class QEGeneratorFSI: public gcfGenerator
   void SetFSIModel(FSIModel m) { fFSIModel = m; }
 
   // Independent-FSI mode: transport each nucleon through its own GENIE
-  // record with an undepleted A-2 remnant (the pre-rewrite behaviour),
-  // instead of the default shared depleting remnant in a single record.
+  // record with an undepleted A-2 remnant, instead of the default shared
+  // depleting remnant in a single record.
   void SetIndependentFSI(bool i = true) { fIndependentFSI = i; }
   bool IndependentFSI() const { return fIndependentFSI; }
 
-  // Tuning: Fermi momentum for Pauli blocking threshold (in MeV/c)
-  void SetFSITuning(double fermiMom_MeV);
+  // Post-FSI final state of the last generated event: a flat particle list
+  // (parentRole = 0/1 for descendants of the generated lead/recoil,
+  // diagnostic only). With FSI disabled (or skipped for an unphysical
+  // residual) this is simply the generated nucleon(s).
+  const std::vector<FSIParticle> & GetFinalStateParticles() const {
+    return fParticles;
+  }
 
-    // FSISecondary is now defined in fsi/GenieFSIHelpers.hh and shared
-    // between the 2N and 3N FSI generators.
-
-      struct FSIEventStats {
-        bool leadChargeExchange;
-        bool recoilChargeExchange;
-        bool leadElasticLike;
-        bool recoilElasticLike;
-        int nSecondaries;
-        int nPionsTotal;
-        int nPiPlus;
-        int nPiMinus;
-        int nPiZero;
-
-        FSIEventStats()
-          : leadChargeExchange(false),
-            recoilChargeExchange(false),
-            leadElasticLike(false),
-            recoilElasticLike(false),
-            nSecondaries(0),
-            nPionsTotal(0),
-            nPiPlus(0),
-            nPiMinus(0),
-            nPiZero(0) {}
-      };
-
-    const std::vector<FSISecondary> & GetLastFSISecondaries() const {
-      return fLastFSISecondaries;
-    }
-
-    const FSIEventStats & GetLastFSIEventStats() const {
-      return fLastFSIEventStats;
-    }
-
-    // Pre-FSI momenta (saved before intranuclear cascade modifies them)
-    const TLorentzVector & GetPreFSILead()   const { return fLeadPreFSI; }
-    const TLorentzVector & GetPreFSIRecoil() const { return fRecPreFSI;  }
-
-    // Per-leg absorption flags from the last FSI call.
-    //
-    // Set to true when GENIE's cascade produced no surviving nucleon
-    // descendant for that leg (e.g. NN absorption fate). The event is NOT
-    // killed in that case -- the GCF primary cross section still applies,
-    // and the surviving leg(s) plus any secondaries (pions etc.) are still
-    // physically observable. Downstream selection must check these flags
-    // to decide whether the event passes a (e,e'pp) topology cut.
-    //
-    // Pauli blocking, in contrast, still zeroes the weight (the kinematic
-    // configuration is genuinely forbidden, not just hidden by FSI).
-    bool IsLeadAbsorbed() const { return fLeadAbsorbed; }
-    bool IsRecAbsorbed()  const { return fRecAbsorbed; }
-
-    // Fermi-gas density n_FG(|p1|) of the last generate_event_MF call,
-    // evaluated at the TRUE sampled struck-nucleon momentum (free of the
-    // radiative/Coulomb reconstruction ambiguity). Valid for MF events only.
-    double GetLastMFRho() const { return fLastMFRho; }
+  // Fermi-gas density n_FG(|p1|) of the last generate_event_MF call,
+  // evaluated at the TRUE sampled struck-nucleon momentum (free of the
+  // radiative/Coulomb reconstruction ambiguity). Valid for MF events only.
+  double GetLastMFRho() const { return fLastMFRho; }
 
  private:
   eNCrossSection * myCS;
@@ -170,13 +131,7 @@ class QEGeneratorFSI: public gcfGenerator
   FSIModel fFSIModel;
   bool   fIndependentFSI = false;
   int    fA, fZ;           // nucleus A and Z (set from gcfNucleus in ctor)
-  double fFermiMomentum;   // GeV/c, for Pauli blocking (default 0.220)
-  std::vector<FSISecondary> fLastFSISecondaries;
-  FSIEventStats fLastFSIEventStats;
-  TLorentzVector fLeadPreFSI;   // lead nucleon 4-momentum before cascade
-  TLorentzVector fRecPreFSI;    // recoil nucleon 4-momentum before cascade
-  bool fLeadAbsorbed = false;   // GENIE produced no surviving nucleon for lead
-  bool fRecAbsorbed  = false;   // GENIE produced no surviving nucleon for recoil
+  std::vector<FSIParticle> fParticles;
 
   // Single-nucleon MF state
   static constexpr int kNoRecoil = 0;  // rec_type sentinel: no recoil nucleon
@@ -191,19 +146,21 @@ class QEGeneratorFSI: public gcfGenerator
   std::vector<double> fLocalFG_p;       // local-FG marginal table: p grid (GeV/c)
   std::vector<double> fLocalFG_n;       // local-FG marginal table: n_MF(p)
 
-  // Apply FSI to the lead and recoil nucleons.
-  // Modifies lead_type, rec_type, momenta in-place; sets weight=0 on absorption
-  // or Pauli blocking.
-  void ApplyFSI(int &lead_type, int &rec_type,
-                TLorentzVector &vLead_target,
-                TLorentzVector &vRec_target,
-                double &weight);
+  // Transport the generated nucleon(s) through GENIE and fill fParticles
+  // with the resulting flat final-state particle list. Does not modify the
+  // generated types/momenta or the event weight.
+  void ApplyFSI(int lead_type, int rec_type,
+                const TLorentzVector &vLead_target,
+                const TLorentzVector &vRec_target);
 
-  // Apply FSI to a SINGLE struck nucleon transported through the A-1 residual
-  // (mean-field knockout). Modifies lead_type and vLead in place; sets
-  // weight=0 on absorption or Pauli blocking.
-  void ApplyFSI_single(int &lead_type, TLorentzVector &vLead_target,
-                       double &weight);
+  // Single-nucleon variant (mean-field knockout, A-1 residual).
+  void ApplyFSI_single(int lead_type, const TLorentzVector &vLead_target);
+
+  // Seed fParticles with the generated nucleon(s) unchanged (the final state
+  // when FSI is off or skipped).
+  void SeedFinalState(int lead_type, int rec_type,
+                      const TLorentzVector &vLead_target,
+                      const TLorentzVector &vRec_target);
 
   // Shared electron/Jacobian/cross-section kinematics (extracted so both the
   // 2N pair path and the single-nucleon MF path use identical physics).
@@ -230,13 +187,6 @@ class QEGeneratorFSI: public gcfGenerator
   double eval_n_FG(double p) const;
   // Build (and cache) the local-Fermi-gas momentum table for nucleus fA.
   void build_local_FG_table();
-
-  // Perform a 2-body elastic scatter of p4 off a nucleon at rest.
-  void ApplyElasticScatter(TLorentzVector &p4);
-
-  // Pauli blocking: true if the nucleon's 3-momentum magnitude is below
-  // the Fermi momentum.
-  bool CheckPauliBlocking(const TLorentzVector &p4) const;
 };
 
 #endif

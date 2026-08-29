@@ -10,14 +10,25 @@
 //   kHA2018: effective hadron-nucleus cascade (HAIntranuke2018) - faster
 enum FSIModel { kHN2018, kHA2018 };
 
-// Stable secondary produced during a single ApplyGenieFSIToNucleon call.
-// The selected outgoing nucleon used to update lead/recoil state is NOT
-// included in the secondaries list.
-struct FSISecondary {
-  int parentRole;     // caller-defined tag (e.g. 0=lead, 1=recoil, 2=third)
+// One stable final-state particle of the GENIE cascade. The cascade output is
+// purely a particle list: no particle is designated lead/recoil here, and
+// absorption of an input nucleon is not special-cased (the absorbed nucleon
+// simply does not appear; its ejecta do). Any lead/recoil identification is a
+// DETECTION-level choice made downstream from types and momenta alone.
+struct FSIParticle {
   int pdg;
   TLorentzVector p4;
-  int rescatterCode;  // GENIE GHepParticle::RescatterCode()
+  int rescatterCode;  // GENIE GHepParticle::RescatterCode() (diagnostic)
+  int parentRole;     // caller tag of the input nucleon this particle
+                      // descends from (provenance diagnostic; -1 if unknown)
+};
+
+// Per-nucleon input for the FSI helper.
+struct FSIInputNucleon {
+  int pdg;                  // PDG code on entry (proton/neutron)
+  TLorentzVector p4;        // 4-momentum on entry
+  TLorentzVector x4;        // initial 4-position inside the nucleus
+  int parentRole;           // provenance tag copied onto descendants
 };
 
 namespace fsi {
@@ -63,74 +74,29 @@ TLorentzVector SampleMFPosition(int A, TRandom3 *rnd);
 // or the density is non-positive.
 double LocalFermiMomentum(int A, int N_q, double r_fm);
 
-// Apply GENIE intranuclear cascade to a single nucleon.
-// Inputs:
-//   A_residual, Z_residual : transport medium (nucleus the nucleon traverses)
-//   nucleon_type           : input PDG code (proton/neutron); updated in place
-//                            to the post-FSI nucleon PDG (may flip on charge
-//                            exchange).
-//   p4                     : input 4-momentum; updated in place to post-FSI.
-//   x4                     : initial 4-position inside the nucleus.
-//   rnd                    : ROOT RNG used to seed GENIE for this call.
-//   parentRole             : tag attached to all returned secondaries.
-//   secondaries            : appended to with stable descendants other than
-//                            the selected outgoing nucleon.
-//   model                  : kHN2018 or kHA2018.
-// Returns true on success (a stable nucleon was produced); false if the
-// nucleon was absorbed or no nucleon descendant could be selected.
-bool ApplyGenieFSIToNucleon(int A_residual, int Z_residual,
-                            int &nucleon_type,
-                            TLorentzVector &p4,
-                            const TLorentzVector &x4,
-                            TRandom3 *rnd,
-                            int parentRole,
-                            std::vector<FSISecondary> &secondaries,
-                            FSIModel model);
-
-// Per-nucleon input for the multi-hadron FSI helper.
-struct FSIInputNucleon {
-  int pdg;                  // PDG code on entry (proton/neutron)
-  TLorentzVector p4;        // 4-momentum on entry
-  TLorentzVector x4;        // initial 4-position inside the nucleus
-  int parentRole;           // tag attached to secondaries from this nucleon
-};
-
-// Per-nucleon output from the multi-hadron FSI helper.
-struct FSIOutputNucleon {
-  bool survived;            // false if absorbed / no stable nucleon descendant
-  int pdg;                  // post-FSI PDG (may flip on charge exchange)
-  TLorentzVector p4;        // post-FSI 4-momentum
-};
-
-// Apply GENIE intranuclear cascade to SEVERAL nucleons SIMULTANEOUSLY.
+// Transport the input nucleons through GENIE's intranuclear cascade and
+// APPEND every stable final-state particle to `particles`.
 //
-// All input nucleons are placed into a single GHepRecord as
-// kIStHadronInTheNucleus particles. GENIE's Intranuke2018::TransportHadrons
-// then iterates over them sharing a single remnant nucleus (fRemnA/fRemnZ),
-// so any absorption / 2p2h removal during the first nucleon's cascade
-// properly depletes the medium seen by subsequent nucleons. This is the
-// physically correct way to FSI a knocked-out SRC pair or triplet through
-// GENIE Intranuke (still sequential within Intranuke's cascade, but with
-// shared bookkeeping — no longer independent passes through an undepleted
-// A-2 / A-3 remnant).
+// All inputs are placed into a single GHepRecord as kIStHadronInTheNucleus
+// particles; GENIE's Intranuke2018::TransportHadrons iterates over them
+// sharing a single remnant nucleus (fRemnA/fRemnZ), so absorption during one
+// nucleon's cascade depletes the medium seen by the others. For independent
+// transport, call once per nucleon with a single-element input vector.
 //
-//   A_residual, Z_residual : transport medium AT ENTRY (before any cascade
-//                            depletion).
-//   inputs                 : one entry per outgoing nucleon.
-//   outputs                : resized to inputs.size(); per-nucleon survival
-//                            flag and post-FSI (pdg, p4).
-//   secondaries            : appended to with stable descendants other than
-//                            the selected outgoing nucleon, tagged with the
-//                            originating input's parentRole.
-//   model                  : kHN2018 or kHA2018.
-// Returns true iff EVERY input produced a surviving nucleon. The caller
-// can also inspect outputs[i].survived for per-nucleon results.
-bool ApplyGenieFSIToNucleons(int A_residual, int Z_residual,
-                              const std::vector<FSIInputNucleon> &inputs,
-                              std::vector<FSIOutputNucleon> &outputs,
-                              TRandom3 *rnd,
-                              std::vector<FSISecondary> &secondaries,
-                              FSIModel model);
+// The output is GENIE's final state verbatim: no surviving-nucleon selection,
+// no daughter-chain walking, no absorption special-casing. Pseudo-particles
+// and the remnant nucleus are excluded; everything else with status
+// kIStStableFinalState is returned, tagged with the parentRole of the input
+// nucleon it descends from.
+//
+// Returns true if the cascade ran; false if FSI is not compiled in or no
+// valid nucleon input was given (in which case `particles` is not modified,
+// and the caller should treat the inputs as the final state).
+bool ApplyGenieFSI(int A_residual, int Z_residual,
+                   const std::vector<FSIInputNucleon> &inputs,
+                   std::vector<FSIParticle> &particles,
+                   TRandom3 *rnd,
+                   FSIModel model);
 
 } // namespace fsi
 

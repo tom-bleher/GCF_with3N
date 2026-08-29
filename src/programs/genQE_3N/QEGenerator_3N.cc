@@ -294,11 +294,11 @@ void QEGenerator_3N::generate_event(double &weight, int &N1_type, int &N2_type, 
   TVector3 v_Lead(v_Lead_target.X(),v_Lead_target.Y(),v_Lead_target.Z());
   double E_Lead = v_Lead_target.T();
 
-  // Jacobian for the E_k delta function: |df/dE_k| = (E_Lead - p_Lead.k_hat)/E_Lead.
+  // Jacobian for the E_k delta function: |E'_1 / (E'_1 - p'_1 . k_hat)|.
   // Differs deliberately from Eq. 18 of 3N_Generator.pdf, which mis-applies the
   // chain rule (dots p'_1 into the full argument instead of the inner derivative -k_hat).
   double J_delta = E_Lead - v_Lead.Dot(hat_k);
-  weight *= E_Lead/J_delta;
+  weight *= fabs(E_Lead/J_delta);
 
   //Add in the actual cross section of the weight
   //Fudge some numbers for C
@@ -308,7 +308,7 @@ void QEGenerator_3N::generate_event(double &weight, int &N1_type, int &N2_type, 
   
   double sigma = myCS->sigma_eN(Ebeam, v_k, v_Lead, (N1_type==pCode));
   double rho_val = get_rho(N2_type, N3_type, theta_ab, mom_a, mom_b);
-  double delta_jac = E_Lead/J_delta;
+  double delta_jac = fabs(E_Lead/J_delta);
 
   weight *= 0.5 * pow(2 * M_PI,-7) * C * t * sigma;
   weight *= rho_val;

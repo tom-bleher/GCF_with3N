@@ -2,6 +2,7 @@
 #include <iostream>
 #include <unistd.h>
 #include <math.h>
+#include <vector>
 #include "TFile.h"
 #include "TTree.h"
 #include "TH1D.h"
@@ -22,13 +23,18 @@ QEGeneratorFSI_3N * myGen;
 TTree * outtree;
 
 // Tree variables
-Double_t pe[3], pLead[3], p2[3], p3[3], pAm3[3];
-Double_t pLead_pre[3], p2_pre[3], p3_pre[3];
+Double_t pe[3], p1_gen[3], p2_gen[3], p3_gen[3], pAm3[3];
 Double_t weight;
 Int_t N1_type, N2_type, N3_type;
 Int_t doFSI_flag;
 Int_t fsiModelInt;       // 0 = hN, 1 = hA
-Int_t N1_absorbed, N2_absorbed, N3_absorbed;
+// Post-FSI final state: purely a flat particle list (GENIE's cascade output
+// verbatim; with FSI off, the three generated nucleons). No particle is
+// designated lead/recoil here -- the analysis builds the measured event
+// (detection-based) from types and momenta alone.
+Int_t nPart;
+std::vector<int>    part_pdg, part_parentRole, part_rescatterCode;
+std::vector<double> part_px, part_py, part_pz, part_E;
 long long totalAttempts = 0;
 
 void Usage()
@@ -176,24 +182,24 @@ bool init(int argc, char ** argv)
   outtree->Branch("N2_type",  &N2_type,  "N2_type/I");
   outtree->Branch("N3_type",  &N3_type,  "N3_type/I");
   outtree->Branch("pe",        pe,       "pe[3]/D");
-  outtree->Branch("pLead",     pLead,    "pLead[3]/D");
-  outtree->Branch("p2",        p2,       "p2[3]/D");
-  outtree->Branch("p3",        p3,       "p3[3]/D");
+  // Generated (pre-FSI) nucleon momenta: p1_gen is the struck nucleon,
+  // p2_gen/p3_gen the spectator pair. Initial-state truth, not the measured
+  // final state.
+  outtree->Branch("p1_gen",    p1_gen,   "p1_gen[3]/D");
+  outtree->Branch("p2_gen",    p2_gen,   "p2_gen[3]/D");
+  outtree->Branch("p3_gen",    p3_gen,   "p3_gen[3]/D");
   outtree->Branch("pAm3",      pAm3,     "pAm3[3]/D");
-  outtree->Branch("pLead_pre", pLead_pre,"pLead_pre[3]/D");
-  outtree->Branch("p2_pre",    p2_pre,   "p2_pre[3]/D");
-  outtree->Branch("p3_pre",    p3_pre,   "p3_pre[3]/D");
   outtree->Branch("doFSI",    &doFSI_flag,  "doFSI/I");
   outtree->Branch("fsiModel", &fsiModelInt, "fsiModel/I");
-  // Per-leg absorption flags: 1 if GENIE produced no surviving nucleon
-  // descendant for that leg. The event is NOT killed in that case (its
-  // primary-vertex weight is still valid); the absorbed leg's p4 is the
-  // zero sentinel. The analysis selects (e,e'ppp) via !N1 && !N2 && !N3,
-  // and (e,e'pp) feed-down by counting how many survived.
-  outtree->Branch("N1_absorbed", &N1_absorbed, "N1_absorbed/I");
-  outtree->Branch("N2_absorbed", &N2_absorbed, "N2_absorbed/I");
-  outtree->Branch("N3_absorbed", &N3_absorbed, "N3_absorbed/I");
   outtree->Branch("weight",   &weight,      "weight/D");
+  outtree->Branch("nPart",    &nPart,       "nPart/I");
+  outtree->Branch("part_pdg",           &part_pdg);
+  outtree->Branch("part_parentRole",    &part_parentRole);
+  outtree->Branch("part_rescatterCode", &part_rescatterCode);
+  outtree->Branch("part_px",            &part_px);
+  outtree->Branch("part_py",            &part_py);
+  outtree->Branch("part_pz",            &part_pz);
+  outtree->Branch("part_E",             &part_E);
 
   return true;
 }
@@ -206,21 +212,22 @@ void evnt(int /*event*/)
                                  vk, vLead, v2, v3, vAm3, useCM);
 
   pe[0] = vk.X();    pe[1] = vk.Y();    pe[2] = vk.Z();
-  pLead[0] = vLead.X(); pLead[1] = vLead.Y(); pLead[2] = vLead.Z();
-  p2[0] = v2.X();    p2[1] = v2.Y();    p2[2] = v2.Z();
-  p3[0] = v3.X();    p3[1] = v3.Y();    p3[2] = v3.Z();
+  p1_gen[0] = vLead.X(); p1_gen[1] = vLead.Y(); p1_gen[2] = vLead.Z();
+  p2_gen[0] = v2.X();    p2_gen[1] = v2.Y();    p2_gen[2] = v2.Z();
+  p3_gen[0] = v3.X();    p3_gen[1] = v3.Y();    p3_gen[2] = v3.Z();
   pAm3[0] = vAm3.X(); pAm3[1] = vAm3.Y(); pAm3[2] = vAm3.Z();
 
-  const TLorentzVector &preL = myGen->GetPreFSILead();
-  const TLorentzVector &pre2 = myGen->GetPreFSIN2();
-  const TLorentzVector &pre3 = myGen->GetPreFSIN3();
-  pLead_pre[0] = preL.X(); pLead_pre[1] = preL.Y(); pLead_pre[2] = preL.Z();
-  p2_pre[0]    = pre2.X(); p2_pre[1]    = pre2.Y(); p2_pre[2]    = pre2.Z();
-  p3_pre[0]    = pre3.X(); p3_pre[1]    = pre3.Y(); p3_pre[2]    = pre3.Z();
-
-  N1_absorbed = myGen->IsN1Absorbed() ? 1 : 0;
-  N2_absorbed = myGen->IsN2Absorbed() ? 1 : 0;
-  N3_absorbed = myGen->IsN3Absorbed() ? 1 : 0;
+  part_pdg.clear(); part_parentRole.clear(); part_rescatterCode.clear();
+  part_px.clear();  part_py.clear();  part_pz.clear();  part_E.clear();
+  const std::vector<FSIParticle> &parts = myGen->GetFinalStateParticles();
+  for (const auto &p : parts) {
+    part_pdg.push_back(p.pdg);
+    part_parentRole.push_back(p.parentRole);
+    part_rescatterCode.push_back(p.rescatterCode);
+    part_px.push_back(p.p4.X()); part_py.push_back(p.p4.Y());
+    part_pz.push_back(p.p4.Z()); part_E.push_back(p.p4.T());
+  }
+  nPart = static_cast<int>(part_pdg.size());
 
   if (weight > 0.) {
     outtree->Fill();

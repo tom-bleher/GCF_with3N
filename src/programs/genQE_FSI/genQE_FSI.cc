@@ -64,13 +64,17 @@ bool doLC;
 bool doCoul = false;
 double deltaECoul = 0;
 
-// Tree variables
+// Tree variables. pLead/pRec are the GENERATED (pre-FSI) nucleons; the
+// post-FSI final state is purely the flat particle list below (GENIE's
+// cascade output verbatim -- no lead/recoil designation, no absorption
+// special-casing).
 Double_t pe[3], pLead[3], pRec[3], pAm2[3], pRel[3], q[3];
-Double_t pLead_pre[3], pRec_pre[3];   // pre-FSI lead/recoil 3-momenta
 Double_t weight;
 Int_t lead_type, rec_type;
 Int_t doFSI_flag;
-Int_t lead_absorbed, rec_absorbed;
+Int_t nPart;
+std::vector<int>    part_pdg, part_parentRole, part_rescatterCode;
+std::vector<double> part_px, part_py, part_pz, part_E;
 
 void Usage()
 {
@@ -236,20 +240,16 @@ bool init(int argc, char ** argv)
   outtree->Branch("pAm2",pAm2,"pAm2[3]/D");
   outtree->Branch("pRel",pRel,"pRel[3]/D");
   outtree->Branch("q",q,"q[3]/D");
-  outtree->Branch("pLead_pre",pLead_pre,"pLead_pre[3]/D");
-  outtree->Branch("pRec_pre",pRec_pre,"pRec_pre[3]/D");
   outtree->Branch("doFSI",&doFSI_flag,"doFSI/I");
-  // Per-leg absorption flags (diagnostics only). True (1) when the ORIGINAL
-  // nucleon ceased to exist in the cascade (typically NN absorption). The
-  // event is NOT killed; the GCF primary weight is kept. The leg's saved
-  // 4-momentum is then its leading nucleon ejectum, promoted from the
-  // secondaries (what a detector would reconstruct as the leg); it is zero
-  // only if the absorption produced no nucleon ejecta at all. Topology
-  // selection must use the FINAL state (particle types and momenta), never
-  // these flags -- an experiment cannot veto on absorption.
-  outtree->Branch("lead_absorbed",&lead_absorbed,"lead_absorbed/I");
-  outtree->Branch("rec_absorbed", &rec_absorbed, "rec_absorbed/I");
   outtree->Branch("weight",&weight,"weight/D");
+  outtree->Branch("nPart",    &nPart,       "nPart/I");
+  outtree->Branch("part_pdg",           &part_pdg);
+  outtree->Branch("part_parentRole",    &part_parentRole);
+  outtree->Branch("part_rescatterCode", &part_rescatterCode);
+  outtree->Branch("part_px",            &part_px);
+  outtree->Branch("part_py",            &part_py);
+  outtree->Branch("part_pz",            &part_pz);
+  outtree->Branch("part_E",             &part_E);
 
   // Print run configuration
   cout << "\n"
@@ -316,21 +316,17 @@ void evnt(int event)
   q[1] = vq.Y();
   q[2] = vq.Z();
 
-  // Pre-FSI lead/recoil (saved before the GENIE intranuclear cascade
-  // modifies them in ApplyFSI). When FSI is disabled, fall back to post.
-  if (doFSI_flag) {
-    const TLorentzVector & preL = myGen->GetPreFSILead();
-    const TLorentzVector & preR = myGen->GetPreFSIRecoil();
-    pLead_pre[0] = preL.X(); pLead_pre[1] = preL.Y(); pLead_pre[2] = preL.Z();
-    pRec_pre[0]  = preR.X(); pRec_pre[1]  = preR.Y(); pRec_pre[2]  = preR.Z();
-    lead_absorbed = myGen->IsLeadAbsorbed() ? 1 : 0;
-    rec_absorbed  = myGen->IsRecAbsorbed()  ? 1 : 0;
-  } else {
-    pLead_pre[0] = pLead[0]; pLead_pre[1] = pLead[1]; pLead_pre[2] = pLead[2];
-    pRec_pre[0]  = pRec[0];  pRec_pre[1]  = pRec[1];  pRec_pre[2]  = pRec[2];
-    lead_absorbed = 0;
-    rec_absorbed  = 0;
+  // Post-FSI final state: flat particle list.
+  part_pdg.clear(); part_parentRole.clear(); part_rescatterCode.clear();
+  part_px.clear();  part_py.clear();  part_pz.clear();  part_E.clear();
+  for (const auto &p : myGen->GetFinalStateParticles()) {
+    part_pdg.push_back(p.pdg);
+    part_parentRole.push_back(p.parentRole);
+    part_rescatterCode.push_back(p.rescatterCode);
+    part_px.push_back(p.p4.X()); part_py.push_back(p.p4.Y());
+    part_pz.push_back(p.p4.Z()); part_E.push_back(p.p4.T());
   }
+  nPart = static_cast<int>(part_pdg.size());
 
   if (weight > 0.)
     outtree->Fill();
