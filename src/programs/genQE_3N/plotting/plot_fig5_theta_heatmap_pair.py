@@ -3,19 +3,20 @@
 
 Side-by-side theta12-theta23 heatmaps:
 
-    Left:  3N SRC generator
-    Right: 2N+FSI generator, N=2 events (exactly two nucleons above kF)
+    Left:  3N+FSI generator
+    Right: 2N+FSI generator
 
-For the 2N+FSI side we follow the conventions from
-``genQE_FSI/analysis/analyze_2N.py:plot_theta_heatmaps`` — theta12 is the angle
-between p_miss = (lead_post - q) and the final recoil, theta23 is the angle
-between the final recoil and the "missing" third nucleon p3 = -(p_miss + p2).
+Both samples are read from detection-based `events` trees (built by
+make_events_from_genT.py for the 3N genT, by SRC_analysis_2N for the 2N
+sample) and pass through the SAME (e,e'pp) selection: exactly 2 detected
+protons above kF, lead = detected proton closest to q with theta_pq < 8 deg
+and |p_lead| > 0.75 |q|; the third (neutron) momentum is RECONSTRUCTED from
+the missing momentum, p3 = -(p1 + p_recoil) with p1 = p_lead - q, and must
+be above kF. theta12 = angle(p1, p_recoil), theta23 = angle(p_recoil, p3).
 
-Cuts (paper convention, applied to BOTH samples):
+Cuts (paper convention, applied identically to BOTH samples):
   theta_e < 45 deg, Q^2 > 1 GeV^2, xB < 1.2,
   theta(p_lead, q) < 8 deg, |p_lead|/|q| > 0.75, 0.25 < pmiss < 0.9 GeV/c.
-3N additionally requires |p_i| > kF for all three initial nucleons and the
-post-absorption lead.  2N+FSI additionally requires nAboveKF == 2.
 
 Two output variants are written: plain heatmaps (default) and a "_triangles"
 version with the L (top-left) and R (top-right) regions outlined in solid
@@ -35,7 +36,6 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paper_style import apply_style, figure_size, CMAP, OVERLAY_COLOR
 
 
-kF = 0.25
 mN = 0.93892
 
 
@@ -110,84 +110,58 @@ def angle_deg(ax, ay, az, bx, by, bz):
     return np.degrees(np.arccos(np.clip(dot / (a * b + 1e-30), -1.0, 1.0)))
 
 
-# ---------- 3N sample ----------
-def load_3N(path, theta_e_max, Q2_min, theta_pq_max, lead_over_q_min,
-            pmiss_lo, pmiss_hi, xB_max):
-    print(f'Reading 3N: {path}')
+# ---------- unified (e,e'pp) loader (3N and 2N samples alike) ----------
+def load_events(path, label, theta_e_max, Q2_min, theta_pq_max,
+                lead_over_q_min, pmiss_lo, pmiss_hi, xB_max, kf):
+    """Load a detection-based `events` tree (make_events_from_genT.py /
+    SRC_analysis_2N schema) and apply the paper (e,e'pp) selection —
+    IDENTICAL for the 3N and 2N samples:
+
+      * exactly 2 detected protons above kF (nProtonAboveKF == 2)
+      * lead cuts: theta(p_lead, q) < 8 deg, |p_lead| > 0.75 |q|
+      * 0.25 < pmiss < 0.9 GeV/c, xB < 1.2, Q2 > 1, theta_e < 45 deg
+      * third nucleon RECONSTRUCTED from missing momentum:
+        p3 = -(p1 + p_recoil) with p1 = p_lead - q; require |p3| > kF
+        (all nucleons above the Fermi level, per the paper text)
+
+    theta12 = angle(p1, p_recoil), theta23 = angle(p_recoil, p3).
+    """
+    print(f'Reading {label}: {path}')
     arr = uproot.open(path)['events'].arrays(
-        ['weight', 'lead', 'recoil2', 'recoil3', 'q',
-         'Q2', 'xB', 'pmiss', 'scattering_angle'],
+        ['weight', 'lead', 'recoil', 'q',
+         'Q2', 'xB', 'pmiss', 'scattering_angle', 'nProtonAboveKF'],
         library='np',
     )
     w = arr['weight']
     Q2, xB, pmiss, theta_e = arr['Q2'], arr['xB'], arr['pmiss'], arr['scattering_angle']
-    lead, r2, r3, q = arr['lead'], arr['recoil2'], arr['recoil3'], arr['q']
+    nP = arr['nProtonAboveKF']
+    lead, rec, q = arr['lead'], arr['recoil'], arr['q']
 
     p1x, p1y, p1z = lead[:, 0] - q[:, 0], lead[:, 1] - q[:, 1], lead[:, 2] - q[:, 2]
-    p1_mag = np.sqrt(p1x**2 + p1y**2 + p1z**2)
-    p1after_mag = np.sqrt(lead[:, 0]**2 + lead[:, 1]**2 + lead[:, 2]**2)
-    p2_mag = np.sqrt(r2[:, 0]**2 + r2[:, 1]**2 + r2[:, 2]**2)
-    p3_mag = np.sqrt(r3[:, 0]**2 + r3[:, 1]**2 + r3[:, 2]**2)
-    q_mag = np.sqrt(q[:, 0]**2 + q[:, 1]**2 + q[:, 2]**2)
-    lead_over_q = p1after_mag / (q_mag + 1e-30)
-    p1after_angle_q = angle_deg(lead[:, 0], lead[:, 1], lead[:, 2],
-                                q[:, 0], q[:, 1], q[:, 2])
+    p3x = -(p1x + rec[:, 0])
+    p3y = -(p1y + rec[:, 1])
+    p3z = -(p1z + rec[:, 2])
+    p3_mag = np.sqrt(p3x**2 + p3y**2 + p3z**2)
 
-    theta12 = angle_deg(p1x, p1y, p1z, r2[:, 0], r2[:, 1], r2[:, 2])
-    theta23 = angle_deg(r2[:, 0], r2[:, 1], r2[:, 2],
-                        r3[:, 0], r3[:, 1], r3[:, 2])
+    lead_mag = np.sqrt(lead[:, 0]**2 + lead[:, 1]**2 + lead[:, 2]**2)
+    q_mag = np.sqrt(q[:, 0]**2 + q[:, 1]**2 + q[:, 2]**2)
+    lead_over_q = lead_mag / (q_mag + 1e-30)
+    lead_angle_q = angle_deg(lead[:, 0], lead[:, 1], lead[:, 2],
+                             q[:, 0], q[:, 1], q[:, 2])
+
+    theta12 = angle_deg(p1x, p1y, p1z, rec[:, 0], rec[:, 1], rec[:, 2])
+    theta23 = angle_deg(rec[:, 0], rec[:, 1], rec[:, 2], p3x, p3y, p3z)
 
     mask = (np.isfinite(w) & (w > 0)
+            & (nP == 2)
             & (theta_e < theta_e_max) & (Q2 > Q2_min)
             & (xB < xB_max)
-            & (p1after_angle_q < theta_pq_max)
+            & (lead_angle_q < theta_pq_max)
             & (lead_over_q > lead_over_q_min)
             & (pmiss > pmiss_lo) & (pmiss < pmiss_hi)
-            & (p1_mag > kF) & (p2_mag > kF) & (p3_mag > kF)
-            & (p1after_mag > kF))
+            & (p3_mag > kf))
 
-    print(f'  total events: {len(w)} ; passing cuts: {int(mask.sum())}')
-    return theta12[mask], theta23[mask], w[mask]
-
-
-# ---------- 2N+FSI sample ----------
-def load_2N(path, theta_e_max, Q2_min, theta_pq_max, lead_over_q_min,
-            pmiss_lo, pmiss_hi, xB_max):
-    print(f'Reading 2N+FSI: {path}')
-    arr = uproot.open(path)['events'].arrays(
-        ['weight', 'lead_post', 'recoil_post', 'q',
-         'Q2', 'xB', 'pmiss', 'scattering_angle', 'nAboveKF'],
-        library='np',
-    )
-    w = arr['weight']
-    Q2, xB, pmiss, theta_e = arr['Q2'], arr['xB'], arr['pmiss'], arr['scattering_angle']
-    nAbove = arr['nAboveKF']
-    lp, rp, q = arr['lead_post'], arr['recoil_post'], arr['q']
-
-    p1x, p1y, p1z = lp[:, 0] - q[:, 0], lp[:, 1] - q[:, 1], lp[:, 2] - q[:, 2]
-    rp_x, rp_y, rp_z = rp[:, 0], rp[:, 1], rp[:, 2]
-    p3x = -(p1x + rp_x)
-    p3y = -(p1y + rp_y)
-    p3z = -(p1z + rp_z)
-
-    lp_mag = np.sqrt(lp[:, 0]**2 + lp[:, 1]**2 + lp[:, 2]**2)
-    q_mag = np.sqrt(q[:, 0]**2 + q[:, 1]**2 + q[:, 2]**2)
-    lead_over_q = lp_mag / (q_mag + 1e-30)
-    p1after_angle_q = angle_deg(lp[:, 0], lp[:, 1], lp[:, 2],
-                                q[:, 0], q[:, 1], q[:, 2])
-
-    theta12 = angle_deg(p1x, p1y, p1z, rp_x, rp_y, rp_z)
-    theta23 = angle_deg(rp_x, rp_y, rp_z, p3x, p3y, p3z)
-
-    mask = (np.isfinite(w) & (w > 0)
-            & (nAbove == 2)
-            & (theta_e < theta_e_max) & (Q2 > Q2_min)
-            & (xB < xB_max)
-            & (p1after_angle_q < theta_pq_max)
-            & (lead_over_q > lead_over_q_min)
-            & (pmiss > pmiss_lo) & (pmiss < pmiss_hi))
-
-    print(f'  total events: {len(w)} ; N=2 events passing cuts: {int(mask.sum())}')
+    print(f'  total events: {len(w)} ; (e,e\'pp) events passing cuts: {int(mask.sum())}')
     return theta12[mask], theta23[mask], w[mask]
 
 
@@ -247,6 +221,8 @@ def main():
     p.add_argument('--lead-over-q-min', type=float, default=0.75)
     p.add_argument('--pmiss-lo', type=float, default=0.25)
     p.add_argument('--pmiss-hi', type=float, default=0.90)
+    p.add_argument('--kF', type=float, default=0.22,
+                   help='Fermi level for the reconstructed-third cut (GeV/c)')
     # color scales (independent per panel)
     p.add_argument('--vmin-3N', type=float, default=1e-9)
     p.add_argument('--vmax-3N', type=float, default=2e-2)
@@ -267,14 +243,14 @@ def main():
                       theta_pq_max=args.theta_pq_max,
                       lead_over_q_min=args.lead_over_q_min,
                       pmiss_lo=args.pmiss_lo, pmiss_hi=args.pmiss_hi,
-                      xB_max=args.xB_max)
+                      xB_max=args.xB_max, kf=args.kF)
 
-    t12_3, t23_3, w_3 = load_3N(in3, **cut_kwargs)
-    t12_2, t23_2, w_2 = load_2N(in2, **cut_kwargs)
+    t12_3, t23_3, w_3 = load_events(in3, '3N+FSI', **cut_kwargs)
+    t12_2, t23_2, w_2 = load_events(in2, '2N+FSI', **cut_kwargs)
 
     # L/R weight fractions on the cut sample (for the caption / paper Fig. 6)
-    for name, t12, t23, w in [('3N', t12_3, t23_3, w_3),
-                              ('2N+FSI N=2', t12_2, t23_2, w_2)]:
+    for name, t12, t23, w in [('3N+FSI', t12_3, t23_3, w_3),
+                              ('2N+FSI', t12_2, t23_2, w_2)]:
         wt = w.sum() + 1e-30
         fL = w[in_region_L_array(t12, t23)].sum() / wt
         fR = w[in_region_R_array(t12, t23)].sum() / wt

@@ -5,23 +5,20 @@ Physics question: can a mean-field (MF) event that ejects a second energetic
 nucleon via FSI fake a 3N-SRC signal?
 
 We take MF events (SRC_analysis_2N wf_mode=4: one struck nucleon from a Fermi
-gas, GENIE hA FSI in the A-1 residual, no correlated recoil) in which exactly
-TWO final-state nucleons have |p| > kF, reconstruct a hypothetical third
+gas, GENIE FSI in the A-1 residual, no correlated recoil) in the (e,e'pp)
+channel — exactly TWO detected protons above kF, the SAME detection-based
+rule as the 3N and 2N paper figures — reconstruct a hypothetical third
 nucleon assuming the initial three-nucleon system had zero center-of-mass
-momentum, and plot the theta12-theta23 opening-angle heatmap — the same
-observable used for the 3N-SRC paper figure (plot_theta_heatmap_paper.py).
+momentum, and plot the theta12-theta23 opening-angle heatmap.
 
-Conventions follow the existing implementation:
-  * p1 = lead_post - q          (reconstructed initial struck-nucleon momentum)
-  * p2 = the FSI-secondary nucleon above kF (its final momentum)
+Conventions (unified events schema from SRC_analysis_2N):
+  * lead = detected proton closest in angle to q; recoil = the other one
+  * p1 = lead - q               (reconstructed initial struck-nucleon momentum)
+  * p2 = recoil                 (final momentum of the second detected proton)
   * p3 = -(p1 + p2)             (zero initial CM: p1 + p2 + p3 = 0)
   * theta12 = angle(p1, p2),  theta23 = angle(p2, p3)
 Region L/R/BR triangles (A=135 deg, K=4.0) and the equal-area center circle are
 overlaid, and the weighted fraction of events in each region is written out.
-
-The two final nucleons above kF are the struck lead (which absorbed q, so it is
-high-momentum) plus exactly one FSI-secondary nucleon above kF. We count BOTH
-protons (2212) and neutrons (2112) as nucleons.
 
 Usage:
     python plot_mf_fake3n_heatmap.py [--input FILE] [--output FILE]
@@ -37,7 +34,7 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from matplotlib.patches import Polygon
 import uproot
-import awkward as ak
+
 
 # Paper styling shared with the genQE_3N theta-heatmap plots.
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
@@ -130,61 +127,41 @@ def interplane_angle(shared, a, b):
 
 # ──────────── Load + select + reconstruct ────────────
 def build_fake3n(path, ebeam, kf, require_pp=True):
-    """Load MF events, select 'exactly 2 nucleons above kF', reconstruct the
-    zero-CM third nucleon, and return a dict of per-event arrays for the
-    selected events (plus derived SRC-cut quantities).
+    """Load detection-based MF `events` (SRC_analysis_2N unified schema),
+    select the (e,e'pp) channel — exactly 2 detected protons above kF, the
+    SAME rule as the 3N and 2N figures — reconstruct the zero-CM third
+    nucleon, and return a dict of per-event arrays for the selected events
+    (plus derived SRC-cut quantities).
 
-    require_pp=True (default): the two final nucleons above kF must BOTH be
-    protons (the experimentally detected (e,e'pp)-like channel) — i.e. the
-    post-FSI lead is a proton and there is exactly one secondary PROTON above
-    kF and no neutron above kF. require_pp=False counts protons and neutrons
-    alike as the two nucleons above kF."""
+    The tree already contains the detection-based lead (detected proton
+    closest to q) and recoil (highest-momentum other detected proton);
+    require_pp=False relaxes the channel to any 2 detected nucleons
+    (nNucleonAboveKF == 2)."""
     tree = uproot.open(path)["events"]
-    flat = tree.arrays(["weight", "lead_type", "lead_post", "q",
-                        "Q2", "scattering_angle", "xB"], library="np")
-    w_all_file = flat["weight"]
-    w_all_file = float(w_all_file[np.isfinite(w_all_file) & (w_all_file > 0)].sum())
-    n_all_file = len(flat["weight"])
-    sec = tree.arrays(["sec_pdg", "sec_px", "sec_py", "sec_pz"], library="ak")
+    flat = tree.arrays(["weight", "lead", "recoil", "q",
+                        "Q2", "scattering_angle", "xB",
+                        "nProtonAboveKF", "nNucleonAboveKF"], library="np")
+    w_all = flat["weight"]
+    w_all_file = float(w_all[np.isfinite(w_all) & (w_all > 0)].sum())
+    n_all_file = len(w_all)
 
-    n_tot = len(flat["weight"])
-    lead = flat["lead_post"][:, :3]
+    n_tot = n_all_file
+    lead = flat["lead"][:, :3]
+    rec = flat["recoil"][:, :3]
     qv = flat["q"][:, :3]
-    lead_mag = np.linalg.norm(lead, axis=1)
-    lead_above = lead_mag > kf
-    lead_is_p = flat["lead_type"] == P_CODE
-
-    # Secondary nucleons above kF — split by species — vectorized with awkward.
-    smag = np.sqrt(sec.sec_px ** 2 + sec.sec_py ** 2 + sec.sec_pz ** 2)
-    above_p = (sec.sec_pdg == P_CODE) & (smag > kf)
-    above_n = (sec.sec_pdg == N_CODE) & (smag > kf)
-    n_sec_p = ak.to_numpy(ak.sum(above_p, axis=1))
-    n_sec_n = ak.to_numpy(ak.sum(above_n, axis=1))
-
-    def pick_max(species_above):
-        """3-momentum of the highest-|p| secondary of `species_above`; 0 if none."""
-        masked = ak.where(species_above, smag, -1.0)
-        idx = ak.argmax(masked, axis=1, keepdims=True)
-        def g(field):
-            return ak.to_numpy(ak.fill_none(ak.firsts(field[idx]), 0.0))
-        return np.column_stack([g(sec.sec_px), g(sec.sec_py), g(sec.sec_pz)])
 
     if require_pp:
-        # exactly two final nucleons above kF, BOTH protons:
-        # post-FSI lead = proton above kF, one secondary proton above kF, no neutron above kF.
-        p2 = pick_max(above_p)
-        sel = lead_is_p & lead_above & (n_sec_p == 1) & (n_sec_n == 0)
-        chan = "pp (both final nucleons above kF are protons)"
+        sel = flat["nProtonAboveKF"] == 2
+        chan = "(e,e'pp): exactly 2 detected protons above kF"
     else:
-        p2 = pick_max(above_p | above_n)
-        sel = lead_above & ((n_sec_p + n_sec_n) == 1)
-        chan = "pN (protons or neutrons counted)"
+        sel = flat["nNucleonAboveKF"] == 2
+        chan = "pN: exactly 2 detected nucleons above kF"
 
-    print(f"  {n_tot} events; lead |p|>kF: {100*np.mean(lead_above):.1f}%, "
-          f"lead is proton (post-FSI): {100*np.mean(lead_is_p):.1f}%")
+    print(f"  {n_tot} events")
     print(f"  selection [{chan}]: {int(sel.sum())} events")
 
     p1 = lead - qv                  # reconstructed initial struck-nucleon momentum
+    p2 = rec                        # second detected proton (final momentum)
     p3 = -(p1 + p2)                 # zero initial CM:  p1 + p2 + p3 = 0
 
     d = {}
@@ -200,7 +177,7 @@ def build_fake3n(path, ebeam, kf, require_pp=True):
     d["xB"] = flat["xB"][sel]
     # SRC-cut quantities
     d["pmiss"] = np.linalg.norm(d["p1"], axis=1)
-    pN = lead_mag[sel]
+    pN = np.linalg.norm(lead[sel], axis=1)
     q3 = np.linalg.norm(qv[sel], axis=1)
     d["pN_over_q"] = pN / (q3 + 1e-30)
     d["theta_pq"] = angle_deg(lead[sel], qv[sel])
@@ -252,7 +229,7 @@ def plot(d, args):
     h_plot = np.where(h_norm > 0, h_norm, np.nan)
     pos = h_norm[h_norm > 0]
     vmax = args.vmax if args.vmax is not None else (pos.max() if pos.size else 1e-2)
-    vmin = args.vmin if args.vmin is not None else vmax * 1e-4
+    vmin = args.vmin if args.vmin is not None else vmax * args.vmin_frac
 
     # Region geometry (integration only; nothing is drawn on the plot).
     tri_R, tri_L = get_triangle_vertices()
@@ -345,6 +322,7 @@ def main():
                    help="if set, apply xB < this as a BASE cut (it is always "
                         "part of the SRC cuts)")
     p.add_argument("--vmin", type=float, default=None)
+    p.add_argument("--vmin-frac", type=float, default=1e-4)
     p.add_argument("--vmax", type=float, default=None)
     p.add_argument("--src-cuts", action="store_true",
                    help="apply 3N SRC cuts (thpq<8, pN/q>0.75, 0.25<pmiss<0.9, xB<1.2)")
