@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<!-- Silence all GENIE log output below ERROR level for production runs -->
+<messenger_config>
+  <priority msgstream="Messenger">        ERROR </priority>
+  <priority msgstream="Rndm">            ERROR </priority>
+  <priority msgstream="AlgFactory">      ERROR </priority>
+  <priority msgstream="Algorithm">       ERROR </priority>
+  <priority msgstream="AlgConfigPool">   ERROR </priority>
+  <priority msgstream="Registry">        ERROR </priority>
+  <priority msgstream="NuclearData">     ERROR </priority>
+  <priority msgstream="HAIntranuke2018"> ERROR </priority>
+  <priority msgstream="HNIntranuke2018"> ERROR </priority>
+  <priority msgstream="Intranuke2018">   ERROR </priority>
+  <priority msgstream="INukeNucleonCorr">ERROR </priority>
+  <priority msgstream="INukeUtils">      ERROR </priority>
+  <priority msgstream="INukeUtils2018">  ERROR </priority>
+  <priority msgstream="TwoBodyCollision">ERROR </priority>
+  <priority msgstream="NuclearModelI">   ERROR </priority>
+  <priority msgstream="NuclearModelMap"> ERROR </priority>
+  <priority msgstream="FermiMover">      ERROR </priority>
+  <priority msgstream="FGMBodekRitchie"> ERROR </priority>
+  <priority msgstream="SplineList">      ERROR </priority>
+  <priority msgstream="XSecSplineList">  ERROR </priority>
+  <priority msgstream="PDGLibrary">      ERROR </priority>
+  <priority msgstream="GHepRecord">      ERROR </priority>
+  <priority msgstream="EventLoop">       ERROR </priority>
+  <priority msgstream="RunOpt">          ERROR </priority>
+  <priority msgstream="XmlParser">       ERROR </priority>
+  <priority msgstream="LocalFGM">       ERROR </priority>
+  <priority msgstream="GHEP">           ERROR </priority>
+  <priority msgstream="INukeData">     ERROR </priority>
+  <priority msgstream="FermiP">        ERROR </priority>
+  <priority msgstream="Math">          ERROR </priority>
+  <priority msgstream="Nuclear">       ERROR </priority>
+  <priority msgstream="PDG">           ERROR </priority>
+</messenger_config>
