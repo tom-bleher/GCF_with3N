@@ -203,7 +203,13 @@ int main(int argc, char **argv) {
         // several decades and a handful of low-k events dominate every sum
         // (N_eff/N was 2.5% for a fixed k>0.25 floor and 0.11% for the local
         // kF(r) floor, which reaches ~0.02 GeV/c at large radius).
-        myGen->set_pRel_importance_sampling(true);
+        // GCF_PREL_IS=0 reverts to uniform sampling, so that the two can be
+        // compared directly at high statistics -- they must agree on every
+        // WEIGHTED distribution, differing only in their error bars.
+        bool prel_is = true;
+        if (const char* e = std::getenv("GCF_PREL_IS")) prel_is = (std::atoi(e) != 0);
+        myGen->set_pRel_importance_sampling(prel_is);
+        if (!prel_is) std::cout << "  [GCF_PREL_IS=0] uniform |p_rel| sampling\n";
     } else if (isMF) {
         myGen->SetFermiMomentumFG(kF);
         myGen->SetFermiGasMode(useLocalFG ? QEGeneratorFSI::kLocalFG
