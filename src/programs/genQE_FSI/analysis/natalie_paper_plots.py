@@ -24,8 +24,10 @@ calculation curve.
 
 Sample definitions:
     * Figs 2-7 (PWIA / T+SCX / FULL) use the GCF SRC sample only: AV18
-      spectral function with relative momentum p_rel > kF (generator
-      wf_mode=2). These are the `--pwia` / `--fsi` files.
+      spectral function with relative momentum above the SRC onset
+      (generator wf_mode=2; the onset is either a constant kF or the local
+      kF(r), see the generator's src_onset switch). These are the
+      `--pwia` / `--fsi` files.
     * Figs 8-10 compare FULL GCF (the same SRC sample) to FULL MF, where the
       mean-field sample is a SINGLE struck nucleon drawn from a Fermi gas
       (generator wf_mode=4): a flat momentum distribution n(p)=3/(4 pi kF^3)
@@ -34,6 +36,13 @@ Sample definitions:
       hA FSI in the A-1 residual. This is a faithful stand-in for the paper's
       GENIE Fermi-gas MF. Any (e,e'pp) second proton comes only from FSI
       secondaries. This is the `--fsi-mf` file.
+
+Event building is detector-style and operates on the generator's flat
+final-state particle list (part_* branches): lead = highest-momentum
+accepted proton, recoil = highest-momentum other accepted proton, and no
+event is ever discarded for having extra protons. The paper's theta_pq,
+|p_N|/|q| and |p_recoil| requirements are SRC selection CUTS, not part of
+that definition -- see the long note above flatlist_resolve.
 
 Usage:
     python natalie_paper_plots.py [--pwia FILE] [--fsi FILE] [--outdir DIR]
@@ -48,7 +57,8 @@ import matplotlib.pyplot as plt
 
 # clas_acceptance lives beside this script
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from clas_acceptance import ClasAcceptance, RESO_ELECTRON, RESO_PROTON
+from clas_acceptance import (ClasAcceptance, RESO_ELECTRON, RESO_PROTON,
+                             MIN_PREC)
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -107,20 +117,33 @@ SRC_CUTS = dict(
 # ===================================================================
 
 def load_tree(filepath, treename="events"):
-    """Load TTree into dict of numpy arrays.  Variable-length sec_*
-    branches (jagged) are kept as awkward arrays under sec_pdg/px/py/pz
-    so compute_best_recoil_kinematics can vectorize the max-p lookup."""
-    import awkward as ak
+    """Load TTree into dict of numpy arrays.
+
+    The per-event final state is the flat particle list written by
+    SRC_analysis_2N: part_pdg / part_px / part_py / part_pz / part_E plus
+    the provenance columns part_parentRole and part_rescatterCode. Those
+    are variable length, so they are kept as awkward arrays; everything
+    else becomes a numpy column.
+
+    Note the list holds the COMPLETE final state -- GENIE's cascade output
+    verbatim, or the generated nucleons when FSI is off -- not just the
+    FSI secondaries. There are no privileged lead/recoil slots to add on
+    top of it (the tree's own `lead`/`recoil` branches are built with the
+    3N paper's rule and are deliberately ignored here)."""
     f = uproot.open(filepath)
     tree = f[treename]
     all_keys = list(tree.keys())
-    flat_keys = [k for k in all_keys if not k.startswith("sec_")]
+    if "part_pdg" not in all_keys:
+        raise KeyError(
+            f"{filepath}: no part_* branches. This file predates the "
+            "flat-list generator output; regenerate it with the current "
+            "SRC_analysis_2N.")
+    jag_keys = [k for k in all_keys if k.startswith("part_")]
+    flat_keys = [k for k in all_keys if k not in jag_keys]
     out = tree.arrays(flat_keys, library="np")
-    sec_keys = [k for k in all_keys if k.startswith("sec_")]
-    if sec_keys:
-        sec = tree.arrays(sec_keys, library="ak")
-        for k in sec_keys:
-            out[k] = sec[k]
+    jag = tree.arrays(jag_keys, library="ak")
+    for k in jag_keys:
+        out[k] = jag[k]
     return out
 
 
@@ -298,19 +321,33 @@ def compute_kinematics(d, Ebeam=6.0):
 # The generator's lead/recoil slots and parentRole tags are cascade
 # bookkeeping: after FSI (e.g. an elastic pp scatter) "which proton was
 # the original" is not an observable, so the analysis must not privilege
-# the slots. Every final-state proton (lead slot, recoil slot, FSI
-# secondaries) enters ONE flat candidate list, and the channels are built
-# the way the CLAS analyses built them from data (Cohen et al., PRL 121,
-# 092501):
-#   lead   = the UNIQUE detected proton consistent with absorbing q
-#            (theta_pq < 25 deg, 0.60 < p/q < 0.96); events with 0 or
-#            >=2 such protons are dropped;
-#   recoil = the UNIQUE other detected proton with p > 0.35 GeV/c
-#            ((e,e'pp) only; 0 -> stays (e,e'p), >=2 -> dropped from
-#            (e,e'pp), matching the measured sample where no event has
-#            more than one recoil candidate).
-# The same convention applies to EVERY sample (PWIA, FSI SRC, FSI MF) --
-# the MF sample simply contributes no recoil-slot candidate.
+# any particle in the list. Every final-state nucleon -- the surviving
+# struck nucleon, its correlated partner, and anything the cascade
+# knocked out -- enters ONE flat candidate list, and the channels are
+# built the way a detector builds them:
+#
+#   lead   = the highest-momentum accepted proton;
+#   recoil = the highest-momentum OTHER accepted proton;
+#   (e,e'p)  = electron accepted and >= 1 accepted proton;
+#   (e,e'pp) = electron accepted and >= 2 accepted protons.
+#
+# An event is never discarded for having "too many" protons.
+#
+# The paper gives no tie-break rule -- it only names "the leading
+# (knocked-out) proton" and "the detected second proton", and says the
+# two samples "differ only in the requirement of detecting a recoil
+# proton in the final state". It does settle where the kinematic cuts
+# belong, though: theta_pq < 25 deg and 0.62 < |p_N|/|q| < 0.92 are listed
+# under *event selection cuts*, and Fig. 2's left panel ("all events that
+# pass the CLAS acceptance cuts") carries substantial FULL yield at
+# p_lead ~ 0.5 GeV/c. With |q| ~ 1.5-2.5 GeV/c that is |p_N|/|q| ~ 0.2-0.33,
+# far below 0.62, so those events cannot exist if the window were part of
+# the lead DEFINITION. They live in apply_src_cuts only, together with
+# |p_recoil| > 0.35 GeV/c.
+#
+# The same convention applies to EVERY sample (PWIA, FSI SRC, FSI MF).
+# In the MF sample the second proton can only be an FSI product -- which
+# is the whole point of that comparison.
 #
 # For the PWIA sample the candidate list must include NEUTRONS
 # (include_neutrons=True): the T+SCX reweighting assigns each event the
@@ -321,36 +358,54 @@ def compute_kinematics(d, Ebeam=6.0):
 # measured-channel selections (select_eep / select_eepp) still demand
 # protons.
 
-LEAD_ID = dict(theta_pq_max_deg=25.0, pq_min=0.60, pq_max=0.96)
+_KMAX_CAND = 24   # cap on the per-event final-state list
 
-_KMAX_CAND = 12   # 2 slots + up to 10 FSI-secondary candidates per event
+# Minimum momentum for a proton to count as DETECTED (GeV/c). The eg2
+# acceptance map is binned from 0, so without this a 100 MeV/c FSI knock-out
+# proton would be treated as a detected second proton and inflate the
+# (e,e'pp) yield. 0.30 GeV/c sits safely below the paper's 0.35 GeV/c
+# |p_recoil| SRC cut, so it never competes with that cut. Applied only when
+# an acceptance object is supplied -- it is a detector property.
+PROTON_PMIN = MIN_PREC
 
 
 def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
-    """Detector-style event building on the flat final-state nucleon list.
+    """Detector-style event building on the flat final-state particle list.
 
     Smears the electron and every candidate (when `acc` is given), applies
-    the LEAD_ID / exactly-one-recoil convention above, and overwrites d's
-    electron / q / lead_post / lead_type / recoil_post / rec_type plus the
-    acceptance masks (acc_mask_ep/epp) and map weights (acc_w_ep/epp).
-    All derived kinematic columns are recomputed. Adds diagnostics
-    d["n_lead_cand"], d["n_recoil_cand"]. Processes the candidate arrays
-    in chunks of `chunk` events to bound peak memory (the intermediates
-    are (n, K)-shaped).
+    the CLAS fiducials, then picks lead = highest-|p| accepted proton and
+    recoil = highest-|p| other accepted proton (see the note above).
+    Overwrites d's electron / q / lead_post / lead_type / recoil_post /
+    rec_type plus the acceptance masks (acc_mask_ep/epp) and map weights
+    (acc_w_ep/epp), and recomputes every derived kinematic column.
+
+    Also records, for the chosen lead and recoil, the provenance columns
+    lead_role / rec_role (part_parentRole: 0 = descendant of the generated
+    struck nucleon, 1 = of the generated partner, -1 = neither) and
+    lead_rescat / rec_rescat (part_rescatterCode, -1 = never rescattered).
+    These drive the candidate-origin diagnostic.
+
+    Diagnostics d["n_lead_cand"] / d["n_recoil_cand"] count accepted
+    candidates. Processed in chunks of `chunk` events to bound peak memory.
     """
     import awkward as ak
     n = len(d["weight"])
     K = _KMAX_CAND
     allowed = (PROTON, NEUTRON) if include_neutrons else (PROTON,)
 
-    # Preserve the GENERATED struck/partner isospins (lead/recoil slots as
-    # thrown) before the detector-style resolution overwrites lead_type /
-    # rec_type with the DETECTED final-state types. The T+SCX reweighting is
-    # a model correction applied to the generated PWIA pair, so it must use
-    # these generated isospins, not the detected recoil (which is 0 for the
-    # ~half of (e,e'p) events with no detected second nucleon).
-    d["gen_lead_type"] = np.asarray(d["lead_type"]).copy()
-    d["gen_rec_type"]  = np.asarray(d["rec_type"]).copy()
+    # Preserve the GENERATED struck/partner isospins before the
+    # detector-style resolution overwrites lead_type / rec_type with the
+    # DETECTED final-state types. The T+SCX reweighting is a model
+    # correction applied to the generated PWIA pair, so it must use these
+    # generated isospins, not the detected recoil (which is absent for the
+    # events with no detected second nucleon).
+    d["gen_lead_type"] = np.asarray(d["gen_lead_type"]).copy()
+    d["gen_rec_type"]  = np.asarray(d["gen_rec_type"]).copy()
+
+    n_over = int(ak.sum(ak.num(d["part_pdg"], axis=1) > K))
+    if n_over:
+        print(f"    WARNING: {n_over} event(s) have more than {K} final-state "
+              f"particles; the list is clipped (raise _KMAX_CAND).")
 
     out_e3    = np.zeros((n, 3))
     out_ok_e  = np.zeros(n, dtype=bool)
@@ -358,38 +413,29 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
     out_rec3  = np.zeros((n, 3))
     out_ltype = np.zeros(n, dtype=np.int64)
     out_rtype = np.zeros(n, dtype=np.int64)
+    out_lrole = np.full(n, -1, dtype=np.int64)
+    out_rrole = np.full(n, -1, dtype=np.int64)
+    out_lresc = np.full(n, -1, dtype=np.int64)
+    out_rresc = np.full(n, -1, dtype=np.int64)
     out_nlead = np.zeros(n, dtype=np.int64)
     out_nrec  = np.zeros(n, dtype=np.int64)
 
-    sec_pdg = d.get("sec_pdg")
+    def _pad(field, m, fill):
+        return ak.to_numpy(
+            ak.fill_none(ak.pad_none(field, K, clip=True), fill))
 
     for lo in range(0, n, chunk):
         hi = min(lo + chunk, n)
         m  = hi - lo
-        cand  = np.zeros((m, K, 3))
-        ctype = np.zeros((m, K), dtype=np.int64)
 
-        lt = d["lead_type"][lo:hi]
-        cand[:, 0, :] = d["lead_post"][lo:hi, :3]
-        ctype[:, 0] = np.where(np.isin(lt, allowed), lt, 0)
-        rt = d["rec_type"][lo:hi]
-        cand[:, 1, :] = d["recoil_post"][lo:hi, :3]
-        ctype[:, 1] = np.where(np.isin(rt, allowed), rt, 0)
-
-        if sec_pdg is not None:
-            Ksec = K - 2
-            spdg = sec_pdg[lo:hi]
-            keep = (spdg == PROTON)
-            if include_neutrons:
-                keep = keep | (spdg == NEUTRON)
-            for col, key in ((0, "sec_px"), (1, "sec_py"), (2, "sec_pz")):
-                padded = ak.fill_none(
-                    ak.pad_none(d[key][lo:hi][keep], Ksec, clip=True), 0.0)
-                cand[:, 2:, col] = ak.to_numpy(padded)
-            tpad = ak.fill_none(ak.pad_none(spdg[keep], Ksec, clip=True), 0)
-            ctype[:, 2:] = ak.to_numpy(tpad)
-
-        valid = ctype != 0
+        # ---- candidate list: the flat final state, verbatim ----
+        ctype = _pad(d["part_pdg"][lo:hi], m, 0).astype(np.int64)
+        cand  = np.stack([_pad(d["part_px"][lo:hi], m, 0.0),
+                          _pad(d["part_py"][lo:hi], m, 0.0),
+                          _pad(d["part_pz"][lo:hi], m, 0.0)], axis=2)
+        crole = _pad(d["part_parentRole"][lo:hi], m, -1).astype(np.int64)
+        cresc = _pad(d["part_rescatterCode"][lo:hi], m, -1).astype(np.int64)
+        valid = np.isin(ctype, allowed)
 
         # ---- detector-resolution smearing ----
         e3 = d["electron"][lo:hi, :3].copy()
@@ -406,40 +452,32 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
         # ---- "detected" = valid candidate inside the CLAS proton fiducials.
         # Neutron candidates (T+SCX bookkeeping) use the same proton
         # fiducials: zero-angle SCX preserves the flipped leg's kinematics.
+        pmag = np.sqrt((cand**2).sum(axis=2))
         detected = valid
         if acc is not None:
-            fid = acc.accept_proton(cand[:, :, 0].ravel(),
-                                    cand[:, :, 1].ravel(),
-                                    cand[:, :, 2].ravel()).reshape(m, K)
-            detected = detected & fid
+            # Padded slots have zero momentum; the fiducial parametrisations
+            # divide by |p|, so silence the resulting inf/nan. Those slots are
+            # already excluded by `valid`.
+            with np.errstate(divide="ignore", invalid="ignore"):
+                fid = acc.accept_proton(cand[:, :, 0].ravel(),
+                                        cand[:, :, 1].ravel(),
+                                        cand[:, :, 2].ravel()).reshape(m, K)
+            detected = detected & fid & (pmag > PROTON_PMIN)
             ok_e = acc.accept_electron(e3[:, 0], e3[:, 1], e3[:, 2])
         else:
             ok_e = np.ones(m, dtype=bool)
 
-        # ---- q from the (smeared) electron ----
-        q3 = np.column_stack([-e3[:, 0], -e3[:, 1], ebeam - e3[:, 2]])
-        qmag = np.sqrt((q3**2).sum(axis=1))
-
-        # ---- lead identification: unique q-consistent detected nucleon ----
-        pmag = np.sqrt((cand**2).sum(axis=2))
-        cospq = (cand * q3[:, None, :]).sum(axis=2) / (pmag * qmag[:, None] + 1e-30)
-        theta_pq = np.degrees(np.arccos(np.clip(cospq, -1.0, 1.0)))
-        p_over_q = pmag / (qmag[:, None] + 1e-30)
-        lead_ok = (detected
-                   & (theta_pq < LEAD_ID["theta_pq_max_deg"])
-                   & (p_over_q > LEAD_ID["pq_min"])
-                   & (p_over_q < LEAD_ID["pq_max"]))
-        n_lead = lead_ok.sum(axis=1)
-        has_lead = (n_lead == 1)
+        # ---- lead / recoil: the two highest-momentum accepted nucleons ----
+        p_ok = np.where(detected, pmag, -1.0)
         rows = np.arange(m)
-        lead_idx = np.argmax(lead_ok, axis=1)
 
-        # ---- recoil: exactly one OTHER detected nucleon above 0.35 GeV/c ----
-        rec_pool = detected & (pmag > SRC_CUTS["precoil_min"])
-        rec_pool[rows, lead_idx] &= ~has_lead   # the chosen lead is not a recoil
-        n_rec = rec_pool.sum(axis=1)
-        has_rec = has_lead & (n_rec == 1)
-        rec_idx = np.argmax(rec_pool, axis=1)
+        lead_idx = np.argmax(p_ok, axis=1)
+        has_lead = p_ok[rows, lead_idx] > 0.0
+
+        p_rest = p_ok.copy()
+        p_rest[rows, lead_idx] = -1.0
+        rec_idx = np.argmax(p_rest, axis=1)
+        has_rec = has_lead & (p_rest[rows, rec_idx] > 0.0)
 
         out_e3[lo:hi]    = e3
         out_ok_e[lo:hi]  = ok_e
@@ -447,17 +485,25 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
         out_rec3[lo:hi]  = np.where(has_rec[:, None],  cand[rows, rec_idx],  0.0)
         out_ltype[lo:hi] = np.where(has_lead, ctype[rows, lead_idx], 0)
         out_rtype[lo:hi] = np.where(has_rec,  ctype[rows, rec_idx],  0)
-        out_nlead[lo:hi] = n_lead
-        out_nrec[lo:hi]  = n_rec
+        out_lrole[lo:hi] = np.where(has_lead, crole[rows, lead_idx], -1)
+        out_rrole[lo:hi] = np.where(has_rec,  crole[rows, rec_idx],  -1)
+        out_lresc[lo:hi] = np.where(has_lead, cresc[rows, lead_idx], -1)
+        out_rresc[lo:hi] = np.where(has_rec,  cresc[rows, rec_idx],  -1)
+        out_nlead[lo:hi] = detected.sum(axis=1)
+        out_nrec[lo:hi]  = np.maximum(detected.sum(axis=1) - 1, 0)
 
     has_lead = out_ltype != 0
     has_rec  = out_rtype != 0
-    d["lead_type"] = out_ltype.astype(d["lead_type"].dtype)
-    d["rec_type"]  = out_rtype.astype(d["rec_type"].dtype)
+    d["lead_type"] = out_ltype.astype(np.int32)
+    d["rec_type"]  = out_rtype.astype(np.int32)
     d["lead_post"] = np.column_stack(
         [out_lead3, np.sqrt((out_lead3**2).sum(axis=1) + M_P**2)])
     d["recoil_post"] = np.column_stack(
         [out_rec3, np.sqrt((out_rec3**2).sum(axis=1) + M_P**2)])
+    d["lead_role"]  = out_lrole
+    d["rec_role"]   = out_rrole
+    d["lead_rescat"] = out_lresc
+    d["rec_rescat"]  = out_rresc
 
     # ---- overwrite electron / q, recompute all derived kinematics ----
     Ee = np.sqrt((out_e3**2).sum(axis=1))
@@ -495,12 +541,12 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
 # ===================================================================
 
 def select_eep(d):
-    """(e,e'p): flat-list lead exists and is a proton."""
+    """(e,e'p): at least one accepted proton (the lead)."""
     return d["lead_type"] == PROTON
 
 
 def select_eepp(d):
-    """(e,e'pp): flat-list lead and (unique) recoil exist and are protons."""
+    """(e,e'pp): at least two accepted protons (lead and recoil)."""
     return (d["lead_type"] == PROTON) & (d["rec_type"] == PROTON)
 
 
@@ -517,16 +563,6 @@ def apply_src_cuts(d):
         (d["mmiss"] < c["mmiss_max"])
     )
     return mask
-
-
-def apply_clas_acceptance(d):
-    """CLAS detector acceptance filter.
-
-    TODO: implement when CLAS simulation is provided by the author.
-    For now returns all-True mask.
-    """
-    return np.ones(len(d["weight"]), dtype=bool)
-
 
 # ===================================================================
 #  T+SCX reweighting  (Eq. 3 of paper)
@@ -894,15 +930,6 @@ def events_to_entry(events, obs_key, mask_key, bins):
 #  Mean-field background
 # ===================================================================
 
-def load_mf_data(filepath):
-    """Load mean-field (Fermi gas) events for background estimation.
-
-    TODO: implement when a Fermi gas generator is available.
-    Returns None for now.
-    """
-    return None
-
-
 # ===================================================================
 #  Plotting helpers
 # ===================================================================
@@ -962,14 +989,6 @@ def make_hist(values, weights, bins):
 def draw_hist(ax, centers, h, **kwargs):
     """Draw a pre-computed histogram as smooth curve."""
     ax.plot(centers, h, **kwargs)
-
-
-def hist1d(ax, values, weights, bins, **kwargs):
-    """Weighted histogram with step style (convenience wrapper)."""
-    centers, h = make_hist(values, weights, bins)
-    draw_hist(ax, centers, h, **kwargs)
-    return centers, h
-
 
 def area_normalize(histograms, ref_area=None):
     """Normalize a list of (centers, h, style_key) to same area.
@@ -1642,6 +1661,158 @@ def figure10(fsi_src, fsi_mf, outdir, clas=None):
 #  Effective transparency summary (text result from paper)
 # ===================================================================
 
+def figure_q2_stages(pwia, fsi, outdir):
+    """Q^2 sanity check: FSI cannot touch Q^2 before cuts.
+
+    Q^2 is fixed entirely by the scattered electron, and the generator's FSI
+    never modifies the primary event weight (QEGeneratorFSI.cc: the cascade
+    output is a particle list, the weight is untouched). So the PWIA and FULL
+    Q^2 spectra must coincide bin for bin BEFORE any selection -- the two
+    samples are independent runs of the same primary configuration, matched
+    by generation attempts.
+
+    They do separate after the acceptance and after the SRC cuts, because FSI
+    changes WHICH events survive those cuts. That separation is the
+    effective-transparency effect, not a Q^2 effect.
+
+    If the pre-cut curves fail to overlap, the fault is in the generation
+    configuration, not in the FSI -- which is what makes this check useful.
+    """
+    bins = np.linspace(1.0, 5.0, 41)
+    ctr = 0.5 * (bins[1:] + bins[:-1])
+
+    def lumi(d):
+        meta = d.get("_meta") or {}
+        try:
+            return float(meta.get("n_events_attempts"))
+        except (TypeError, ValueError):
+            return None
+
+    ap, af = lumi(pwia), lumi(fsi)
+    scale = (ap / af) if (ap and af) else 1.0
+
+    stages = [
+        ("as generated", lambda d: np.ones(len(d["weight"]), bool),
+         lambda d: np.ones(len(d["weight"]))),
+        ("in CLAS acceptance", lambda d: select_eep(d) & _acc_mask_ep(d),
+         _acc_w_ep),
+        ("+ SRC cuts", lambda d: select_eep(d) & _acc_mask_ep(d) & apply_src_cuts(d),
+         _acc_w_ep),
+    ]
+
+    fig, axes = plt.subplots(1, 3, figsize=(15, 4.2))
+    for ax, (title, mask_fn, wfn) in zip(axes, stages):
+        for d, lbl, sc, kw in ((pwia, "PWIA", 1.0, dict(ls=":", color="0.35")),
+                               (fsi, "FULL", scale, dict(ls="-", color="C0", lw=2))):
+            m = mask_fn(d)
+            h = make_hist(d["Q2"][m], (d["weight"] * wfn(d))[m] * sc, bins)
+            draw_hist(ax, ctr, h, label=lbl, **kw)
+        ax.set_xlabel(r"$Q^2$  [GeV$^2$]")
+        ax.set_ylabel("Counts (equal luminosity)")
+        ax.set_title(title)
+        ax.legend(frameon=False)
+
+    # quantify the pre-cut agreement
+    hp = make_hist(pwia["Q2"], pwia["weight"], bins)
+    hf = make_hist(fsi["Q2"], fsi["weight"] * scale, bins)
+    ok = hp > 0
+    dev = np.abs(hf[ok] - hp[ok]) / hp[ok]
+    axes[0].text(0.97, 0.90,
+                 f"max |FULL-PWIA|/PWIA = {100*dev.max():.1f}%\n"
+                 f"mean = {100*dev.mean():.1f}%",
+                 transform=axes[0].transAxes, ha="right", va="top", fontsize=9)
+    print(f"  Q2 pre-cut PWIA vs FULL: mean |diff| {100*dev.mean():.2f}%, "
+          f"max {100*dev.max():.2f}%  (must be statistical only)")
+
+    fig.tight_layout()
+    out = os.path.join(outdir, "figD_Q2_stages.png")
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"  Saved {os.path.basename(out)}")
+
+
+# Provenance classes for the candidate-origin diagnostic. parentRole is 0 for
+# descendants of the generated struck nucleon, 1 for the generated partner,
+# -1 for neither; rescatterCode is -1 when the particle never rescattered.
+_ORIGIN_LABELS = ["struck, untouched", "struck, rescattered",
+                  "partner, untouched", "partner, rescattered",
+                  "FSI knock-out"]
+
+
+def _origin_class(role, rescat):
+    """Map (parentRole, rescatterCode) onto _ORIGIN_LABELS indices."""
+    cls = np.full(len(role), 4, dtype=np.int64)      # default: FSI knock-out
+    for r, base in ((0, 0), (1, 2)):
+        m = role == r
+        cls[m & (rescat < 0)] = base
+        cls[m & (rescat >= 0)] = base + 1
+    return cls
+
+
+def figure_origins(fsi_src, fsi_mf, outdir):
+    """Where do the detected lead and recoil actually come from?
+
+    The paper's mean-field argument (Fig 8) is that FULL MF has a much
+    BROADER pair c.m. distribution than the GCF. In the MF sample the second
+    proton can only be an FSI product, so p_cm = p_miss + p_recoil is set by
+    the momentum of whatever the cascade knocked out. This figure breaks the
+    selected (e,e'pp) yield down by the provenance of the two detected
+    protons and plots |p_cm| separately for each class, which is what tells
+    us whether a too-narrow MF p_cm comes from the event definition, from the
+    cascade medium, or from the acceptance.
+    """
+    fig, axes = plt.subplots(2, 2, figsize=(11, 8))
+    bins = np.linspace(0.0, 1.0, 26)
+    ctr = 0.5 * (bins[1:] + bins[:-1])
+
+    for col, (d, name) in enumerate(((fsi_src, "FULL GCF"), (fsi_mf, "FULL MF"))):
+        if d is None:
+            continue
+        m = select_eepp(d) & _acc_mask_epp(d) & apply_src_cuts(d) \
+            & (d["prec"] > SRC_CUTS["precoil_min"])
+        w = (d["weight"] * _acc_w_epp(d))[m]
+        lc = _origin_class(d["lead_role"][m], d["lead_rescat"][m])
+        rc = _origin_class(d["rec_role"][m], d["rec_rescat"][m])
+
+        ax = axes[0][col]
+        tot = w.sum()
+        frac = [[100 * w[(lc == i) & (rc == j)].sum() / tot if tot > 0 else 0
+                 for j in range(5)] for i in range(5)]
+        im = ax.imshow(frac, cmap="Blues", vmin=0)
+        ax.set_xticks(range(5)); ax.set_yticks(range(5))
+        ax.set_xticklabels(_ORIGIN_LABELS, rotation=45, ha="right", fontsize=7)
+        ax.set_yticklabels(_ORIGIN_LABELS, fontsize=7)
+        ax.set_xlabel("recoil origin"); ax.set_ylabel("lead origin")
+        ax.set_title(f"{name} — (e,e'pp) yield share [%]")
+        for i in range(5):
+            for j in range(5):
+                if frac[i][j] >= 0.5:
+                    ax.text(j, i, f"{frac[i][j]:.0f}", ha="center", va="center",
+                            fontsize=7,
+                            color="white" if frac[i][j] > 50 else "black")
+        fig.colorbar(im, ax=ax, fraction=0.046)
+
+        ax = axes[1][col]
+        pcm = d["pcm_mag"][m]
+        draw_hist(ax, ctr, make_hist(pcm, w, bins), color="k", lw=2, label="all")
+        for j, lbl in enumerate(_ORIGIN_LABELS):
+            sel = rc == j
+            if w[sel].sum() <= 0:
+                continue
+            draw_hist(ax, ctr, make_hist(pcm[sel], w[sel], bins),
+                      label=f"recoil: {lbl}")
+        ax.set_xlabel(r"$|p_{c.m.}|$  [GeV/c]")
+        ax.set_ylabel("Counts")
+        ax.set_title(f"{name} — by recoil origin")
+        ax.legend(frameon=False, fontsize=7)
+
+    fig.tight_layout()
+    out = os.path.join(outdir, "figD_origins.png")
+    fig.savefig(out, dpi=150)
+    plt.close(fig)
+    print(f"  Saved {os.path.basename(out)}")
+
+
 def figure_q2_diag(pwia, fsi, outdir, clas_ev=None):
     """Diagnostic: post-cut Q^2 spectrum, sim vs data.
 
@@ -1848,13 +2019,13 @@ def main():
                   f"Sigma_w={meta.get('total_weight')}")
         d["_meta"] = meta
         flatlist_resolve(d, acc, args.ebeam, include_neutrons=include_neutrons)
-        nl = d["n_lead_cand"]; nr = d["n_recoil_cand"]
-        one = nl == 1
-        print(f"    flat-list lead:   1: {int(one.sum())}   0: {int((nl==0).sum())}"
-              f"   >=2: {int((nl>=2).sum())} (dropped)")
-        print(f"    flat-list recoil (lead events):  1: {int((one&(nr==1)).sum())}"
-              f"   0: {int((one&(nr==0)).sum())}"
-              f"   >=2: {int((one&(nr>=2)).sum())} (dropped from eepp)")
+        nl = d["n_lead_cand"]
+        print(f"    accepted nucleons per event:  0: {int((nl==0).sum())}"
+              f"   1: {int((nl==1).sum())}"
+              f"   2: {int((nl==2).sum())}"
+              f"   >=3: {int((nl>=3).sum())}   (none dropped)")
+        print(f"    channels: (e,e'p) {int((select_eep(d) & d['acc_mask_ep']).sum())}"
+              f"   (e,e'pp) {int((select_eepp(d) & d['acc_mask_epp']).sum())}")
         return d
 
     if not args.no_acceptance:
@@ -1948,6 +2119,8 @@ def main():
     figure6(pwia, fsi, args.outdir, clas=clas, clas_ev=clas_ev)
     figure7(pwia, fsi, args.outdir, clas=clas, clas_ev=clas_ev)
     figure_q2_diag(pwia, fsi, args.outdir, clas_ev=clas_ev)
+    figure_q2_stages(pwia, fsi, args.outdir)
+    figure_origins(fsi, fsi_mf, args.outdir)
 
     # Figs 8-10 compare FULL GCF (AV18 SRC, p_rel>kF) to FULL MF (single
     # struck nucleon, Fermi gas). Both are pure-wavefunction FULL calculations.
