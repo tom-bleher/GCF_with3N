@@ -57,8 +57,7 @@ import matplotlib.pyplot as plt
 
 # clas_acceptance lives beside this script
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from clas_acceptance import (ClasAcceptance, RESO_ELECTRON, RESO_PROTON,
-                             MIN_PREC)
+from clas_acceptance import ClasAcceptance, RESO_ELECTRON, RESO_PROTON
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -360,13 +359,16 @@ def compute_kinematics(d, Ebeam=6.0):
 
 _KMAX_CAND = 24   # cap on the per-event final-state list
 
-# Minimum momentum for a proton to count as DETECTED (GeV/c). The eg2
-# acceptance map is binned from 0, so without this a 100 MeV/c FSI knock-out
-# proton would be treated as a detected second proton and inflate the
-# (e,e'pp) yield. 0.30 GeV/c sits safely below the paper's 0.35 GeV/c
-# |p_recoil| SRC cut, so it never competes with that cut. Applied only when
-# an acceptance object is supplied -- it is a detector property.
-PROTON_PMIN = MIN_PREC
+# NOTE: no explicit low-momentum proton threshold is applied. The eg2
+# acceptance map already handles it, and does so probabilistically rather
+# than with a hard edge -- measured mean map weight for an isotropic proton
+# throw: 0.000 at 0.05 GeV/c, 0.005 at 0.10, 0.045 at 0.15, 0.42 at 0.20,
+# 0.63 at 0.25, 0.80 at 0.60. The gen==0 -> weight 1.0 fallback inside
+# map_weight never fires down there (0.0% of accepted protons below
+# 0.30 GeV/c), so there is no soft-proton leak to guard against. A detected
+# proton is a detected proton, whatever produced it; the paper's
+# |p_recoil| > 0.35 GeV/c requirement is an SRC selection cut and lives in
+# apply_src_cuts.
 
 
 def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
@@ -417,6 +419,8 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
     out_rrole = np.full(n, -1, dtype=np.int64)
     out_lgen  = np.full(n, -1, dtype=np.int64)
     out_rgen  = np.full(n, -1, dtype=np.int64)
+    out_lfate = np.full(n, -1, dtype=np.int64)
+    out_rfate = np.full(n, -1, dtype=np.int64)
     out_nlead = np.zeros(n, dtype=np.int64)
     out_nrec  = np.zeros(n, dtype=np.int64)
 
@@ -435,6 +439,7 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
                           _pad(d["part_pz"][lo:hi], m, 0.0)], axis=2)
         crole = _pad(d["part_parentRole"][lo:hi], m, -1).astype(np.int64)
         cgen  = _pad(d["part_generation"][lo:hi], m, -1).astype(np.int64)
+        cfate = _pad(d["part_rescatterCode"][lo:hi], m, -1).astype(np.int64)
         valid = np.isin(ctype, allowed)
 
         # ---- detector-resolution smearing ----
@@ -462,7 +467,7 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
                 fid = acc.accept_proton(cand[:, :, 0].ravel(),
                                         cand[:, :, 1].ravel(),
                                         cand[:, :, 2].ravel()).reshape(m, K)
-            detected = detected & fid & (pmag > PROTON_PMIN)
+            detected = detected & fid
             ok_e = acc.accept_electron(e3[:, 0], e3[:, 1], e3[:, 2])
         else:
             ok_e = np.ones(m, dtype=bool)
@@ -489,6 +494,8 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
         out_rrole[lo:hi] = np.where(has_rec,  crole[rows, rec_idx],  -1)
         out_lgen[lo:hi]  = np.where(has_lead, cgen[rows, lead_idx], -1)
         out_rgen[lo:hi]  = np.where(has_rec,  cgen[rows, rec_idx],  -1)
+        out_lfate[lo:hi] = np.where(has_lead, cfate[rows, lead_idx], -1)
+        out_rfate[lo:hi] = np.where(has_rec,  cfate[rows, rec_idx],  -1)
         out_nlead[lo:hi] = detected.sum(axis=1)
         out_nrec[lo:hi]  = np.maximum(detected.sum(axis=1) - 1, 0)
 
@@ -504,6 +511,8 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
     d["rec_role"]   = out_rrole
     d["lead_gen"] = out_lgen
     d["rec_gen"]  = out_rgen
+    d["lead_fate"] = out_lfate
+    d["rec_fate"]  = out_rfate
 
     # ---- overwrite electron / q, recompute all derived kinematics ----
     Ee = np.sqrt((out_e3**2).sum(axis=1))
@@ -1734,26 +1743,37 @@ def figure_q2_stages(pwia, fsi, outdir):
 # Provenance classes for the candidate-origin diagnostic, built from
 # part_generation and part_parentRole.
 #
-#   generation == 0  the particle IS the transported input nucleon: it left
-#                    the nucleus with exactly its generated momentum.
-#   generation >  0  it is a cascade product -- either the original nucleon
-#                    after a scatter (Intranuke replaces it with a daughter)
-#                    or a knocked-out medium nucleon.
+#   rescatterCode == NO_INTERACTION_FATE  the input nucleon this particle
+#       descends from never interacted, so the particle IS that nucleon and
+#       left with exactly its generated momentum.
+#   anything else  the input nucleon interacted, so this particle is a cascade
+#       product -- either that nucleon after the scatter or a knocked-out
+#       medium nucleon.
 #
-# parentRole alone cannot make this distinction: a knocked-out medium nucleon
-# inherits the role of whichever incident nucleon knocked it out.
+# part_generation cannot make this split: Intranuke re-emits even
+# non-interacting hadrons as daughters, so generation is >=1 for everything.
+# parentRole cannot either: a knocked-out medium nucleon inherits the role of
+# whichever incident nucleon knocked it out.
+#
+# The fate integer is checked empirically rather than against the GENIE enum
+# (two headers define the same names with different values -- see the note in
+# GenieFSIHelpers.cc). On a 2M hA sample, fate 1 was the only value for which
+# |p - p_pre| < 1 MeV, and it held for 100% of them; every other fate had a
+# median displacement of 0.36-2.2 GeV/c.
+NO_INTERACTION_FATE = 1
+
 _ORIGIN_LABELS = ["struck, untouched", "product of struck",
                   "partner, untouched", "product of partner",
                   "unattributed"]
 
 
-def _origin_class(role, gen):
-    """Map (parentRole, generation) onto _ORIGIN_LABELS indices."""
+def _origin_class(role, fate):
+    """Map (parentRole, rescatterCode) onto _ORIGIN_LABELS indices."""
     cls = np.full(len(role), 4, dtype=np.int64)      # default: unattributed
     for r, base in ((0, 0), (1, 2)):
         m = role == r
-        cls[m & (gen == 0)] = base
-        cls[m & (gen > 0)] = base + 1
+        cls[m & (fate == NO_INTERACTION_FATE)] = base
+        cls[m & (fate != NO_INTERACTION_FATE)] = base + 1
     return cls
 
 
@@ -1779,8 +1799,8 @@ def figure_origins(fsi_src, fsi_mf, outdir):
         m = select_eepp(d) & _acc_mask_epp(d) & apply_src_cuts(d) \
             & (d["prec"] > SRC_CUTS["precoil_min"])
         w = (d["weight"] * _acc_w_epp(d))[m]
-        lc = _origin_class(d["lead_role"][m], d["lead_gen"][m])
-        rc = _origin_class(d["rec_role"][m], d["rec_gen"][m])
+        lc = _origin_class(d["lead_role"][m], d["lead_fate"][m])
+        rc = _origin_class(d["rec_role"][m], d["rec_fate"][m])
 
         ax = axes[0][col]
         tot = w.sum()

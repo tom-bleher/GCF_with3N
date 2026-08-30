@@ -1,0 +1,50 @@
+CLAS acceptance enabled  (map=Acceptance/map_eg2_adin.root, seed=12345  [user-supplied], map_smoothing_radius=1)
+Loading PWIA (SRC): events/natalie_val/pwia_fixed.root
+  2000000 rows loaded, 2000000 with weight > 0 kept
+    metadata: wf_mode=SRC_only  N_saved=2000000  Sigma_w=21113623
+    accepted nucleons per event:  0: 532915   1: 993797   2: 473288   >=3: 0   (none dropped)
+    channels: (e,e'p) 414228   (e,e'pp) 65837
+Loading FSI  (SRC): events/natalie_val/fsi_fixed.root
+  2000000 rows loaded, 2000000 with weight > 0 kept
+    metadata: wf_mode=SRC_only  N_saved=2000000  Sigma_w=21103479
+    accepted nucleons per event:  0: 750725   1: 784877   2: 317118   >=3: 147280   (none dropped)
+    channels: (e,e'p) 695775   (e,e'pp) 258245
+Loading FSI  (MF, single nucleon): events/natalie_val/mf_localFG.root
+  2000000 rows loaded, 2000000 with weight > 0 kept
+    metadata: wf_mode=MF_1N  N_saved=2000000  Sigma_w=69841.527
+    accepted nucleons per event:  0: 1242524   1: 614194   2: 92006   >=3: 51276   (none dropped)
+    channels: (e,e'p) 463917   (e,e'pp) 78631
+Loading CLAS paper hists: Acceptance/SRC_eg2_Hists_C.root
+  Loaded 12 panel(s): [('fig2', 'src'), ('fig3_lead', 'src'), ('fig3_rec', 'src'), ('fig4_ep', 'src'), ('fig4_epp', 'src'), ('fig5_ratio', 'src'), ('fig6_x', 'src'), ('fig6_y', 'src'), ('fig6_z', 'src'), ('fig7_prel', 'src'), ('fig9_ep', 'src'), ('fig9_epp', 'src')]
+  Paper-PDF extracted points loaded for figs 6/7/8 (11 panels)
+Loading CLAS raw events: data/clas/SRC_e2p_C_GoodRuns_coulomb.root
+  605 events; after SRC cuts: 567 (e,e'p), 556 (e,e'pp)  [paper: 363 (e,e'pp)]
+
+==============================================================
+  Effective Transparencies  (within CLAS acceptance, SRC cuts)
+  Both samples rescaled to equivalent experimental luminosity.
+==============================================================
+  Channel           T+SCX       Full   (paper: T+SCX / Full)
+  (e,e'p)           0.519      0.696   (paper: 0.61  / 0.58)
+  (e,e'pp)          0.568      1.284   (paper: 0.83  / 0.73)
+==============================================================
+
+Generating plots in analysis/plots/natalie_paper/val_fixed/
+  Saved fig2_pLead_eep.png
+  Saved fig3_pLead_pRec_eepp.png
+  Saved fig4_pmiss.png
+  Saved fig5_ratio_eepp_eep.png
+  Saved fig6_pcm_components.png
+  Saved fig7_prel_eepp.png
+  Q2 diag  PWIA: frac(Q2<1.7) = 0.126
+  Q2 diag  FULL: frac(Q2<1.7) = 0.135
+  Q2 diag  Data: frac(Q2<1.7) = 0.275
+  Saved figD_Q2_diagnostic.png
+  Q2 pre-cut PWIA vs FULL: mean |diff| 0.97%, max 3.43%  (must be statistical only)
+  Saved figD_Q2_stages.png
+  Saved figD_origins.png
+  Saved fig8_pcm_GCF_vs_MF.png
+  Saved fig9_theta_pmiss_q_GCF_vs_MF.png
+  Saved fig10_ratio_GCF_vs_MF.png
+
+Done.
