@@ -18,7 +18,18 @@ enum FSIModel { kHN2018, kHA2018 };
 struct FSIParticle {
   int pdg;
   TLorentzVector p4;
-  int rescatterCode;  // GENIE GHepParticle::RescatterCode() (diagnostic)
+  // Fate of the INPUT nucleon this particle descends from, as stamped by
+  // Intranuke (INukeHadroFates2018.h); -1 = that nucleon never interacted.
+  // Note Intranuke stamps the fate on the incident particle, not on the
+  // stable final state, so this must be read from the ancestor -- reading it
+  // off the final-state particle always yields -1.
+  int rescatterCode;
+  // Mother-chain depth from the transported input nucleon: 0 means this
+  // particle IS that nucleon, unchanged by the cascade; >0 means it is a
+  // cascade product. This is the reliable "was it made by FSI?" flag --
+  // parentRole cannot answer it, because a knocked-out medium nucleon
+  // inherits the role of whichever incident nucleon knocked it out.
+  int generation;
   int parentRole;     // caller tag of the input nucleon this particle
                       // descends from (provenance diagnostic; -1 if unknown)
 };

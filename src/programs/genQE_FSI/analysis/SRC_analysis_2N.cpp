@@ -257,6 +257,7 @@ int main(int argc, char **argv) {
     static const Int_t kMaxPart = 100;
     Int_t br_nPart;
     Int_t br_part_pdg[kMaxPart], br_part_parentRole[kMaxPart], br_part_rescatterCode[kMaxPart];
+    Int_t br_part_generation[kMaxPart];
     Double_t br_part_px[kMaxPart], br_part_py[kMaxPart], br_part_pz[kMaxPart], br_part_E[kMaxPart];
 
     // Set up branches.
@@ -295,6 +296,10 @@ int main(int argc, char **argv) {
     tree->Branch("part_pdg", br_part_pdg, "part_pdg[nPart]/I");
     tree->Branch("part_parentRole", br_part_parentRole, "part_parentRole[nPart]/I");
     tree->Branch("part_rescatterCode", br_part_rescatterCode, "part_rescatterCode[nPart]/I");
+    // 0 = this particle IS the transported input nucleon, unchanged by the
+    // cascade; >0 = an FSI product. parentRole cannot express this: a
+    // knocked-out medium nucleon inherits the role of whatever hit it.
+    tree->Branch("part_generation", br_part_generation, "part_generation[nPart]/I");
     tree->Branch("part_px", br_part_px, "part_px[nPart]/D");
     tree->Branch("part_py", br_part_py, "part_py[nPart]/D");
     tree->Branch("part_pz", br_part_pz, "part_pz[nPart]/D");
@@ -362,6 +367,7 @@ int main(int argc, char **argv) {
             br_part_pdg[i] = parts[i].pdg;
             br_part_parentRole[i] = parts[i].parentRole;
             br_part_rescatterCode[i] = parts[i].rescatterCode;
+            br_part_generation[i] = parts[i].generation;
             br_part_px[i] = parts[i].p4.X();
             br_part_py[i] = parts[i].p4.Y();
             br_part_pz[i] = parts[i].p4.Z();

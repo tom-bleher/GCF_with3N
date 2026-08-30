@@ -380,10 +380,10 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
     (acc_w_ep/epp), and recomputes every derived kinematic column.
 
     Also records, for the chosen lead and recoil, the provenance columns
-    lead_role / rec_role (part_parentRole: 0 = descendant of the generated
-    struck nucleon, 1 = of the generated partner, -1 = neither) and
-    lead_rescat / rec_rescat (part_rescatterCode, -1 = never rescattered).
-    These drive the candidate-origin diagnostic.
+    lead_role / rec_role (part_parentRole: 0 = descends from the generated
+    struck nucleon, 1 = from the generated partner) and lead_gen / rec_gen
+    (part_generation: 0 = IS that nucleon, untouched by the cascade; >0 = an
+    FSI product). These drive the candidate-origin diagnostic.
 
     Diagnostics d["n_lead_cand"] / d["n_recoil_cand"] count accepted
     candidates. Processed in chunks of `chunk` events to bound peak memory.
@@ -415,8 +415,8 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
     out_rtype = np.zeros(n, dtype=np.int64)
     out_lrole = np.full(n, -1, dtype=np.int64)
     out_rrole = np.full(n, -1, dtype=np.int64)
-    out_lresc = np.full(n, -1, dtype=np.int64)
-    out_rresc = np.full(n, -1, dtype=np.int64)
+    out_lgen  = np.full(n, -1, dtype=np.int64)
+    out_rgen  = np.full(n, -1, dtype=np.int64)
     out_nlead = np.zeros(n, dtype=np.int64)
     out_nrec  = np.zeros(n, dtype=np.int64)
 
@@ -434,7 +434,7 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
                           _pad(d["part_py"][lo:hi], m, 0.0),
                           _pad(d["part_pz"][lo:hi], m, 0.0)], axis=2)
         crole = _pad(d["part_parentRole"][lo:hi], m, -1).astype(np.int64)
-        cresc = _pad(d["part_rescatterCode"][lo:hi], m, -1).astype(np.int64)
+        cgen  = _pad(d["part_generation"][lo:hi], m, -1).astype(np.int64)
         valid = np.isin(ctype, allowed)
 
         # ---- detector-resolution smearing ----
@@ -487,8 +487,8 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
         out_rtype[lo:hi] = np.where(has_rec,  ctype[rows, rec_idx],  0)
         out_lrole[lo:hi] = np.where(has_lead, crole[rows, lead_idx], -1)
         out_rrole[lo:hi] = np.where(has_rec,  crole[rows, rec_idx],  -1)
-        out_lresc[lo:hi] = np.where(has_lead, cresc[rows, lead_idx], -1)
-        out_rresc[lo:hi] = np.where(has_rec,  cresc[rows, rec_idx],  -1)
+        out_lgen[lo:hi]  = np.where(has_lead, cgen[rows, lead_idx], -1)
+        out_rgen[lo:hi]  = np.where(has_rec,  cgen[rows, rec_idx],  -1)
         out_nlead[lo:hi] = detected.sum(axis=1)
         out_nrec[lo:hi]  = np.maximum(detected.sum(axis=1) - 1, 0)
 
@@ -502,8 +502,8 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
         [out_rec3, np.sqrt((out_rec3**2).sum(axis=1) + M_P**2)])
     d["lead_role"]  = out_lrole
     d["rec_role"]   = out_rrole
-    d["lead_rescat"] = out_lresc
-    d["rec_rescat"]  = out_rresc
+    d["lead_gen"] = out_lgen
+    d["rec_gen"]  = out_rgen
 
     # ---- overwrite electron / q, recompute all derived kinematics ----
     Ee = np.sqrt((out_e3**2).sum(axis=1))
@@ -1705,7 +1705,7 @@ def figure_q2_stages(pwia, fsi, outdir):
         for d, lbl, sc, kw in ((pwia, "PWIA", 1.0, dict(ls=":", color="0.35")),
                                (fsi, "FULL", scale, dict(ls="-", color="C0", lw=2))):
             m = mask_fn(d)
-            h = make_hist(d["Q2"][m], (d["weight"] * wfn(d))[m] * sc, bins)
+            _, h = make_hist(d["Q2"][m], (d["weight"] * wfn(d))[m] * sc, bins)
             draw_hist(ax, ctr, h, label=lbl, **kw)
         ax.set_xlabel(r"$Q^2$  [GeV$^2$]")
         ax.set_ylabel("Counts (equal luminosity)")
@@ -1713,8 +1713,8 @@ def figure_q2_stages(pwia, fsi, outdir):
         ax.legend(frameon=False)
 
     # quantify the pre-cut agreement
-    hp = make_hist(pwia["Q2"], pwia["weight"], bins)
-    hf = make_hist(fsi["Q2"], fsi["weight"] * scale, bins)
+    _, hp = make_hist(pwia["Q2"], pwia["weight"], bins)
+    _, hf = make_hist(fsi["Q2"], fsi["weight"] * scale, bins)
     ok = hp > 0
     dev = np.abs(hf[ok] - hp[ok]) / hp[ok]
     axes[0].text(0.97, 0.90,
@@ -1731,21 +1731,29 @@ def figure_q2_stages(pwia, fsi, outdir):
     print(f"  Saved {os.path.basename(out)}")
 
 
-# Provenance classes for the candidate-origin diagnostic. parentRole is 0 for
-# descendants of the generated struck nucleon, 1 for the generated partner,
-# -1 for neither; rescatterCode is -1 when the particle never rescattered.
-_ORIGIN_LABELS = ["struck, untouched", "struck, rescattered",
-                  "partner, untouched", "partner, rescattered",
-                  "FSI knock-out"]
+# Provenance classes for the candidate-origin diagnostic, built from
+# part_generation and part_parentRole.
+#
+#   generation == 0  the particle IS the transported input nucleon: it left
+#                    the nucleus with exactly its generated momentum.
+#   generation >  0  it is a cascade product -- either the original nucleon
+#                    after a scatter (Intranuke replaces it with a daughter)
+#                    or a knocked-out medium nucleon.
+#
+# parentRole alone cannot make this distinction: a knocked-out medium nucleon
+# inherits the role of whichever incident nucleon knocked it out.
+_ORIGIN_LABELS = ["struck, untouched", "product of struck",
+                  "partner, untouched", "product of partner",
+                  "unattributed"]
 
 
-def _origin_class(role, rescat):
-    """Map (parentRole, rescatterCode) onto _ORIGIN_LABELS indices."""
-    cls = np.full(len(role), 4, dtype=np.int64)      # default: FSI knock-out
+def _origin_class(role, gen):
+    """Map (parentRole, generation) onto _ORIGIN_LABELS indices."""
+    cls = np.full(len(role), 4, dtype=np.int64)      # default: unattributed
     for r, base in ((0, 0), (1, 2)):
         m = role == r
-        cls[m & (rescat < 0)] = base
-        cls[m & (rescat >= 0)] = base + 1
+        cls[m & (gen == 0)] = base
+        cls[m & (gen > 0)] = base + 1
     return cls
 
 
@@ -1771,8 +1779,8 @@ def figure_origins(fsi_src, fsi_mf, outdir):
         m = select_eepp(d) & _acc_mask_epp(d) & apply_src_cuts(d) \
             & (d["prec"] > SRC_CUTS["precoil_min"])
         w = (d["weight"] * _acc_w_epp(d))[m]
-        lc = _origin_class(d["lead_role"][m], d["lead_rescat"][m])
-        rc = _origin_class(d["rec_role"][m], d["rec_rescat"][m])
+        lc = _origin_class(d["lead_role"][m], d["lead_gen"][m])
+        rc = _origin_class(d["rec_role"][m], d["rec_gen"][m])
 
         ax = axes[0][col]
         tot = w.sum()
@@ -1794,12 +1802,12 @@ def figure_origins(fsi_src, fsi_mf, outdir):
 
         ax = axes[1][col]
         pcm = d["pcm_mag"][m]
-        draw_hist(ax, ctr, make_hist(pcm, w, bins), color="k", lw=2, label="all")
+        draw_hist(ax, ctr, make_hist(pcm, w, bins)[1], color="k", lw=2, label="all")
         for j, lbl in enumerate(_ORIGIN_LABELS):
             sel = rc == j
             if w[sel].sum() <= 0:
                 continue
-            draw_hist(ax, ctr, make_hist(pcm[sel], w[sel], bins),
+            draw_hist(ax, ctr, make_hist(pcm[sel], w[sel], bins)[1],
                       label=f"recoil: {lbl}")
         ax.set_xlabel(r"$|p_{c.m.}|$  [GeV/c]")
         ax.set_ylabel("Counts")

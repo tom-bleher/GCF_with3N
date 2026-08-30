@@ -250,6 +250,7 @@ bool ApplyGenieFSI(int A_residual, int Z_residual,
       part.pdg = inputs[i].pdg;
       part.p4 = inputs[i].p4;
       part.rescatterCode = -1;
+      part.generation = 0;
       part.parentRole = inputs[i].parentRole;
       particles.push_back(part);
     }
@@ -341,21 +342,35 @@ bool ApplyGenieFSI(int A_residual, int Z_residual,
     if (genie::pdg::IsIon(pdg) || genie::pdg::IsPseudoParticle(pdg)) continue;
 
     int role = -1;
+    int fate = -1;
+    int depth = 0;               // 0 = this particle IS the transported input
     int cur = idx;
     while (cur >= 0) {
       if (cur >= first_hadron_slot && cur <= last_hadron_slot) {
         role = slot_role[cur - first_hadron_slot];
+        // Intranuke stamps the fate on the FirstMother of each product
+        // (HAIntranuke2018.cxx:152, HNIntranuke2018.cxx:155), i.e. on the
+        // INCIDENT particle -- never on the stable final state itself.
+        // Reading sp->RescatterCode() therefore always returned -1. Take it
+        // from the transported input slot this particle descends from:
+        // -1 there means that nucleon never interacted.
+        genie::GHepParticle* anc = evrec.Particle(cur);
+        if (anc) fate = anc->RescatterCode();
         break;
       }
       genie::GHepParticle* cp = evrec.Particle(cur);
       if (!cp) break;
       cur = cp->FirstMother();
+      ++depth;
     }
 
     FSIParticle part;
     part.pdg = pdg;
     part.p4 = *(sp->P4());
-    part.rescatterCode = sp->RescatterCode();
+    part.rescatterCode = fate;
+    // 0 = this particle IS the transported input nucleon, unchanged by the
+    // cascade; >0 = it is a descendant, i.e. an FSI product.
+    part.generation = depth;
     part.parentRole = role;
     particles.push_back(part);
   }
