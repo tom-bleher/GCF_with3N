@@ -72,3 +72,9 @@ src/programs/genIon/genIon
 src/programs/genPhoto/genPhoto
 src/programs/sfSampler/sfSampler
 src/programs/sfSampler/sfSamplerLC
+
+# Generator output trees and their companion metadata / per-worker logs.
+# These are large, machine-generated, and reproducible from the run scripts.
+events/
+*.root.meta.txt
+*.part[0-9][0-9][0-9].log
