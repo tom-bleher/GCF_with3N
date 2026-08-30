@@ -151,8 +151,20 @@ def load_tree(filepath, treename="events"):
             f"{filepath}: no part_* branches. This file predates the "
             "flat-list generator output; regenerate it with the current "
             "SRC_analysis_2N.")
-    jag_keys = [k for k in all_keys if k.startswith("part_")]
-    flat_keys = [k for k in all_keys if k not in jag_keys]
+    # Read only what the analysis uses. The rest -- lead/recoil (built here
+    # instead), part_E (rebuilt from |p| and the proton mass), and the tree's
+    # xB/nu/pmiss/scattering_angle (all recomputed by compute_kinematics from
+    # the SMEARED electron) -- would otherwise be loaded and thrown away. At
+    # 150M events that is tens of GB of RAM.
+    WANT_FLAT = ("weight", "electron", "q", "gen_lead_type", "gen_rec_type",
+                 "lead_pre", "recoil_pre", "Q2")
+    WANT_JAG = ("part_pdg", "part_px", "part_py", "part_pz",
+                "part_parentRole", "part_rescatterCode", "part_generation")
+    jag_keys = [k for k in all_keys if k in WANT_JAG]
+    flat_keys = [k for k in all_keys if k in WANT_FLAT]
+    missing = [k for k in WANT_FLAT if k not in all_keys]
+    if missing:
+        raise KeyError(f"{filepath}: missing required branches {missing}")
     out = tree.arrays(flat_keys, library="np")
     jag = tree.arrays(jag_keys, library="ak")
     for k in jag_keys:
