@@ -580,12 +580,30 @@ def wright_resolve(d, acc, ebeam, seed=None, chunk=2_000_000):
                               ebeam - out["e3"][:, 2], ebeam - Ee])
     compute_kinematics(d, Ebeam=ebeam)
 
-    # 1824-1828: analysis-level truth cut on the pair relative momentum,
-    # prel = 0.5*(p_miss - p_recoil_truth), using the GENERATED recoil.
-    prel_truth = 0.5 * np.linalg.norm(
-        d["pmiss_vec"] - np.asarray(d["recoil_pre"])[:, :3], axis=1)
-    d["wright_prel_truth"] = prel_truth
-    out["drop"] |= (prel_truth < 0.25)
+    # 1824-1828: analysis-level TRUTH cut, prel > 0.25 GeV/c.
+    #
+    #     TVector3 prel = .5*(pn - true_recoil->P4()->Vect()); //truth IS
+    #     if(prel.Mag() < .25){ ... continue; }
+    #
+    # At that point `pn` is NOT the reconstructed missing momentum -- it is the
+    # struck nucleon's initial momentum, set at 1476-1479 from the status-11
+    # particle, and only reassigned to the smeared p_miss on the line AFTER the
+    # cut (1832). `true_recoil` is the first kIStHadronInTheNucleus nucleon,
+    # which for an SRC pair is the partner (SRCNuclearRecoil adds it at
+    # Module-2, before the struck nucleon's daughter at Module-5). So for the
+    # SRC samples this is exactly the generated relative momentum,
+    # 0.5|p1_gen - p2_gen| -- i.e. her analysis imposes k_rel > 0.25 on top of
+    # whatever her generator produced.
+    #
+    # For the mean-field sample there is no partner: `true_recoil` is then the
+    # OUTGOING nucleon (p1 + q), so her prel is 0.5|q| ~ 0.75-1.2 GeV/c and the
+    # cut never fires. It must therefore not be applied to MF.
+    p1_gen = np.asarray(d["lead_pre"])[:, :3] - np.asarray(d["q"])[:, :3]
+    p2_gen = np.asarray(d["recoil_pre"])[:, :3]
+    prel_truth = 0.5 * np.linalg.norm(p1_gen - p2_gen, axis=1)
+    has_partner = np.isin(np.asarray(d["gen_rec_type"]), (PROTON, NEUTRON))
+    d["wright_prel_truth"] = np.where(has_partner, prel_truth, np.inf)
+    out["drop"] |= has_partner & (prel_truth < 0.25)
 
     keep = ~out["drop"]
     d["wright_drop"] = out["drop"]

@@ -122,3 +122,118 @@ with the same setting, so a common normalisation offset cancels identically.
 The setting must simply be kept the same within a PWIA/FSI pair — which
 `run_natalie_samples.sh` guarantees.
 
+---
+
+# Her analysis code (`GENIE-GCF-Analysis`)
+
+All items verified directly against the source; file:line given.
+
+## Which file is which
+
+1. **`genie_gcf_loop.C` produced the paper's FULL curve.** Its output path
+   (`:628`, `..._501_1bil_reco_f.root`) is verbatim the file
+   `gst_plotter.C:1309` opens as the FULL input. `_501_` = 5.014 GeV beam,
+   tune G18_10a (hA).
+2. `gcf_generator_analysis_EM.cpp` = PWIA baseline, reads the standalone GCF
+   generator tree `genT`. No GENIE.
+3. `gcf_genie_analysis.C` = an **older** GENIE analysis with a completely
+   different sample definition (lead/recoil strictly by daughter-link
+   provenance, `:1248`, so FSI knock-outs are excluded by construction).
+   Superseded -- do not confuse with item 1.
+4. `gst_plotter.C` = plotting and normalisation.
+
+## Event building (`genie_gcf_loop.C`)
+
+5. The final-state list contains **protons only** (`:1506`); each is smeared
+   1% on the magnitude, then must pass the proton fiducial **and** have a
+   non-zero acceptance-map value -- the map is a **binary filter** here, not a
+   weight (`:1514-1516`).
+6. **The lead is simply the highest-momentum accepted proton, with no cuts.**
+   Her first loop intends to apply the SRC cuts to lead candidates, but
+   `:1618` compares against `pLead_max`, a histogram axis limit of 2.4 GeV
+   (`:701`, active since `data_bins = true` at `:641`), instead of the running
+   `lead_max`. The loop almost never fires; the fallback (`:1628-1640`)
+   decides.
+7. **The recoil is any other detected proton above 0.35 GeV/c**, falling back
+   to any other proton if none qualify (`:1652-1687`). Provenance is never
+   enforced -- a cascade knock-out is as valid a recoil as the SRC partner.
+8. **With 2 or 3 candidates she runs a lottery** (`assign_recoil`,
+   `:540-623`): each candidate's map value is an independent detection
+   probability, one random number is thrown, and **if two or more come out
+   detected the entire event is discarded, its (e,e'p) entry included**
+   (`:1728-1731`). With 4+ the dispatch is commented out and the event
+   silently becomes (e,e'p)-only.
+9. The recoil map weight is applied **only** when there was exactly one
+   candidate (`:1691`).
+10. **"Goodbye Absorption"** (`:1554-1557`): any event where either SRC
+    nucleon has rescatter fate 4 is discarded (27% of our weighted sample).
+11. **Analysis-level truth cut, k_rel > 0.25 GeV/c** (`:1824-1828`). `pn`
+    there is the struck nucleon's **truth** momentum (status-11 particle,
+    `:1476-1479`), reassigned to the smeared p_miss only on the line *after*
+    the cut. For the mean-field sample `true_recoil` is the outgoing nucleon,
+    so her prel is ~0.5|q| and the cut never fires there.
+12. Fate legend (`:1541-1552`): 0 Undefined, 1 No Interaction, 2 SCX,
+    3 Inelastic, 4 Absorption, 5 Knock out, 6 Compound nucleus,
+    7 Pion Production. Confirmed independently: fate 1 was the only value
+    whose final-state particle matched its input nucleon's momentum.
+
+## Cuts and constants
+
+13. `pass_selection_cuts` (`:512-524`): xB > 1.2, theta_pq < 25 deg,
+    **0.62 < |p_N|/|q| < 0.96**, 0.4 < p_miss < 1.0, m_miss < 1.1,
+    p_recoil > 0.35 (epp only). **The 0.96 disagrees with the paper's text,
+    which says 0.92.**
+14. **No Q^2 cut anywhere** -- Q^2 appears only as a histogram axis.
+15. Smearing: protons 1%, electrons 1.25%, magnitude only (`:637-638`).
+16. SCX probabilities (`:422-436`) identical to ours; applied as a per-event
+    random flip rather than a weight.
+
+## Normalisation
+
+17. **The published (e,e'pp) T+SCX transparency 0.83 is hard-coded**, not
+    simulated: `gst_plotter.C:1356`, `transparency = (.44/.53)` = 0.8302
+    = T_NN/T_N.
+18. Every curve is area-normalised to the data on the (e,e'p) p_miss
+    histogram (`gst_plotter.C:1360`), so the (e,e'p) yield carries no
+    absolute information.
+19. The GENIE event weight is never used; the only per-event weight is the
+    acceptance-map value.
+
+## Bugs in her code that affect the published numbers
+
+20. `pLead_max` vs `lead_max` (`:1618`) -- see item 6.
+21. **`events_pass_ep` over-counted ~7x**: the increment sits in an `else`
+    attached to the m_miss test *inside* the cut ladder (`:1971-1976`), so it
+    fires once per surviving stage. `events_pass_epp` fires once. Any
+    transparency from those printouts is wrong, by different factors for ep
+    and epp.
+22. **Out-of-bounds read**: `norm_factors` has 3 elements
+    (`gst_plotter.C:1360`) but `:1172-1181` indexes `norm_factors[j+6]` for
+    j = 0,1,2 -- undefined behaviour in the Fig 6 / Fig 8 scaling, alongside
+    hand-tuned rebin factors.
+23. `p0_id = 1;` immediately followed by `if(p0_id == -3)` (`:1486-1490`)
+    makes her p0_id/p1_id provenance indices dead.
+24. `gRandom->SetSeed(i)` re-seeds per event when SCX is on (`:1860`), after
+    the smearing was drawn.
+25. phi-frame inconsistency: protons rotated by +pi before the fiducial and
+    map filter (`:1514`), but the lead's map *weight* uses the unsmeared,
+    unrotated vector (`:1853`).
+26. `Sumw2()` is never called in either GENIE macro, so her weighted GENIE
+    histograms carry sqrt(N) errors.
+
+## Reproduction with her conventions
+
+`--convention wright`, 2M validation samples:
+
+| | fixed onset | **local onset** | paper |
+|---|---|---|---|
+| (e,e'p) Full | 0.549 | **0.594** | **0.58** |
+| (e,e'pp) Full | 0.961 | **0.740** | **0.73** |
+
+Her conventions plus the `local` SRC onset reproduce **both** published
+transparencies to within ~2%. The onset still matters even though her analysis
+cuts k_rel > 0.25: with the local onset the pair-vertex distribution is
+rho^n(r) r^2 I_SRC(r), which is surface-biased because I_SRC(r) grows as
+kF(r) -> 0, and surface pairs suffer less FSI. That is a genuine consequence
+of her "AV18 tail above a local Fermi gas" ansatz, not a normalisation choice.
+
