@@ -33,7 +33,7 @@ DelRNucleon         double  Yes   mult. factor for nucleon de-Broglie wavelength
          keeps the GENIE-side nucleon momentum distribution consistent with
          the generator-side LFG sampling used by QEGeneratorFSI::sample_FG_momentum
          (Algorithm A) and applies uniformly to the 2N, 3N and MF FSI paths. -->
-    <param type="alg"    name="NuclearModel">      genie::LocalFGM/Correlated  </param> <!-- srctail variant: 20% SRC high-momentum tail (SRC-Fraction=0.2) --> <!-- project override: no-tail LFG, matches hA override (N. Wright cascade targets measured soft) -->
+    <param type="alg"    name="NuclearModel">      genie::LocalFGM/Correlated  </param> <!-- srctail variant: 20% SRC high-momentum tail (SRC-Fraction=0.2) -->
     <!-- Upstream default was genie::NuclearModelMap/Default.  Intranuke was
          tuned with genie::FGMBodekRitchie/Default; if a systematic validation
          is desired switch back via
