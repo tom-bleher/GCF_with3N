@@ -52,14 +52,31 @@ CLI (positional; later args optional):
   argv[8] = fg_mode       (wf_mode 4 only: "global" [default] or "local")
   argv[9] = kF            (GeV/c; default 0.25; SRC/MF p_rel split, MF FG
                            ceiling, and the detected-nucleon counting threshold)
-  argv[11] = vertex_rho_power (1-3; default 2. Radial weight rho^n r^2 of the
-                           SRC-pair FSI vertex. Use 1 for the Wright et al.
-                           paper convention: pair position follows the
-                           one-body density)
   argv[10] = fsi_indep    (0/1; default 0. 1 = independent FSI: each nucleon
                            transported through its own GENIE record with an
                            undepleted A-2 remnant, instead of the default
                            shared depleting remnant in a single record)
+  argv[11] = vertex_rho_power (1-3; default 2. Radial weight rho^n r^2 of the
+                           SRC-pair FSI vertex. Use 1 for the Wright et al.
+                           paper convention: pair position follows the
+                           one-body density)
+  argv[12] = src_onset    ("fixed" [default] or "local"; wf_mode 2 only).
+                           Where the correlated-pair branch begins:
+                             fixed = k_rel > kF (argv[9]), a constant;
+                             local = k_rel > kF(r), the local Fermi momentum
+                                     at the sampled pair vertex (N. Wright's
+                                     convention). "local" makes the SRC and MF
+                                     samples exactly complementary -- the MF
+                                     ceiling is already kF(r) -- closing the
+                                     gap that "fixed" leaves between kF(r) and
+                                     kF for the 78% of vertices with kF(r)<kF.
+  argv[13] = src_require_p1 (0/1; default 0; wf_mode 2 only). 1 = additionally
+                           require |p1| = |k_rel + P_cm/2| > kF(r) after the
+                           c.m. motion is added (Wright's second test). Off by
+                           default: the GCF split belongs on the RELATIVE
+                           momentum, and her double test is what leaks pairs
+                           into the mean-field class. Provided so the size of
+                           that leak can be measured.
 
 A companion <output>.meta.txt file is written so the Python analysis can
 recover wf_mode, kF, total weight, etc.
@@ -119,6 +136,18 @@ int main(int argc, char **argv) {
     if (argc > 11) vertex_rho_power = std::atoi(argv[11]);
     fsi::SetSRCVertexRhoPower(vertex_rho_power);
 
+    std::string src_onset_str = "fixed";
+    if (argc > 12) src_onset_str = argv[12];
+    if (src_onset_str != "fixed" && src_onset_str != "local") {
+        std::cerr << "ERROR: src_onset (argv[12]) must be \"fixed\" or \"local\"; got "
+                  << src_onset_str << std::endl;
+        return 1;
+    }
+    const bool src_onset_local = (src_onset_str == "local");
+
+    bool src_require_p1 = false;
+    if (argc > 13) src_require_p1 = (std::atoi(argv[13]) != 0);
+
     const char* fsi_model_name = (fsiModel == kHN2018) ? "hN" : "hA";
     std::string fsi_backend_str = std::string("ENABLED (GENIE ") + fsi_model_name + " intranuke cascade)";
 
@@ -166,6 +195,15 @@ int main(int argc, char **argv) {
     if (wf_mode == 2) {
         myGen->set_pRel_range(kF, p_max_sampling);
         myGen->set_pRel_cut(kF);
+        myGen->SetSrcOnset(src_onset_local ? QEGeneratorFSI::kLocalKF
+                                           : QEGeneratorFSI::kFixedKF);
+        myGen->SetSrcRequireP1(src_require_p1);
+        // Draw |p_rel| from k^2 S(k) rather than uniformly. Same expectation
+        // values, far smaller weight spread: with uniform sampling S(k) spans
+        // several decades and a handful of low-k events dominate every sum
+        // (N_eff/N was 2.5% for a fixed k>0.25 floor and 0.11% for the local
+        // kF(r) floor, which reaches ~0.02 GeV/c at large radius).
+        myGen->set_pRel_importance_sampling(true);
     } else if (isMF) {
         myGen->SetFermiMomentumFG(kF);
         myGen->SetFermiGasMode(useLocalFG ? QEGeneratorFSI::kLocalFG
@@ -183,7 +221,16 @@ int main(int argc, char **argv) {
               << "  WF mode:      " << wf_mode << " (" << wf_mode_name << ")";
     if (isMF) std::cout << "   [single-nucleon MF, "
                         << (useLocalFG ? "local" : "global") << " Fermi gas, kF=" << kF << " GeV/c]";
-    std::cout << "\n"
+    std::cout << "\n";
+    if (wf_mode == 2) {
+        std::cout << "  SRC onset:    " << src_onset_str
+                  << (src_onset_local ? "  [k_rel > kF(r) at the pair vertex]"
+                                      : "  [k_rel > kF, constant]")
+                  << "\n"
+                  << "  |p1|>kF(r):   " << (src_require_p1 ? "REQUIRED" : "not required")
+                  << "\n";
+    }
+    std::cout
               << "  Events:       " << n_target_events << "\n"
               << "  Output:       " << output_filename << "\n"
               << "========================================\n\n";
@@ -436,6 +483,10 @@ int main(int argc, char **argv) {
             meta << "kF=" << kF << "\n";
             meta << "fsi_indep=" << (fsi_indep ? 1 : 0) << "\n";
             if (isMF) meta << "fg_mode=" << (useLocalFG ? "local" : "global") << "\n";
+            if (wf_mode == 2) {
+                meta << "src_onset=" << src_onset_str << "\n";
+                meta << "src_require_p1=" << (src_require_p1 ? 1 : 0) << "\n";
+            }
             meta << "sigma_CM=" << sigCM_val << "\n";
             meta << "Ebeam=" << Ebeam << "\n";
             meta << "doFSI=" << (doFSI ? 1 : 0) << "\n";

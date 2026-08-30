@@ -94,6 +94,42 @@ class QEGeneratorFSI: public gcfGenerator
   // the analysis tree). Normalised so integral n_FG d^3p = 1.
   double get_n_FG(double p) { return eval_n_FG(p); }
 
+  // ---- SRC onset: where the correlated-pair branch begins (2N pair mode) ----
+  //
+  // kFixedKF (default): k_rel > a constant k_F, namely the sampling floor the
+  //   caller configured through set_pRel_range(). Simple and defensible -- the
+  //   GCF is a short-distance factorization -- but it leaves a hole in the
+  //   momentum distribution: the mean-field sample is capped at the LOCAL
+  //   k_F(r), so nucleons with k_F(r) < k < k_F belong to neither sample.
+  //
+  // kLocalKF: k_rel > k_F(r), the local Fermi momentum at the sampled pair
+  //   vertex. This is N. Wright's convention (GCF_GENIE, LocalFGM::ProbDistro:
+  //   flat Fermi gas below k_F(r), AV18 universal function above), and it makes
+  //   the SRC and mean-field samples exactly complementary -- together they
+  //   tile the whole momentum distribution with no gap and no overlap.
+  //   Caveat: k_F(r) runs down to ~0.08 GeV/c at large radius, well below the
+  //   ~0.3 GeV/c where the GCF is validated against ab-initio calculations.
+  enum SrcOnset { kFixedKF, kLocalKF };
+  void SetSrcOnset(SrcOnset m) { fSrcOnset = m; }
+  SrcOnset GetSrcOnset() const { return fSrcOnset; }
+
+  // Additionally require |p1| = |k_rel + P_cm/2| > k_F(r) AFTER the c.m.
+  // motion is added, i.e. Wright's second test (FermiMover.cxx:182,
+  // "FermiMomentum() < Momentum()"). Off by default: her code decides the
+  // SRC/mean-field branch twice -- once on k_rel when choosing whether to add
+  // P_cm/2, then again on |p1| when choosing whether to emit a recoil -- and
+  // the two disagree near the boundary, which is where her one-way leak into
+  // the mean-field class comes from. The GCF split belongs on the RELATIVE
+  // momentum. Provided so the size of that leak can be measured.
+  // Events failing the test get weight = 0 (they belong in the MF sample);
+  // they still count as generation attempts, so attempts-based luminosity
+  // normalization stays correct.
+  void SetSrcRequireP1(bool b = true) { fSrcRequireP1 = b; }
+  bool SrcRequireP1() const { return fSrcRequireP1; }
+
+  // k_F(r) at the pair vertex of the last generated 2N event (GeV/c).
+  double GetLastLocalKF() const { return fLastLocalKF; }
+
   // FSI on/off toggle (enabled by default)
   void EnableFSI(bool enable = true) { doFSI = enable; }
 
@@ -132,6 +168,39 @@ class QEGeneratorFSI: public gcfGenerator
   bool   fIndependentFSI = false;
   int    fA, fZ;           // nucleus A and Z (set from gcfNucleus in ctor)
   std::vector<FSIParticle> fParticles;
+
+  // SRC onset state (2N pair mode)
+  SrcOnset fSrcOnset     = kFixedKF;
+  bool     fSrcRequireP1 = false;
+  double   fLastLocalKF  = 0.;   // k_F(r) at the last pair vertex (GeV/c)
+  // Pair vertex of the current event. Sampled at the TOP of generate_event so
+  // k_F(r) is available before the relative momentum is drawn; the same
+  // vertex is then handed to the cascade, so the FSI entry point is unchanged
+  // -- only the order in which it is drawn.
+  TLorentzVector fSrcVertex;
+  bool fSrcVertexValid = false;
+
+  // ---- kLocalKF vertex sampling ----
+  // With a fixed onset the SRC strength a vertex carries, I_SRC =
+  // int_{kF}^{pRelmax} k^2 S(k) dk, is the same everywhere, so drawing the
+  // vertex from rho^n(r) r^2 and leaving I_SRC in the weight is fine.
+  // With the LOCAL onset I_SRC becomes I_SRC(r) and grows by orders of
+  // magnitude as kF(r) -> 0 at large radius, so that recipe puts almost all
+  // the weight on a handful of rare far-out vertices (measured: 3% of events
+  // carried 48% of the weight, N_eff/N = 0.25%).
+  //
+  // Instead draw the vertex from rho^n(r) r^2 I_SRC(r) directly. That is both
+  // the variance fix and the physically correct pair-vertex distribution --
+  // with a radius-dependent onset, SRC pairs are no longer distributed like
+  // the one-body density. The leftover weight factor is then the constant
+  // <I_SRC>_{rho^n r^2}, independent of r.
+  void build_local_onset_vertex_table(int lead_type, int rec_type);
+  TLorentzVector sample_local_onset_vertex(int lead_type, int rec_type,
+                                           double &kF_r, double &I_src_r);
+  bool   fLocalVtx_built[3] = {false, false, false};
+  double fLocalVtx_rmax[3]  = {0., 0., 0.};   // fm
+  double fLocalVtx_fmax[3]  = {0., 0., 0.};   // max of rho^n r^2 I_SRC(r)
+  double fLocalVtx_meanI[3] = {0., 0., 0.};   // <I_SRC> over rho^n r^2
 
   // Single-nucleon MF state
   static constexpr int kNoRecoil = 0;  // rec_type sentinel: no recoil nucleon

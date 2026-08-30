@@ -92,10 +92,13 @@ void QEGeneratorFSI::ApplyFSI(int lead_type, int rec_type,
   }
 
 #ifdef USE_FSI
-  // Sample position once for the SRC pair (both nucleons originate from the
-  // same location).  Weighted by rho^2 of the FULL nucleus, since the pair
-  // was formed before knockout.
-  const TLorentzVector x4_src = fsi::SampleSRCPosition(fA, myRand);
+  // Position of the SRC pair (both nucleons originate from the same
+  // location), weighted by rho^n of the FULL nucleus since the pair was
+  // formed before knockout. generate_event() has normally already drawn it
+  // (it needs k_F(r) before the relative momentum); sample here only for
+  // callers that have not, e.g. the light-cone path.
+  const TLorentzVector x4_src =
+      fSrcVertexValid ? fSrcVertex : fsi::SampleSRCPosition(fA, myRand);
 
   std::vector<FSIInputNucleon> fsi_inputs;
   fsi_inputs.reserve(2);
@@ -142,6 +145,82 @@ void QEGeneratorFSI::ApplyFSI(int lead_type, int rec_type,
 #endif
 }
 
+
+// ---------------------------------------------------------------------------
+// kLocalKF vertex sampling
+//
+// I_SRC(r) = int_{kF(r)}^{pRelmax} k^2 S(k) dk is the SRC strength a vertex at
+// radius r carries once the onset follows the local Fermi momentum. It grows
+// by orders of magnitude as kF(r) -> 0 at large radius, so sampling the vertex
+// from rho^n r^2 and leaving I_SRC(r) in the weight concentrates the sample's
+// entire weight on a few far-out vertices. Draw the vertex from
+// rho^n(r) r^2 I_SRC(r) instead: the leftover weight factor is then the
+// constant <I_SRC> and the vertex distribution is the physically correct one
+// for a radius-dependent onset.
+// ---------------------------------------------------------------------------
+void QEGeneratorFSI::build_local_onset_vertex_table(int lead_type, int rec_type)
+{
+  const int cls = is_class(lead_type, rec_type);
+  if (fLocalVtx_built[cls]) return;
+
+  const int    n_rho = fsi::GetSRCVertexRhoPower();
+  const double rmax  = 2.5 * 1.4 * TMath::Power(fA, 1./3.);   // fm, as fsi::SampleSRCPosition
+  const int    nbin  = 2000;
+  const double dr    = rmax / nbin;
+
+  double fmax = 0., num = 0., den = 0.;
+  for (int i = 1; i <= nbin; i++) {
+    const double r   = i * dr;
+    const double rho = fsi::NuclearDensity(fA, r);
+    if (rho <= 0.) continue;
+    const double base = TMath::Power(rho, n_rho) * r * r;    // rho^n r^2
+    const double kF_r = fsi::LocalFermiMomentum(
+        fA, (lead_type == pCode) ? fZ : (fA - fZ), r);
+    const double I    = pRel_integral(lead_type, rec_type, kF_r, pRelmax);
+    if (base * I > fmax) fmax = base * I;
+    num += base * I * dr;
+    den += base * dr;
+  }
+
+  fLocalVtx_rmax[cls]  = rmax;
+  fLocalVtx_fmax[cls]  = fmax * 1.05;               // safety margin
+  fLocalVtx_meanI[cls] = (den > 0.) ? num / den : 0.;
+  fLocalVtx_built[cls] = true;
+}
+
+TLorentzVector QEGeneratorFSI::sample_local_onset_vertex(int lead_type,
+                                                        int rec_type,
+                                                        double &kF_r,
+                                                        double &I_src_r)
+{
+  const int cls = is_class(lead_type, rec_type);
+  build_local_onset_vertex_table(lead_type, rec_type);
+
+  const int    n_rho = fsi::GetSRCVertexRhoPower();
+  const double rmax  = fLocalVtx_rmax[cls];
+  const double fmax  = fLocalVtx_fmax[cls];
+  const int    N_q   = (lead_type == pCode) ? fZ : (fA - fZ);
+
+  double r = 0.;
+  kF_r = 0.; I_src_r = 0.;
+  for (int guard = 0; guard < 100000; guard++) {
+    r = rmax * myRand->Rndm();
+    const double rho = fsi::NuclearDensity(fA, r);
+    if (rho <= 0.) continue;
+    const double kF = fsi::LocalFermiMomentum(fA, N_q, r);
+    const double I  = pRel_integral(lead_type, rec_type, kF, pRelmax);
+    const double f  = TMath::Power(rho, n_rho) * r * r * I;
+    if (myRand->Rndm() * fmax <= f) { kF_r = kF; I_src_r = I; break; }
+  }
+
+  const double cosTheta = 2. * myRand->Rndm() - 1.;
+  const double sinTheta = TMath::Sqrt(1. - cosTheta * cosTheta);
+  const double phi = 2. * TMath::Pi() * myRand->Rndm();
+  return TLorentzVector(r * sinTheta * TMath::Cos(phi),
+                        r * sinTheta * TMath::Sin(phi),
+                        r * cosTheta, 0.);
+}
+
 void QEGeneratorFSI::generate_event(double &weight, int &lead_type, int &rec_type, TLorentzVector& vk_target, TLorentzVector &vLead_target, TLorentzVector &vRec_target, TLorentzVector &vAm2_target)
 {
   double Estar;
@@ -158,11 +237,50 @@ void QEGeneratorFSI::generate_event(double &weight, int &lead_type, int &rec_typ
 void QEGeneratorFSI::generate_event(double &weight, int &lead_type, int &rec_type, TLorentzVector& vk_target, TLorentzVector &vLead_target, TLorentzVector &vRec_target, TLorentzVector &vAm2_target, TVector3 &vRel_target, TLorentzVector &q_target, double &Estar)
 {
   fParticles.clear();
+  fSrcVertexValid = false;
+  fLastLocalKF = 0.;
   weight = 1.;
 
   lead_type = (myRand->Rndm() > 0.5) ? pCode:nCode;
   rec_type = (myRand->Rndm() > 0.5) ? pCode:nCode;
   weight *= 4.;
+
+  // ---- Pair vertex and the local Fermi momentum there --------------------
+  // Drawn BEFORE the relative momentum so that k_F(r) can define the SRC
+  // onset. ApplyFSI reuses this same vertex, so the FSI entry point is
+  // unchanged -- only the order in which it is sampled.
+  // N_q follows the struck nucleon's isospin (Z for a proton, A-Z for a
+  // neutron), matching LocalFGM::GenerateNucleon in GCF_GENIE.
+  // ---- SRC onset -------------------------------------------------------
+  // kFixedKF: vertex from rho^n(r) r^2 as before, and the caller-configured
+  //   [pRelmin, pRelmax] is left untouched (wf_mode 0 configures its own).
+  // kLocalKF: the floor becomes kF(r), so the vertex must be drawn first --
+  //   and drawn from rho^n(r) r^2 I_SRC(r), see sample_local_onset_vertex.
+  double I_src_r = 0.;
+  if (fSrcOnset == kLocalKF) {
+    fSrcVertex = sample_local_onset_vertex(lead_type, rec_type,
+                                           fLastLocalKF, I_src_r);
+    fSrcVertexValid = true;
+    if (fLastLocalKF <= 0. || I_src_r <= 0.) {
+      static bool complained = false;
+      if (!complained) {
+        std::cerr << "ERROR: SRC onset 'local' could not sample a pair vertex "
+                  << "(kF(r)=" << fLastLocalKF << ", I_SRC=" << I_src_r
+                  << "; built without USE_FSI?). Events will be rejected."
+                  << std::endl;
+        complained = true;
+      }
+      weight = 0.; return;
+    }
+    if (fLastLocalKF >= pRelmax) { weight = 0.; return; }
+    set_pRel_range(fLastLocalKF, pRelmax);
+    set_pRel_cut(fLastLocalKF);
+  } else {
+    fSrcVertex = fsi::SampleSRCPosition(fA, myRand);
+    fSrcVertexValid = true;
+    fLastLocalKF = fsi::LocalFermiMomentum(
+        fA, (lead_type == pCode) ? fZ : (fA - fZ), fSrcVertex.Vect().Mag());
+  }
 
   double mAm2 = get_mAm2(lead_type, rec_type, Estar);
 
@@ -170,6 +288,18 @@ void QEGeneratorFSI::generate_event(double &weight, int &lead_type, int &rec_typ
   decay_function(weight, lead_type, rec_type, v1, vRec);
 
   if (weight <= 0.) return;
+
+  // Undo the per-vertex I_SRC(r) that decay_function put into the weight (the
+  // vertex was already drawn proportional to it) and replace it by the
+  // constant <I_SRC>. Net effect: expectation values unchanged, the r-driven
+  // weight spread gone.
+  if (fSrcOnset == kLocalKF) {
+    weight *= fLocalVtx_meanI[is_class(lead_type, rec_type)] / I_src_r;
+  }
+
+  // Optional second test on the struck-nucleon momentum AFTER the c.m. motion
+  // is added (v1 = P_cm/2 + k_rel). Off by default -- see the header.
+  if (fSrcRequireP1 && v1.Mag() <= fLastLocalKF) { weight = 0.; return; }
 
   TVector3 vAm2 = - v1 - vRec;
   double EAm2 = sqrt(vAm2.Mag2() + sq(mAm2));

@@ -199,6 +199,75 @@ bool gcfGenerator::parse_phase_space_file(char* phase_space)
   
 }
 
+
+// ---------------------------------------------------------------------------
+// |p_rel| importance sampling
+//
+// Uniform sampling of |p_rel| leaves the whole k^2 S(k) factor in the weight,
+// and S(k) spans several decades, so a few low-k events dominate every sum.
+// Sampling k from its own integrand instead makes that dimension contribute a
+// constant (the integral over the allowed range) to the weight.
+// ---------------------------------------------------------------------------
+
+// 0 = pp, 1 = nn, 2 = pn — mirrors the branching inside gcfSRC::get_S.
+int gcfGenerator::is_class(int lead_type, int rec_type) const
+{
+  if (lead_type == rec_type) return (lead_type == pCode) ? 0 : 1;
+  return 2;
+}
+
+void gcfGenerator::build_pRel_IS_tables()
+{
+  fISdk = fISkmax / kISBins;
+  const int types[3][2] = {{pCode, pCode}, {nCode, nCode}, {pCode, nCode}};
+  for (int c = 0; c < 3; c++) {
+    fISF[c].assign(kISBins + 1, 0.);
+    double acc = 0., f_prev = 0.;
+    for (int i = 1; i <= kISBins; i++) {
+      const double k = i * fISdk;
+      const double f = k * k * myInfo->get_S(k, types[c][0], types[c][1]);
+      acc += 0.5 * (f + f_prev) * fISdk;   // trapezoid
+      f_prev = f;
+      fISF[c][i] = acc;
+    }
+  }
+  fPRelIS_built = true;
+}
+
+double gcfGenerator::IS_F(int cls, double k) const
+{
+  if (k <= 0.) return 0.;
+  if (k >= fISkmax) return fISF[cls][kISBins];
+  const double x = k / fISdk;
+  const int i = (int)x;
+  const double t = x - i;
+  return fISF[cls][i] + t * (fISF[cls][i + 1] - fISF[cls][i]);
+}
+
+double gcfGenerator::pRel_integral(int lead_type, int rec_type,
+                                   double lo, double hi)
+{
+  if (!fPRelIS_built) build_pRel_IS_tables();
+  const int cls = is_class(lead_type, rec_type);
+  const double I = IS_F(cls, hi) - IS_F(cls, lo);
+  return (I > 0.) ? I : 0.;
+}
+
+double gcfGenerator::IS_invF(int cls, double u, double &f_hat) const
+{
+  const std::vector<double> &F = fISF[cls];
+  // binary search for the bin with F[i] <= u < F[i+1]
+  int lo = 0, hi = kISBins;
+  while (hi - lo > 1) {
+    const int mid = (lo + hi) / 2;
+    if (F[mid] <= u) lo = mid; else hi = mid;
+  }
+  const double dF = F[lo + 1] - F[lo];
+  f_hat = dF / fISdk;                       // density implied by the interpolant
+  if (dF <= 0.) return lo * fISdk;
+  return (lo + (u - F[lo]) / dF) * fISdk;
+}
+
 void gcfGenerator::decay_function(double &weight, int lead_type, int rec_type, TVector3 &vi, TVector3 &vRec)
 {
   
@@ -210,18 +279,45 @@ void gcfGenerator::decay_function(double &weight, int lead_type, int rec_type, T
   double phiRel = phiRelmin + (phiRelmax-phiRelmin)*myRand->Rndm();
   double cosThetaRel = cosThetaRelmin + (cosThetaRelmax - cosThetaRelmin)*myRand->Rndm();
   double thetaRel = acos(cosThetaRel);
-  double pRel_Mag = pRelmin + (pRelmax - pRelmin)*myRand->Rndm();
-  vRel.SetMagThetaPhi(pRel_Mag,thetaRel,phiRel);
 
   if ((phiRelmax < phiRelmin) or (cosThetaRelmax < cosThetaRelmin) or (pRelmax < pRelmin))
     {
       weight = 0.;
       return;
     }
-  
-  // Factor universal functions into the weights
-  weight *= (phiRelmax-phiRelmin) * (cosThetaRelmax - cosThetaRelmin) * (pRelmax - pRelmin) // Phase Space
-    * sq(pRel_Mag)*myInfo->get_S(pRel_Mag,lead_type,rec_type)/pow(2.*M_PI,3); // Contacts
+
+  const double angular = (phiRelmax-phiRelmin) * (cosThetaRelmax - cosThetaRelmin);
+
+  double pRel_Mag;
+  if (fPRelIS)
+    {
+      // Draw |p_rel| from k^2 S(k) restricted to [pRelmin, pRelmax]. The
+      // weight then picks up the integral over that range -- constant per
+      // event -- times a residual f/f_hat that makes the estimator exactly
+      // unbiased against the piecewise-linear cumulative.
+      if (!fPRelIS_built) build_pRel_IS_tables();
+      const int cls = is_class(lead_type, rec_type);
+      const double Flo = IS_F(cls, pRelmin);
+      const double Fhi = IS_F(cls, pRelmax);
+      const double dF  = Fhi - Flo;
+      if (dF <= 0.) { weight = 0.; return; }
+
+      double f_hat = 0.;
+      pRel_Mag = IS_invF(cls, Flo + dF*myRand->Rndm(), f_hat);
+      if (f_hat <= 0.) { weight = 0.; return; }
+
+      const double f = sq(pRel_Mag)*myInfo->get_S(pRel_Mag,lead_type,rec_type);
+      weight *= angular * dF * (f / f_hat) / pow(2.*M_PI,3);
+    }
+  else
+    {
+      pRel_Mag = pRelmin + (pRelmax - pRelmin)*myRand->Rndm();
+      // Factor universal functions into the weights
+      weight *= angular * (pRelmax - pRelmin) // Phase Space
+        * sq(pRel_Mag)*myInfo->get_S(pRel_Mag,lead_type,rec_type)/pow(2.*M_PI,3); // Contacts
+    }
+
+  vRel.SetMagThetaPhi(pRel_Mag,thetaRel,phiRel);
 
   // Do a safeguard cut
   if (pRel_Mag < pRel_cut)

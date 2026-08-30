@@ -9,7 +9,7 @@
 # staggered 1 s apart so the auto-seeds differ.
 #
 # Usage:
-#   ./run_2N_parallel.sh [TOTAL] [OUTPUT] [DOFSI] [MODEL] [SIGCM] [WFMODE] [EBEAM] [FGMODE] [KF] [FSIINDEP] [RHOPOW]
+#   ./run_2N_parallel.sh [TOTAL] [OUTPUT] [DOFSI] [MODEL] [SIGCM] [WFMODE] [EBEAM] [FGMODE] [KF] [FSIINDEP] [RHOPOW] [SRCONSET] [SRCREQP1]
 #
 #   TOTAL    total number of successful events        (default 1000000)
 #   OUTPUT   merged output .root file                 (default events/misc/events_2N.root)
@@ -22,6 +22,11 @@
 #   KF       Fermi momentum in GeV/c                  (default 0.25)
 #   FSIINDEP 1 = independent per-nucleon FSI          (default 0 = shared remnant)
 #   RHOPOW   SRC-pair FSI vertex weight rho^n r^2      (default 2; 1 = Wright et al.)
+#   SRCONSET where the SRC branch starts, wf_mode 2 only:
+#              fixed = k_rel > KF (constant)              (default)
+#              local = k_rel > kF(r) at the pair vertex   (Wright et al.;
+#                      makes the SRC and MF samples exactly complementary)
+#   SRCREQP1 also require |p1|=|k_rel+P_cm/2| > kF(r)     (default 0 = off)
 #
 # Environment overrides:
 #   JOBS=N    number of parallel workers   (default: all cores)
@@ -44,6 +49,8 @@ FGMODE="${8:-global}"
 KF="${9:-0.25}"
 FSIINDEP="${10:-0}"
 RHOPOW="${11:-2}"
+SRCONSET="${12:-fixed}"
+SRCREQP1="${13:-0}"
 FORCE="${FORCE:-0}"
 
 BINARY="$SCRIPT_DIR/build/SRC_analysis_2N"
@@ -74,7 +81,8 @@ fi
 # GENIE environment (mirror run_SRC.sh)
 GENIE_DIR="$SCRIPT_DIR/Generator-R-3_06_02"
 export GENIE="$GENIE_DIR"
-export GXMLPATH="$SCRIPT_DIR/config/genie_override:$GENIE_DIR/config/G18_10a:$GENIE_DIR/config"
+GENIE_OVERRIDE_DIR="${GENIE_OVERRIDE_DIR:-$SCRIPT_DIR/config/genie_override}"
+export GXMLPATH="$GENIE_OVERRIDE_DIR:$GENIE_DIR/config/G18_10a:$GENIE_DIR/config"
 export GMSGCONF="$SCRIPT_DIR/config/quiet_messenger.xml"
 export LD_LIBRARY_PATH="$GENIE_DIR/lib:$HOME/local/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 
@@ -113,7 +121,7 @@ done
 launch_chunk() {
     local idx="$1" label="${2:-launched}"
     local part="${PARTS[$idx]}" log="${PARTS[$idx]%.root}.log" n="${SIZES[$idx]}"
-    "$BINARY" "$n" "$DOFSI" "$MODEL" "$part" "$SIGCM" "$WFMODE" "$EBEAM" "$FGMODE" "$KF" "$FSIINDEP" "$RHOPOW" >"$log" 2>&1 &
+    "$BINARY" "$n" "$DOFSI" "$MODEL" "$part" "$SIGCM" "$WFMODE" "$EBEAM" "$FGMODE" "$KF" "$FSIINDEP" "$RHOPOW" "$SRCONSET" "$SRCREQP1" >"$log" 2>&1 &
     PIDS[$idx]=$!
     echo "  $label worker $idx  pid=${PIDS[$idx]}  events=$n  -> $(basename "$part")"
     sleep 1   # stagger => distinct TRandom3(0) auto-seeds

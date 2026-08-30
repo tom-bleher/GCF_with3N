@@ -5,6 +5,7 @@
 #include "TLorentzVector.h"
 #include "TVector3.h"
 #include "nucleus/gcfNucleus.hh"
+#include <vector>
 
 class gcfGenerator
 {
@@ -19,6 +20,24 @@ class gcfGenerator
   void set_thetaRel_range_deg(double low, double high);
   void set_pRel_range(double low, double high);
   void set_pRel_cut(double new_cutoff);
+
+  // Importance-sample |p_rel| from its own integrand k^2 * S(k) instead of
+  // uniformly over [pRelmin, pRelmax].
+  //
+  // With uniform sampling the weight carries the full k^2 S(k) factor, and
+  // S(k) spans several decades, so a handful of low-k events dominate every
+  // sum. Measured on a 20k PWIA test: N_eff / N = 2.5% for a fixed k>0.25
+  // floor and 0.11% once the floor follows the local Fermi momentum (which
+  // reaches down to ~0.02 GeV/c at large radius) -- i.e. 22 effective events
+  // out of 20000. Drawing k from k^2 S(k) instead makes that dimension's
+  // weight contribution the integral over [pRelmin, pRelmax], which is
+  // constant per event, so the spread vanishes.
+  //
+  // Expectation values are unchanged (a residual f/f_hat factor keeps the
+  // estimator exactly unbiased against the piecewise-linear cumulative), only
+  // the variance. Off by default so existing users are untouched.
+  void set_pRel_importance_sampling(bool on = true) { fPRelIS = on; }
+  bool pRel_importance_sampling() const { return fPRelIS; }
   void set_nu_range(double low, double high);
   void set_xB_range(double low, double high);
   void set_QSq_range(double low, double high);
@@ -90,7 +109,28 @@ class gcfGenerator
   double QSqmax;
   double phikmin;
   double phikmax;
-  
+
+  // ---- |p_rel| importance sampling ----
+  bool fPRelIS = false;
+  bool fPRelIS_built = false;
+  static const int kISBins = 8000;      // grid over [0, kISmax]
+  double fISkmax = 2.0;                 // GeV/c, beyond the AV18 table range
+  double fISdk = 0.;
+  // Cumulative F(k) = int_0^k k'^2 S(k') dk' for the three S() outcomes:
+  // 0 = pp, 1 = nn, 2 = pn.
+  std::vector<double> fISF[3];
+  void build_pRel_IS_tables();
+  int is_class(int lead_type, int rec_type) const;
+  // Cumulative at k (linear interpolation on the grid).
+  double IS_F(int cls, double k) const;
+  // Inverse cumulative: returns k with F(k) = u, and sets f_hat to the
+  // piecewise-constant density implied by the interpolated cumulative.
+  double IS_invF(int cls, double u, double &f_hat) const;
+  // int_lo^hi k^2 S(k) dk for the pair (lead_type, rec_type). Builds the
+  // tables on first use. Used by derived generators that need to know how
+  // much SRC strength a given |p_rel| window holds.
+  double pRel_integral(int lead_type, int rec_type, double lo, double hi);
+
 };
 
 #endif
