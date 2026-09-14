@@ -223,17 +223,177 @@ All items verified directly against the source; file:line given.
 
 ## Reproduction with her conventions
 
-`--convention wright`, 2M validation samples:
+`--convention wright`, `local` SRC onset. **Corrected 2026-08-31** after the
+60M production: the earlier 2M numbers were not converged.
 
-| | fixed onset | **local onset** | paper |
+| statistics | (e,e'p) Full | (e,e'pp) Full |
+|---|---|---|
+| 2M validation sample | 0.594 +- 0.053 | 0.740 +- 0.152 |
+| first 2M of the 60M sample | 0.607 +- 0.055 | 0.920 +- 0.160 |
+| 30M of the 60M sample | 0.612 +- 0.015 | **1.100 +- 0.059** |
+| paper | 0.58 | 0.73 |
+
+The quoted errors are 1/sqrt(N_eff) added in quadrature over the PWIA and FSI
+weight sums, N_eff = (Sum w)^2 / Sum w^2 computed on the *selected* bucket
+(inside the acceptance, after the SRC cuts). They are the honest errors on this
+estimator and had not been quoted before.
+
+**The (e,e'pp) transparency is weight-tail limited.** In the selected (e,e'pp)
+FSI bucket at 2M there are ~800 surviving events but only N_eff ~ 35-60: the
+single largest-weight event carries 4-10 % of the total and the top ten carry
+34-43 %. So the 2M value has a ~20 % error, and the apparent agreement with her
+0.73 was a ~2 sigma downward fluctuation, not a reproduction. At 30M the bucket
+has 11941 events with N_eff = 533 (top event 1.4 %, top ten 8.2 %) and the value
+is stable: 1.06 (2M subset) -> 1.14 (8M) -> 1.14 (30M).
+
+Conclusion: **(e,e'p) is reproduced** (0.61 vs 0.58); **(e,e'pp) is not**
+(1.10 +- 0.06 vs 0.73, a 6 sigma gap). FSI still adds pp pairs for us and
+removes them for her. The cascade medium is not the cause: srctail 1.186 vs
+no-tail 1.138 at 30M.
+
+The `local` onset still matters for a physical reason unrelated to the analysis
+cut k_rel > 0.25: with it the pair-vertex distribution is rho^n(r) r^2 I_SRC(r),
+which is surface-biased because I_SRC(r) grows as kF(r) -> 0, and surface pairs
+suffer less FSI. That is a genuine consequence of her "AV18 tail above a local
+Fermi gas" ansatz, not a normalisation choice.
+
+Note for future runs: N_eff, not the raw selected-event count, is what sets the
+precision of any weighted transparency here. Quote it.
+
+## Where the (e,e'pp) excess comes from (2026-08-31)
+
+Fate-by-fate decomposition of the selected (e,e'pp) FSI yield, `--convention
+wright`, no-tail medium, 8M events (3245 selected, so the fractions carry a few
+% relative from the weight tail). `rec_role` = which chain the detected recoil
+descends from, `rec_fate` = the hA fate stamped on its ancestor:
+
+| recoil origin | fate | yield share |
+|---|---|---|
+| partner chain | NoInteraction (the true SRC partner) | 47.5 % |
+| partner chain | **ChargeExchange (n -> p)** | **39.3 %** |
+| partner chain | Inelastic | 5.9 % |
+| struck chain | Inelastic | 4.5 % |
+| struck chain | PiProd | 1.7 % |
+| struck chain | NoInteraction | 1.2 % |
+
+Applying those shares to the 30M transparency 1.098:
+
+| component | contribution | Glauber reference |
+|---|---|---|
+| genuine pp pair survives | 0.52 | T_NN = 0.44 |
+| n -> p charge exchange gain | **0.43** | none -- T+SCX cannot add pairs |
+| other cascade products | 0.15 | none |
+| total | 1.10 | paper 0.73 |
+
+Two conclusions:
+
+1. **Our cascade is only ~18 % more transparent than the Glauber numbers the
+   paper uses** (pp survival 0.52 vs T_NN 0.44), consistent with the (e,e'p)
+   channel (0.613 vs T_N 0.53, +16 %). That part is a modest, defensible
+   difference.
+2. **The excess is n -> p charge exchange of the SRC partner.** GCF is 88.2 %
+   pn / 5.9 % pp, so the partner is almost always a neutron; hA converts it to
+   a detected proton often enough to promote pn pairs into the (e,e'pp)
+   channel. A Glauber T+SCX treatment cannot do this -- it only removes flux
+   and flips isospin as a substitution, never as a gain.
+
+The implied per-pair conversion rate is not obviously wrong: CX yield /
+untouched-pp yield = 39.3/47.5 = 0.83, and scaling by the pair-type mix gives
+0.83 x (5.9/88.2) ~ 0.055 per pn pair, against the paper's Glauber SCX
+probabilities of 0.035-0.048. Same order.
+
+But it does not fully close the gap: even rescaling our pp survival down to the
+Glauber T_NN would give 0.44/0.52 x 1.10 = 0.93, still well above 0.73. So her
+hA must produce far less charge-exchange gain in this channel than ours does,
+despite both being GENIE hA. **That is now the sharpest open question.**
+
+Also measured (30M, her conventions): accepted protons per event
+
+| protons | PWIA | FSI |
+|---|---|---|
+| 0 | 19964034 | 16888948 |
+| 1 |  9110708 | 10358219 |
+| 2 |   925258 |  2376437 |
+| >=3 |      0 |   376396 |
+
+PWIA cannot exceed 2 (the pair has two nucleons) and indeed is exactly 0. FSI
+gives 2.57x more two-proton events. That is proton multiplication.
+
+## src_require_p1 (Wright's second branch test) -- measured, no effect
+
+30M each, no-tail medium, everything else pinned to the baseline:
+
+| | (e,e'p) | (e,e'pp) |
+|---|---|---|
+| baseline, wright | 0.613 | 1.138 |
+| src_require_p1=1, wright | 0.633 | 1.098 |
+| baseline, detector | 0.834 | 1.678 |
+| src_require_p1=1, detector | 0.838 | 1.546 |
+
+The switch removes 7.6 % of the SRC strength (Sum w / attempts 39.5 vs 42.7)
+and moves the transparencies within their errors. Lever closed.
+
+## 2026-09-13 — revised detector convention and the {absorption} x {recoil rule} grid
+
+Defaults of `natalie_paper_plots.py --convention detector` (all switchable):
+
+- CLAS fiducials and acceptance map evaluated at **phi + 180 deg**
+  (`--acc-phi-rotation`), as `genie_gcf_loop.C` does for the electron
+  (1425-1426) and every proton (1514). The fiducial parameters and proton gaps
+  are per sector, so this is not a symmetry: it changes the fiducial verdict
+  for 13 % of protons and 5 % of electrons.
+- **Absorbed events thrown away** (weight 0) when either generated nucleon has
+  hA fate 4 (`--absorption-veto`, default; `--no-absorption-veto` keeps them).
+  Her code vetoes absorption everywhere.
+- (e,e'p): no recoil requirement.
+- (e,e'pp) recoil rule `--epp-recoil`:
+  `unique` (exactly one other accepted proton >= 0.35 GeV/c, else not (e,e'pp)
+  but still (e,e'p)); `all` (each such proton gives its own (e,e'pp) entry);
+  `exactly2` (exactly two accepted protons in total -- the topology of the CLAS
+  data file, whose 605 events all have two protons); `highest` (old rule).
+  The CLAS papers (Cohen PRL 121 092501; Duer PRL 122 172502) define the recoil
+  as a second proton >= 350 MeV/c and publish no multi-recoil rule.
+- `--convention wright` now applies her rotation as well: gate rotated, while
+  the lead weight (1853) and the lottery (1697) read the map at the unsmeared,
+  unrotated momentum, as her code does.
+
+Full effective transparencies, 30M SRC / 60M MF, no-tail medium:
+
+| recoil rule | absorbed events | (e,e'p) | (e,e'pp) |
 |---|---|---|---|
-| (e,e'p) Full | 0.549 | **0.594** | **0.58** |
-| (e,e'pp) Full | 0.961 | **0.740** | **0.73** |
+| unique | thrown away | 0.684 | 1.286 |
+| all | thrown away | 0.684 | 1.304 |
+| unique | kept | 0.829 | 1.653 |
+| all | kept | 0.829 | 1.759 |
+| paper | | 0.58 | 0.73 |
 
-Her conventions plus the `local` SRC onset reproduce **both** published
-transparencies to within ~2%. The onset still matters even though her analysis
-cuts k_rel > 0.25: with the local onset the pair-vertex distribution is
-rho^n(r) r^2 I_SRC(r), which is surface-biased because I_SRC(r) grows as
-kF(r) -> 0, and surface pairs suffer less FSI. That is a genuine consequence
-of her "AV18 tail above a local Fermi gas" ansatz, not a normalisation choice.
+**Multi-recoil events come almost entirely from absorption.** Weighted fraction
+of SRC-cut (e,e'p) events with >= 2 possible recoils: GCF 0.07 % (absorbed
+thrown away) vs 0.32 % (kept); MF 0 % vs 0.92 %. With absorbed events thrown
+away the recoil rule is irrelevant (unique vs all: 1.4 %).
 
+**Fig 8.** hA's nucleon "inelastic" fate is a 2->2 collision with a partner
+drawn from the Fermi distribution (`HAIntranuke2018::InelasticHA`,
+`INUKE-DoFermi = true`), so for a single rescatter MF p_cm = p_i + p_t, the sum
+of two initial Fermi momenta: narrow by momentum conservation. Per recoil-fate
+class (unique rule, 8M GCF / 30M MF):
+
+| sample | recoil from | share | <\|p_cm\|> | frac > 0.5 |
+|---|---|---|---|---|
+| MF | struck: inelastic | 42 % | 0.239 | 0.0 % |
+| MF | struck: pion production | 33 % | 0.257 | 2.7 % |
+| MF | struck: absorption | 25 % | 0.486 | 44.2 % |
+| GCF | partner untouched | 34 % | 0.280 | 7.5 % |
+| GCF | partner charge exchange | 26 % | 0.371 | 18.4 % |
+| GCF | absorption (partner / struck) | 8 / 8 % | 0.50 / 0.44 | 41 / 39 % |
+
+Absorption is the only channel with a broad p_cm. With absorbed events thrown
+away (her convention) MF has 1.2 % above |p_cm| = 0.5 against 11.5 % for GCF:
+**MF is narrower than GCF, the opposite of the paper's statement.** Keeping
+absorbed events makes MF about as broad as GCF, never broader. Her Fig 8/9/10
+plotting code is not in her repository (`gst_plotter.C` has no mean-field
+input), so her MF curve cannot be checked against code.
+
+Correction to an earlier statement in this file's history: the back-to-back
+MF correlation is not produced by the SRC cuts; it follows from momentum
+conservation in the 2->2 knock-out.

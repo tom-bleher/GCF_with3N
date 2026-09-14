@@ -129,7 +129,7 @@ FATE_ABSORPTION = 4
 #  Data loading
 # ===================================================================
 
-def load_tree(filepath, treename="events"):
+def load_tree(filepath, treename="events", max_events=None):
     """Load TTree into dict of numpy arrays.
 
     The per-event final state is the flat particle list written by
@@ -165,8 +165,11 @@ def load_tree(filepath, treename="events"):
     missing = [k for k in WANT_FLAT if k not in all_keys]
     if missing:
         raise KeyError(f"{filepath}: missing required branches {missing}")
-    out = tree.arrays(flat_keys, library="np")
-    jag = tree.arrays(jag_keys, library="ak")
+    stop = None if not max_events else min(int(max_events), tree.num_entries)
+    if stop is not None and stop < tree.num_entries:
+        print(f"    [cap] reading {stop} of {tree.num_entries} entries")
+    out = tree.arrays(flat_keys, library="np", entry_stop=stop)
+    jag = tree.arrays(jag_keys, library="ak", entry_stop=stop)
     for k in jag_keys:
         out[k] = jag[k]
     return out
@@ -397,7 +400,29 @@ _KMAX_CAND = 24   # cap on the per-event final-state list
 # apply_src_cuts.
 
 
-def wright_resolve(d, acc, ebeam, seed=None, chunk=2_000_000):
+def _free_raw_columns(d):
+    """Drop the per-particle arrays once lead/recoil have been resolved.
+
+    The part_* branches exist only to build the event: every quantity the
+    figures need is already extracted into fixed-length columns (lead_post,
+    recoil_post, lead_role/rec_role, lead_fate/rec_fate). For a 150M-event
+    sample the jagged arrays and their awkward overhead are tens of GB, and
+    the analysis holds three samples at once, so keeping them is what pushed
+    a 60M/60M/150M run to 169 GB RSS and nearly OOMed the node.
+
+    lead_pre / recoil_pre go too: they are used only for the truth k_rel cut,
+    which has already been applied by the time this is called.
+    """
+    import gc
+    for k in ("part_pdg", "part_px", "part_py", "part_pz",
+              "part_parentRole", "part_rescatterCode", "part_generation",
+              "lead_pre", "recoil_pre"):
+        d.pop(k, None)
+    gc.collect()
+    return d
+
+
+def wright_resolve(d, acc, ebeam, seed=None, chunk=2_000_000, phi_rot=True):
     """Event building following N. Wright's analysis macro exactly.
 
     This is a SECOND, selectable convention -- flatlist_resolve is untouched
@@ -433,6 +458,10 @@ def wright_resolve(d, acc, ebeam, seed=None, chunk=2_000_000):
       * 1691       when the lottery was used, the recoil map weight is NOT
                    applied afterwards -- it has already been consumed.
       * 1824-1828  an analysis-level truth cut, p_rel > 0.25 GeV/c.
+      * 1425, 1514 the electron and every proton are rotated by +pi before
+                   the fiducials and the map gate (phi_rot). The lead weight
+                   (1853) and the lottery (1697-1709) read the map at the
+                   UNSMEARED, UNROTATED momentum instead -- reproduced as is.
 
     Sets the same columns as flatlist_resolve, plus d["wright_drop"] marking
     events her code discards.
@@ -496,13 +525,21 @@ def wright_resolve(d, acc, ebeam, seed=None, chunk=2_000_000):
             with np.errstate(divide="ignore", invalid="ignore"):
                 fid = acc.accept_proton(cand[:, :, 0].ravel(),
                                         cand[:, :, 1].ravel(),
-                                        cand[:, :, 2].ravel()).reshape(m, K)
-                wmap = acc.map_weight(cand[:, :, 0].ravel(),
-                                      cand[:, :, 1].ravel(),
-                                      cand[:, :, 2].ravel(),
+                                        cand[:, :, 2].ravel(),
+                                        rot=phi_rot).reshape(m, K)
+                wgate = acc.map_weight(cand[:, :, 0].ravel(),
+                                       cand[:, :, 1].ravel(),
+                                       cand[:, :, 2].ravel(),
+                                       'p', rot=phi_rot).reshape(m, K)
+                # 1697-1709: the lottery reads the map at the unsmeared,
+                # unrotated momentum (final_state_p4), not at the gate's.
+                wmap = acc.map_weight(cand_true[:, :, 0].ravel(),
+                                      cand_true[:, :, 1].ravel(),
+                                      cand_true[:, :, 2].ravel(),
                                       'p').reshape(m, K)
-            ok = is_p & fid & (wmap > 0)          # map used as a BINARY filter
-            ok_e = acc.accept_electron(e3[:, 0], e3[:, 1], e3[:, 2])
+            ok = is_p & fid & (wgate > 0)         # map used as a BINARY filter
+            ok_e = acc.accept_electron(e3[:, 0], e3[:, 1], e3[:, 2],
+                                       rot=phi_rot)
         else:
             wmap = np.ones((m, K)); ok = is_p
             ok_e = np.ones(m, bool)
@@ -625,10 +662,12 @@ def wright_resolve(d, acc, ebeam, seed=None, chunk=2_000_000):
     d["acc_w_epp"] = out["wlead"] * out["wrec"]
     d["n_lead_cand"] = out["ncand"] + has_lead.astype(np.int64)
     d["n_recoil_cand"] = out["ncand"]
+    _free_raw_columns(d)
     return d
 
 
-def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
+def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000,
+                     phi_rot=True, absorption_veto=True, epp_recoil="unique"):
     """Detector-style event building on the flat final-state particle list.
 
     Smears the electron and every candidate (when `acc` is given), applies
@@ -646,6 +685,37 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
 
     Diagnostics d["n_lead_cand"] / d["n_recoil_cand"] count accepted
     candidates. Processed in chunks of `chunk` events to bound peak memory.
+
+    phi_rot          evaluate every fiducial and map lookup at phi + 180 deg,
+                     as N. Wright's macro does for the electron and protons.
+    absorption_veto  throw the event away -- weight set to 0 and removed from
+                     every channel -- when either generated nucleon has hA
+                     fate 4 (absorption). ON by default. The generator-level
+                     weight is kept in weight_gen, used ONLY by the checks
+                     that compare generator configurations (pre-cut Q^2
+                     stage, Sigma-w vs attempts).
+    epp_recoil       how the (e,e'pp) recoil is chosen. (e,e'p) never looks
+                     at recoils under any setting.
+        "unique"    recoil candidates are the accepted protons other than
+                    the lead with |p| >= precoil_min. Exactly one -> it is
+                    the recoil; none -> no (e,e'pp); two or more ->
+                    ambiguous, the event is NOT (e,e'pp) but stays in
+                    (e,e'p). Softer protons and any other particles are
+                    allowed as extras.
+        "exactly2"  (e,e'pp) only when exactly two protons are accepted in
+                    total (lead + one other, any momentum). This is the
+                    topology of the CLAS data file we compare to, which
+                    contains only two-proton events.
+        "highest"   the previous rule: recoil = second-highest accepted
+                    proton, extras ignored.
+        "all"       every candidate with |p| >= precoil_min is a recoil: the
+                    highest takes the event's own row and each further one
+                    is APPENDED as an extra (e,e'pp)-only row (epp_extra
+                    True) with that proton as the recoil and its own map
+                    weight. (e,e'p) still counts the event once.
+
+    Also sets n_recoil_hard, the number of possible recoils (accepted protons
+    other than the lead with |p| >= precoil_min), for every rule.
     """
     import awkward as ak
     n = len(d["weight"])
@@ -680,6 +750,10 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
     out_rfate = np.full(n, -1, dtype=np.int64)
     out_nlead = np.zeros(n, dtype=np.int64)
     out_nrec  = np.zeros(n, dtype=np.int64)
+    out_abs   = np.zeros(n, dtype=bool)
+    out_ambig = np.zeros(n, dtype=bool)
+    out_nhard = np.zeros(n, dtype=np.int64)
+    xr_l, x3_l, xt_l, xro_l, xg_l, xf_l = [], [], [], [], [], []
 
     def _pad(field, m, fill):
         return ak.to_numpy(
@@ -698,6 +772,19 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
         cgen  = _pad(d["part_generation"][lo:hi], m, -1).astype(np.int64)
         cfate = _pad(d["part_rescatterCode"][lo:hi], m, -1).astype(np.int64)
         valid = np.isin(ctype, allowed)
+
+        # ---- optional absorption veto (genie_gcf_loop.C:1554-1557) ----
+        # The fate is stamped on the INPUT nucleon, so it is constant across
+        # every final-state particle sharing a parentRole.
+        if absorption_veto:
+            absorbed = np.zeros(m, bool)
+            for role in (0, 1):
+                has = (crole == role)
+                fate_role = np.where(has.any(axis=1),
+                                     np.max(np.where(has, cfate, -1), axis=1),
+                                     -1)
+                absorbed |= (fate_role == FATE_ABSORPTION)
+            out_abs[lo:hi] = absorbed
 
         # ---- detector-resolution smearing ----
         e3 = d["electron"][lo:hi, :3].copy()
@@ -723,9 +810,11 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
             with np.errstate(divide="ignore", invalid="ignore"):
                 fid = acc.accept_proton(cand[:, :, 0].ravel(),
                                         cand[:, :, 1].ravel(),
-                                        cand[:, :, 2].ravel()).reshape(m, K)
+                                        cand[:, :, 2].ravel(),
+                                        rot=phi_rot).reshape(m, K)
             detected = detected & fid
-            ok_e = acc.accept_electron(e3[:, 0], e3[:, 1], e3[:, 2])
+            ok_e = acc.accept_electron(e3[:, 0], e3[:, 1], e3[:, 2],
+                                       rot=phi_rot)
         else:
             ok_e = np.ones(m, dtype=bool)
 
@@ -738,8 +827,37 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
 
         p_rest = p_ok.copy()
         p_rest[rows, lead_idx] = -1.0
-        rec_idx = np.argmax(p_rest, axis=1)
-        has_rec = has_lead & (p_rest[rows, rec_idx] > 0.0)
+        rec_idx = np.argmax(p_rest, axis=1)       # highest-|p| other nucleon
+        n_other = (p_rest > 0.0).sum(axis=1)
+        n_hard = (p_rest >= SRC_CUTS["precoil_min"]).sum(axis=1)
+        if epp_recoil == "unique":
+            has_rec = has_lead & (n_hard == 1)
+            ambig = has_lead & (n_hard >= 2)
+        elif epp_recoil == "exactly2":
+            has_rec = has_lead & (n_other == 1)
+            ambig = has_lead & (n_other >= 2)
+        elif epp_recoil == "highest":
+            has_rec = has_lead & (n_other > 0)
+            ambig = np.zeros(m, bool)
+        elif epp_recoil == "all":
+            # The highest hard candidate (== rec_idx whenever n_hard >= 1)
+            # takes this row; every further hard candidate becomes an extra row.
+            has_rec = has_lead & (n_hard >= 1)
+            ambig = np.zeros(m, bool)
+            extra = (p_rest >= SRC_CUTS["precoil_min"]) & has_lead[:, None]
+            extra[rows, rec_idx] = False
+            er, ec = np.nonzero(extra)
+            if er.size:
+                xr_l.append(lo + er)
+                x3_l.append(cand[er, ec])
+                xt_l.append(ctype[er, ec])
+                xro_l.append(crole[er, ec])
+                xg_l.append(cgen[er, ec])
+                xf_l.append(cfate[er, ec])
+        else:
+            raise ValueError(f"unknown epp_recoil={epp_recoil!r}")
+        out_ambig[lo:hi] = ambig
+        out_nhard[lo:hi] = np.where(has_lead, n_hard, 0)
 
         out_e3[lo:hi]    = e3
         out_ok_e[lo:hi]  = ok_e
@@ -779,26 +897,67 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
     compute_kinematics(d, Ebeam=ebeam)
 
     # ---- acceptance masks & map weights on the CHOSEN particles ----
-    d["acc_mask_ep"]  = out_ok_e & has_lead
-    d["acc_mask_epp"] = out_ok_e & has_rec
+    keep = ~out_abs
+    d["acc_mask_ep"]  = out_ok_e & has_lead & keep
+    d["acc_mask_epp"] = out_ok_e & has_rec & keep
+    d["abs_drop"] = out_abs
+    d["epp_ambiguous"] = out_ambig
+    d["weight_gen"] = np.asarray(d["weight"]).copy()
+    d["weight"] = np.where(out_abs, 0.0, d["weight_gen"])
     w_e    = np.ones(n)
     w_lead = np.ones(n)
     w_rec  = np.ones(n)
     if acc is not None:
-        w_e = acc.map_weight(out_e3[:, 0], out_e3[:, 1], out_e3[:, 2], 'e')
+        w_e = acc.map_weight(out_e3[:, 0], out_e3[:, 1], out_e3[:, 2], 'e',
+                             rot=phi_rot)
         if has_lead.any():
             w_lead[has_lead] = acc.map_weight(
                 out_lead3[has_lead, 0], out_lead3[has_lead, 1],
-                out_lead3[has_lead, 2], 'p')
+                out_lead3[has_lead, 2], 'p', rot=phi_rot)
         if has_rec.any():
             w_rec[has_rec] = acc.map_weight(
                 out_rec3[has_rec, 0], out_rec3[has_rec, 1],
-                out_rec3[has_rec, 2], 'p')
+                out_rec3[has_rec, 2], 'p', rot=phi_rot)
     d["acc_w_ep"]  = w_e * w_lead
     d["acc_w_epp"] = w_e * w_lead * w_rec
 
     d["n_lead_cand"]   = out_nlead
     d["n_recoil_cand"] = out_nrec
+    d["n_recoil_hard"] = out_nhard
+    d["epp_extra"] = np.zeros(n, dtype=bool)
+    _free_raw_columns(d)
+
+    # ---- --epp-recoil all: one extra (e,e'pp)-only row per additional
+    # recoil candidate. Every per-event column is copied from the parent
+    # event, then the recoil columns are replaced. Extra rows are kept out of
+    # (e,e'p) twice over: acc_mask_ep is False and select_eep checks epp_extra.
+    if epp_recoil == "all" and xr_l:
+        xr = np.concatenate(xr_l)
+        x3 = np.concatenate(x3_l)
+        nx = len(xr)
+        for k in list(d.keys()):
+            v = d[k]
+            if k.startswith("_"):
+                continue
+            if not isinstance(v, np.ndarray):
+                if not hasattr(v, "__len__") or len(v) != n:
+                    continue
+                v = np.asarray(v)
+            if v.ndim >= 1 and v.shape[0] == n:
+                d[k] = np.concatenate([v, v[xr]], axis=0)
+        sl = slice(n, n + nx)
+        d["recoil_post"][sl] = np.column_stack(
+            [x3, np.sqrt((x3 ** 2).sum(axis=1) + M_P ** 2)])
+        d["rec_type"][sl] = np.concatenate(xt_l).astype(d["rec_type"].dtype)
+        d["rec_role"][sl] = np.concatenate(xro_l)
+        d["rec_gen"][sl]  = np.concatenate(xg_l)
+        d["rec_fate"][sl] = np.concatenate(xf_l)
+        d["acc_mask_ep"][sl] = False
+        d["epp_extra"][sl] = True
+        if acc is not None:
+            d["acc_w_epp"][sl] = d["acc_w_ep"][sl] * acc.map_weight(
+                x3[:, 0], x3[:, 1], x3[:, 2], 'p', rot=phi_rot)
+        compute_kinematics(d, Ebeam=ebeam)
     return d
 
 
@@ -807,8 +966,39 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000):
 # ===================================================================
 
 def select_eep(d):
-    """(e,e'p): at least one accepted proton (the lead)."""
-    return d["lead_type"] == PROTON
+    """(e,e'p): at least one accepted proton (the lead). Rows appended by
+    --epp-recoil all are extra recoil pairings of an event already counted,
+    so they never enter (e,e'p)."""
+    m = d["lead_type"] == PROTON
+    if "epp_extra" in d:
+        m = m & ~d["epp_extra"]
+    return m
+
+
+def _primary(d):
+    """One row per generated event: False on rows added by --epp-recoil all."""
+    if "epp_extra" in d:
+        return ~d["epp_extra"]
+    return np.ones(len(d["weight"]), dtype=bool)
+
+
+def _print_recoil_multiplicity(d):
+    """Distribution of the number of possible recoils per event: accepted
+    protons other than the lead with |p| >= precoil_min. One entry per event,
+    weighted by generator weight x electron and lead map weights."""
+    base = select_eep(d) & d["acc_mask_ep"]
+    w = d["weight"] * _acc_w_ep(d)
+    k = d["n_recoil_hard"]
+    for label, sel in (("accepted e + lead", base),
+                       ("+ SRC cuts on e and lead", base & apply_src_cuts(d))):
+        W = w[sel].sum()
+        parts = []
+        for lab, kk in (("0", k == 0), ("1", k == 1), ("2", k == 2),
+                        ("3", k == 3), (">=4", k >= 4)):
+            s_ = sel & kk
+            frac = 100 * w[s_].sum() / W if W > 0 else 0.0
+            parts.append(f"{lab}: {int(s_.sum())} ({frac:.2f}%)")
+        print(f"    possible recoils per event [{label}]   " + "   ".join(parts))
 
 
 def select_eepp(d):
@@ -1623,6 +1813,119 @@ def figure5(pwia, fsi, outdir, clas=None):
     print("  Saved fig5_ratio_eepp_eep.png")
 
 
+def figure5_components(pwia, fsi, outdir):
+    """Diagnostic behind Fig 5: the four yield spectra that make the ratio.
+
+    Fig 5 shows (e,e'pp)/(e,e'p) vs p_miss, which folds four numbers per bin
+    into one. Here they are drawn separately:
+
+      top    -- (e,e'p) and (e,e'pp) yields vs p_miss for PWIA and FULL, all
+                four rescaled to the SAME experimental luminosity (the
+                attempts-based scale used by print_effective_transparencies),
+                so their absolute heights are directly comparable.
+      bottom -- the per-bin effective transparency FULL/PWIA for each channel.
+
+    Reading it: a Fig-5 ratio that is too high can come from the (e,e'pp)
+    numerator being too large or the (e,e'p) denominator being too small, and
+    only the separated yields say which.
+    """
+    lo, hi = _ACTIVE_SRC_CUTS["pmiss_min"], _ACTIVE_SRC_CUTS["pmiss_max"]
+    bins = np.linspace(lo, hi, 13)
+    centers = 0.5 * (bins[:-1] + bins[1:])
+    src = apply_src_cuts
+
+    def _n_attempts(d):
+        meta = d.get("_meta") or {}
+        try:
+            return float(meta.get("n_events_attempts"))
+        except (TypeError, ValueError):
+            return None
+    att_p, att_f = _n_attempts(pwia), _n_attempts(fsi)
+    if att_p and att_f:
+        lumi = att_p / att_f
+    else:
+        lumi = (pwia.get("weight_gen", pwia["weight"])[_primary(pwia)].sum()
+                / fsi.get("weight_gen", fsi["weight"])[_primary(fsi)].sum())
+
+    def _yields(d, channel, wscale):
+        if channel == "ep":
+            m = select_eep(d) & src(d) & _acc_mask_ep(d)
+            w = d["weight"] * _acc_w_ep(d) * wscale
+        else:
+            m = (select_eepp(d) & src(d) & _acc_mask_epp(d)
+                 & (d["prec"] > SRC_CUTS["precoil_min"]))
+            w = d["weight"] * _acc_w_epp(d) * wscale
+        h, _ = np.histogram(d["pmiss"][m], bins=bins, weights=w[m])
+        h2, _ = np.histogram(d["pmiss"][m], bins=bins, weights=(w[m])**2)
+        return h, np.sqrt(h2)
+
+    y = {}
+    y[("pwia", "ep")]  = _yields(pwia, "ep",  1.0)
+    y[("pwia", "epp")] = _yields(pwia, "epp", 1.0)
+    y[("full", "ep")]  = _yields(fsi,  "ep",  lumi)
+    y[("full", "epp")] = _yields(fsi,  "epp", lumi)
+
+    fig, (ax, axr) = plt.subplots(
+        2, 1, figsize=(6.4, 7.2), sharex=True,
+        gridspec_kw=dict(height_ratios=[2.0, 1.0], hspace=0.07))
+
+    spec = [
+        (("pwia", "ep"),  _GRAY, ":",  r"PWIA  (e,e$'$p)"),
+        (("full", "ep"),  _BLUE, "-",  r"FULL  (e,e$'$p)"),
+        (("pwia", "epp"), _GRAY, "-.", r"PWIA  (e,e$'$pp)"),
+        (("full", "epp"), _RED,  "--", r"FULL  (e,e$'$pp)"),
+    ]
+    for key, col, ls, lab in spec:
+        h, e = y[key]
+        ax.errorbar(centers, h, yerr=e, color=col, linestyle=ls, lw=1.7,
+                    label=lab, elinewidth=0.7, capsize=0, marker="")
+
+    ax.set_yscale("log")
+    ax.set_ylabel("yield at matched luminosity [arb.]")
+    ax.legend(frameon=False, loc="upper right", ncol=1)
+    ax.text(0.03, 0.05, r"$^{12}$C — SRC cuts", transform=ax.transAxes,
+            ha="left", va="bottom", fontsize=11)
+
+    for chan, col, lab in (("ep", _BLUE, r"(e,e$'$p)"),
+                           ("epp", _RED, r"(e,e$'$pp)")):
+        hp, ep_ = y[("pwia", chan)]
+        hf, ef = y[("full", chan)]
+        r = np.divide(hf, hp, out=np.zeros_like(hf), where=hp > 0)
+        rerr = np.zeros_like(r)
+        ok = (hp > 0) & (hf > 0)
+        rerr[ok] = r[ok] * np.sqrt((ef[ok]/hf[ok])**2 + (ep_[ok]/hp[ok])**2)
+        axr.errorbar(centers, r, yerr=rerr, color=col, lw=1.7, label=lab,
+                     elinewidth=0.7, capsize=0)
+    axr.axhline(1.0, color="k", lw=0.6, ls=":")
+    axr.axhline(0.58, color=_BLUE, lw=0.8, ls="--", alpha=0.6)
+    axr.axhline(0.73, color=_RED, lw=0.8, ls="--", alpha=0.6)
+    axr.set_xlabel(r"$p_{\rm Miss}$ [GeV/c]")
+    axr.set_ylabel("FULL / PWIA")
+    axr.set_xlim(lo, hi)
+    axr.set_ylim(bottom=0)
+    axr.legend(frameon=False, loc="upper left", ncol=2)
+    axr.text(0.98, 0.06,
+             "dashed: paper integrated values 0.58 / 0.73",
+             transform=axr.transAxes, ha="right", va="bottom", fontsize=8,
+             color="0.35")
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(outdir, "figD_fig5_components.png"), dpi=200)
+    plt.close(fig)
+    print("  Saved figD_fig5_components.png")
+
+    print("  Fig5 components (matched luminosity):")
+    print(f"    {'pmiss':>8} {'ep PWIA':>11} {'ep FULL':>11} {'T_ep':>7}"
+          f" {'epp PWIA':>11} {'epp FULL':>11} {'T_epp':>7}")
+    for i, c in enumerate(centers):
+        hp_ep = y[("pwia", "ep")][0][i];  hf_ep = y[("full", "ep")][0][i]
+        hp_pp = y[("pwia", "epp")][0][i]; hf_pp = y[("full", "epp")][0][i]
+        t_ep = hf_ep/hp_ep if hp_ep > 0 else float("nan")
+        t_pp = hf_pp/hp_pp if hp_pp > 0 else float("nan")
+        print(f"    {c:8.3f} {hp_ep:11.4g} {hf_ep:11.4g} {t_ep:7.3f}"
+              f" {hp_pp:11.4g} {hf_pp:11.4g} {t_pp:7.3f}")
+
+
 def figure6(pwia, fsi, outdir, clas=None, clas_ev=None):
     """Fig 6: CM momentum components for 12C(e,e'pp) in the pmiss frame
     (z-axis along pmiss, q in x-z plane — Ref. [21] convention).
@@ -1961,7 +2264,7 @@ def figure_q2_stages(pwia, fsi, outdir):
     scale = (ap / af) if (ap and af) else 1.0
 
     stages = [
-        ("as generated", lambda d: np.ones(len(d["weight"]), bool),
+        ("as generated", lambda d: _primary(d),
          lambda d: np.ones(len(d["weight"]))),
         ("in CLAS acceptance", lambda d: select_eep(d) & _acc_mask_ep(d),
          _acc_w_ep),
@@ -1974,7 +2277,9 @@ def figure_q2_stages(pwia, fsi, outdir):
         for d, lbl, sc, kw in ((pwia, "PWIA", 1.0, dict(ls=":", color="0.35")),
                                (fsi, "FULL", scale, dict(ls="-", color="C0", lw=2))):
             m = mask_fn(d)
-            _, h = make_hist(d["Q2"][m], (d["weight"] * wfn(d))[m] * sc, bins)
+            wbase = (d.get("weight_gen", d["weight"]) if title == "as generated"
+                     else d["weight"])
+            _, h = make_hist(d["Q2"][m], (wbase * wfn(d))[m] * sc, bins)
             draw_hist(ax, ctr, h, label=lbl, **kw)
         ax.set_xlabel(r"$Q^2$  [GeV$^2$]")
         ax.set_ylabel("Counts (equal luminosity)")
@@ -1982,8 +2287,10 @@ def figure_q2_stages(pwia, fsi, outdir):
         ax.legend(frameon=False)
 
     # quantify the pre-cut agreement
-    _, hp = make_hist(pwia["Q2"], pwia["weight"], bins)
-    _, hf = make_hist(fsi["Q2"], fsi["weight"] * scale, bins)
+    pp_, pf_ = _primary(pwia), _primary(fsi)
+    wgp, wgf = pwia.get("weight_gen", pwia["weight"]), fsi.get("weight_gen", fsi["weight"])
+    _, hp = make_hist(pwia["Q2"][pp_], wgp[pp_], bins)
+    _, hf = make_hist(fsi["Q2"][pf_], wgf[pf_] * scale, bins)
     ok = hp > 0
     dev = np.abs(hf[ok] - hp[ok]) / hp[ok]
     axes[0].text(0.97, 0.90,
@@ -2182,7 +2489,8 @@ def print_effective_transparencies(pwia, fsi):
         except (TypeError, ValueError):
             return None
     att_p, att_f = _n_attempts(pwia_eep), _n_attempts(fsi_eep)
-    sumw_scale = pwia_eep["weight"].sum() / fsi_eep["weight"].sum()
+    sumw_scale = (pwia_eep.get("weight_gen", pwia_eep["weight"])[_primary(pwia_eep)].sum()
+                  / fsi_eep.get("weight_gen", fsi_eep["weight"])[_primary(fsi_eep)].sum())
     if att_p and att_f:
         lumi_scale = att_p / att_f
         ratio = lumi_scale / sumw_scale
@@ -2253,6 +2561,12 @@ def main():
                         help="Output directory for plots")
     parser.add_argument("--ebeam", type=float, default=5.01,
                         help="Beam energy [GeV]")
+    parser.add_argument("--max-events", type=float, default=None,
+                        help=("Cap on events read per SRC sample. The analysis "
+                              "holds all samples in memory at once, so this is "
+                              "the knob that bounds peak RSS."))
+    parser.add_argument("--mf-max-events", type=float, default=None,
+                        help="Separate cap for the mean-field sample.")
     parser.add_argument("--convention", choices=("detector", "wright"),
                         default="detector",
                         help=("Event-building convention. 'detector' (default) "
@@ -2266,6 +2580,32 @@ def main():
                               "the acceptance map as a binary filter plus a "
                               "single-candidate-only recoil weight, the truth "
                               "p_rel > 0.25 cut, and |p_N|/|q| < 0.96."))
+    parser.add_argument("--acc-phi-rotation", type=int, choices=(0, 180),
+                        default=180,
+                        help=("Evaluate the CLAS fiducials and acceptance map "
+                              "at phi + this angle. 180 (default) follows "
+                              "genie_gcf_loop.C, which rotates the electron "
+                              "and protons by +pi; 0 is the previous "
+                              "behaviour."))
+    parser.add_argument("--absorption-veto", action=argparse.BooleanOptionalAction,
+                        default=True,
+                        help=("detector convention: throw the event away "
+                              "(weight 0) if either generated nucleon has hA "
+                              "fate 4 (absorption). ON by default; "
+                              "--no-absorption-veto keeps absorbed events. "
+                              "Always on under --convention wright."))
+    parser.add_argument("--epp-recoil", choices=("unique", "exactly2", "highest", "all"),
+                        default="unique",
+                        help=("detector convention: (e,e'pp) recoil rule. "
+                              "'unique' (default): exactly one other accepted "
+                              "proton above 0.35 GeV/c, else the event is not "
+                              "(e,e'pp) (it stays (e,e'p)); softer extras "
+                              "allowed. 'exactly2': exactly two accepted "
+                              "protons in total, the CLAS data topology. "
+                              "'highest': previous rule, second-highest "
+                              "proton. 'all': every candidate above 0.35 "
+                              "GeV/c gives its own (e,e'pp) entry with that "
+                              "proton as the recoil; (e,e'p) counted once."))
     parser.add_argument("--clas-data",
                         default="Acceptance/SRC_eg2_Hists_C.root",
                         help=("Pre-made CLAS paper histograms (Natalie Mail 2). "
@@ -2309,13 +2649,17 @@ def main():
               "absorption veto, multi-recoil events discarded, "
               "truth p_rel > 0.25")
     else:
-        print("Convention: detector-style (default)")
+        print(f"Convention: detector-style (default) - absorption veto "
+              f"{'ON' if args.absorption_veto else 'off'}, (e,e'pp) recoil "
+              f"rule '{args.epp_recoil}'")
+    print(f"  acceptance evaluated at phi + {args.acc_phi_rotation} deg")
 
     os.makedirs(args.outdir, exist_ok=True)
 
-    def _load_and_preprocess(label, path, acc=None, include_neutrons=False):
+    def _load_and_preprocess(label, path, acc=None, include_neutrons=False,
+                             cap=None):
         print(f"Loading {label}: {path}")
-        d = load_tree(path)
+        d = load_tree(path, max_events=cap)
         n_raw = len(d["weight"])
         keep = d["weight"] > 0
         if not keep.all():
@@ -2329,21 +2673,35 @@ def main():
                   f"Sigma_w={meta.get('total_weight')}")
         d["_meta"] = meta
         if args.convention == "wright":
-            wright_resolve(d, acc, args.ebeam, seed=args.seed)
+            wright_resolve(d, acc, args.ebeam, seed=args.seed,
+                           phi_rot=(args.acc_phi_rotation == 180))
             nd = int(d["wright_drop"].sum())
             print(f"    [wright] discarded {nd} of {len(d['weight'])} events "
                   f"({100*nd/len(d['weight']):.1f}%) via absorption veto / "
                   f"no lead / multi-recoil / truth p_rel<0.25")
         else:
             flatlist_resolve(d, acc, args.ebeam,
-                             include_neutrons=include_neutrons)
-        nl = d["n_lead_cand"]
+                             include_neutrons=include_neutrons,
+                             phi_rot=(args.acc_phi_rotation == 180),
+                             absorption_veto=args.absorption_veto,
+                             epp_recoil=args.epp_recoil)
+            _p = _primary(d)
+            print(f"    [detector] absorption veto {'ON' if args.absorption_veto else 'off'}:"
+                  f" {int((d['abs_drop'] & _p).sum())} of {int(_p.sum())} events"
+                  f" thrown away (weight 0)   (e,e'pp) ambiguous under "
+                  f"'{args.epp_recoil}' (kept as (e,e'p) only): "
+                  f"{int((d['epp_ambiguous'] & _p & ~d['abs_drop']).sum())}")
+        prim = _primary(d)
+        nl = d["n_lead_cand"][prim]
         print(f"    accepted nucleons per event:  0: {int((nl==0).sum())}"
               f"   1: {int((nl==1).sum())}"
               f"   2: {int((nl==2).sum())}"
               f"   >=3: {int((nl>=3).sum())}   (none dropped)")
         print(f"    channels: (e,e'p) {int((select_eep(d) & d['acc_mask_ep']).sum())}"
-              f"   (e,e'pp) {int((select_eepp(d) & d['acc_mask_epp']).sum())}")
+              f"   (e,e'pp) {int((select_eepp(d) & d['acc_mask_epp']).sum())} entries"
+              f" ({int((select_eepp(d) & d['acc_mask_epp'] & prim).sum())} events)")
+        if "n_recoil_hard" in d:
+            _print_recoil_multiplicity(d)
         return d
 
     if not args.no_acceptance:
@@ -2362,13 +2720,17 @@ def main():
 
     # GCF SRC samples (AV18, p_rel>kF): the PWIA / T+SCX / FULL curves of
     # Figs 2-7 and the FULL GCF reference of Figs 8-10. No SRC/MF mixing.
-    pwia = _load_and_preprocess("PWIA (SRC)", args.pwia, acc, include_neutrons=True)
-    fsi  = _load_and_preprocess("FSI  (SRC)", args.fsi,  acc)
+    pwia = _load_and_preprocess("PWIA (SRC)", args.pwia, acc,
+                                include_neutrons=True, cap=args.max_events)
+    fsi  = _load_and_preprocess("FSI  (SRC)", args.fsi,  acc,
+                                cap=args.max_events)
 
     # Single-nucleon mean-field sample (Figs 8-10 only). FULL only.
     fsi_mf = None
     if args.fsi_mf:
-        fsi_mf = _load_and_preprocess("FSI  (MF, single nucleon)", args.fsi_mf, acc)
+        fsi_mf = _load_and_preprocess("FSI  (MF, single nucleon)", args.fsi_mf,
+                                      acc, cap=(args.mf_max_events
+                                                or args.max_events))
 
     # Optional weight cap (variance reduction), applied per sample.
     if args.weight_cap_percentile is not None:
@@ -2434,6 +2796,7 @@ def main():
     figure3(pwia, fsi, args.outdir, clas=clas, clas_ev=clas_ev)
     figure4(pwia, fsi, args.outdir, clas=clas, clas_ev=clas_ev)
     figure5(pwia, fsi, args.outdir, clas=clas)
+    figure5_components(pwia, fsi, args.outdir)
     figure6(pwia, fsi, args.outdir, clas=clas, clas_ev=clas_ev)
     figure7(pwia, fsi, args.outdir, clas=clas, clas_ev=clas_ev)
     figure_q2_diag(pwia, fsi, args.outdir, clas_ev=clas_ev)

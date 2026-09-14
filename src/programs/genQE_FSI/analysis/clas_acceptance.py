@@ -229,6 +229,19 @@ def _gap_accept_proton(mom, theta_deg, phi_deg_signed):
 # =====================================================================
 # 3-momentum -> (mom, theta, phi) helpers
 # =====================================================================
+# rot=True on accept_electron / accept_proton / map_weight evaluates the
+# acceptance at phi + 180 deg, i.e. (px, py) -> (-px, -py). N. Wright's
+# genie_gcf_loop.C rotates the electron (1425-1426) and every proton (1514) by
+# +pi before the CLAS fiducials and the map gate: GENIE's azimuth and the CLAS
+# sector frame differ by 180 deg. The fiducial parameters and the proton gaps
+# are per sector, so the rotation is NOT a symmetry -- it moves every particle
+# three sectors over. Default off, so existing callers are unchanged.
+def _rot_pi(px, py, rot):
+    if rot:
+        return -np.asarray(px), -np.asarray(py)
+    return px, py
+
+
 def _vec_angles(px, py, pz):
     mom = np.sqrt(px**2 + py**2 + pz**2)
     safe = np.where(mom > 0, mom, 1e-30)
@@ -272,7 +285,8 @@ class ClasAcceptance:
             )
 
     # ---- fiducial cuts ---------------------------------------------------
-    def accept_electron(self, px, py, pz):
+    def accept_electron(self, px, py, pz, rot=False):
+        px, py = _rot_pi(px, py, rot)
         mom, th, ph = _vec_angles(px, py, pz)
         # Faithful to Natalie's C++ accept_electron: the sector-dependent
         # theta_min rejection is COMMENTED OUT there, so it is not applied
@@ -288,7 +302,8 @@ class ClasAcceptance:
             wedge = wedge & (th <= self.e_th_max)
         return wedge
 
-    def accept_proton(self, px, py, pz):
+    def accept_proton(self, px, py, pz, rot=False):
+        px, py = _rot_pi(px, py, rot)
         mom, th, ph = _vec_angles(px, py, pz)
         wedge = _fiducial_pass(mom, th, ph,
                                _P_THETA, _P_A_LOW, _P_B_LOW, _P_A_HIGH, _P_B_HIGH,
@@ -297,7 +312,7 @@ class ClasAcceptance:
         return wedge & no_gap
 
     # ---- weighted acceptance map ---------------------------------------
-    def map_weight(self, px, py, pz, particle='p'):
+    def map_weight(self, px, py, pz, particle='p', rot=False):
         """Return array of acc/gen weights for each event.
 
         Faithful port of AccMap::accept_map (Acceptance/AccMap.cpp):
@@ -307,6 +322,7 @@ class ClasAcceptance:
             GetBinContent for invalid indices); phi bins wrap.
           - If gen is still 0 after 7^3, return 1.0.
         """
+        px, py = _rot_pi(px, py, rot)
         m = self._maps[particle]
         gen, acc = m['gen'], m['acc']
         mom_edges, cos_edges, phi_edges = m['mom_edges'], m['cos_edges'], m['phi_edges']
