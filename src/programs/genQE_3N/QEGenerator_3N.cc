@@ -478,6 +478,15 @@ void QEGenerator_3N::fill_array(){
   else if(u==3){uType="array/he3_3Ndensity_AV18TM.dnst";}
   else if(u==4){uType="array/he3_3Ndensity_CDBonn.dnst";}
   else if(u==5){uType="array/he3_3Ndensity_CDBonnTM.dnst";}
+  // u=6..10: pD-only (deuteron channels 15-18 of the Faddeev wave function,
+  // see Data/He3togo/wf_he3_pD.f / gen_3N_density_grid_pD.f in the research
+  // repo) counterparts of u=1..5 above, same grid/units/Jacobian -- get_rho()
+  // needs no changes to use these, only which table fill_array() loads.
+  else if(u==6){uType="array/he3_3Ndensity_pD_AV18.dnst";}
+  else if(u==7){uType="array/he3_3Ndensity_pD_AV18UIX.dnst";}
+  else if(u==8){uType="array/he3_3Ndensity_pD_AV18TM.dnst";}
+  else if(u==9){uType="array/he3_3Ndensity_pD_CDBonn.dnst";}
+  else if(u==10){uType="array/he3_3Ndensity_pD_CDBonnTM.dnst";}
   std::ifstream densityFile(uType);
   if(!densityFile.is_open()){
     cout<<"3 nucleon distribution file failed to load.\n"
