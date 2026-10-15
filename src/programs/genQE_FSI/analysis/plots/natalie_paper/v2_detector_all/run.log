@@ -1,0 +1,84 @@
+/home/ilayws/Ilay-Generators/src/programs/genQE_FSI/analysis/natalie_paper_plots.py:280: RuntimeWarning: invalid value encountered in sqrt
+  mmiss = np.where(mmiss_sq > 0, np.sqrt(mmiss_sq), -np.sqrt(-mmiss_sq))
+/home/ilayws/Ilay-Generators/src/programs/genQE_FSI/analysis/natalie_paper_plots.py:1311: RuntimeWarning: invalid value encountered in sqrt
+  mmiss  = np.where(mmiss2 > 0, np.sqrt(mmiss2), -np.sqrt(-mmiss2))
+/home/ilayws/Ilay-Generators/src/programs/genQE_FSI/analysis/natalie_paper_plots.py:1912: UserWarning: This figure includes Axes that are not compatible with tight_layout, so results might be incorrect.
+  fig.tight_layout()
+Convention: detector-style (default) - absorption veto ON, (e,e'pp) recoil rule 'all'
+  acceptance evaluated at phi + 180 deg
+CLAS acceptance enabled  (map=Acceptance/map_eg2_adin.root, seed=12345  [user-supplied], map_smoothing_radius=1)
+Loading PWIA (SRC): events/natalie/pwia_SRC.root
+    [cap] reading 30000000 of 60000000 entries
+  30000000 rows loaded, 30000000 with weight > 0 kept
+    metadata: wf_mode=SRC_only  N_saved=60000000  Sigma_w=2899248000
+    [detector] absorption veto ON: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    accepted nucleons per event:  0: 8783506   1: 14890844   2: 6325650   >=3: 0   (none dropped)
+    channels: (e,e'p) 6415050   (e,e'pp) 86323 entries (86323 events)
+    possible recoils per event [accepted e + lead]   0: 6173470 (93.75%)   1: 241580 (6.25%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 48997 (60.53%)   1: 42659 (39.47%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+Loading FSI  (SRC): events/natalie/fsi_hA_SRC_rho1_notail.root
+    [cap] reading 30000000 of 60000000 entries
+  30000000 rows loaded, 30000000 with weight > 0 kept
+    metadata: wf_mode=SRC_only  N_saved=60000000  Sigma_w=2900156600
+    [detector] absorption veto ON: 5146754 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    accepted nucleons per event:  0: 13813859   1: 11460998   2: 3516284   >=3: 1208859   (none dropped)
+    channels: (e,e'p) 7132843   (e,e'pp) 189597 entries (184581 events)
+    possible recoils per event [accepted e + lead]   0: 6948262 (97.44%)   1: 179582 (2.51%)   2: 4982 (0.05%)   3: 17 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 46645 (90.93%)   1: 11839 (9.00%)   2: 103 (0.07%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+Loading FSI  (MF, single nucleon): events/natalie/fsi_hA_MF_localFG_notail.root
+  60000000 rows loaded, 60000000 with weight > 0 kept
+    metadata: wf_mode=MF_1N  N_saved=60000000  Sigma_w=2096824.9
+    [detector] absorption veto ON: 7116585 of 60000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    accepted nucleons per event:  0: 37235295   1: 18461267   2: 2775511   >=3: 1527927   (none dropped)
+    channels: (e,e'p) 10841950   (e,e'pp) 437334 entries (437334 events)
+    possible recoils per event [accepted e + lead]   0: 10404616 (96.89%)   1: 437334 (3.11%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 19695 (89.02%)   1: 2224 (10.98%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+Loading CLAS paper hists: Acceptance/SRC_eg2_Hists_C.root
+  Loaded 12 panel(s): [('fig2', 'src'), ('fig3_lead', 'src'), ('fig3_rec', 'src'), ('fig4_ep', 'src'), ('fig4_epp', 'src'), ('fig5_ratio', 'src'), ('fig6_x', 'src'), ('fig6_y', 'src'), ('fig6_z', 'src'), ('fig7_prel', 'src'), ('fig9_ep', 'src'), ('fig9_epp', 'src')]
+  Paper-PDF extracted points loaded for figs 6/7/8 (11 panels)
+Loading CLAS raw events: data/clas/SRC_e2p_C_GoodRuns_coulomb.root
+  605 events; after SRC cuts: 567 (e,e'p), 556 (e,e'pp)  [paper: 363 (e,e'pp)]
+
+==============================================================
+  Effective Transparencies  (within CLAS acceptance, SRC cuts)
+  Both samples rescaled to equivalent experimental luminosity.
+==============================================================
+  Channel           T+SCX       Full   (paper: T+SCX / Full)
+  (e,e'p)           0.518      0.684   (paper: 0.61  / 0.58)
+  (e,e'pp)          0.577      1.304   (paper: 0.83  / 0.73)
+==============================================================
+
+Generating plots in analysis/plots/natalie_paper/v2_detector_all/
+  Saved fig2_pLead_eep.png
+  Saved fig3_pLead_pRec_eepp.png
+  Saved fig4_pmiss.png
+  Saved fig5_ratio_eepp_eep.png
+  Saved figD_fig5_components.png
+  Fig5 components (matched luminosity):
+       pmiss     ep PWIA     ep FULL    T_ep    epp PWIA    epp FULL   T_epp
+       0.425   1.907e+05   1.151e+05   0.604        1334        3280   2.458
+       0.475   1.387e+05   8.728e+04   0.629        3199        5716   1.787
+       0.525   1.022e+05    6.67e+04   0.653        4945        5719   1.156
+       0.575     7.3e+04    5.72e+04   0.784        4386        5972   1.362
+       0.625   5.247e+04   3.938e+04   0.751        5026        4624   0.920
+       0.675   3.292e+04    2.67e+04   0.811        3630        4089   1.126
+       0.725   2.102e+04     1.7e+04   0.809        2395        2634   1.100
+       0.775   1.305e+04   1.189e+04   0.911        1855        2559   1.380
+       0.825        7184        7200   1.002        1095        1378   1.258
+       0.875        3763        3944   1.048       553.4       834.8   1.509
+       0.925        1950        2571   1.318       314.8       610.3   1.939
+       0.975       952.5        1578   1.657       175.3       289.3   1.650
+  Saved fig6_pcm_components.png
+  Saved fig7_prel_eepp.png
+  Q2 diag  PWIA: frac(Q2<1.7) = 0.123
+  Q2 diag  FULL: frac(Q2<1.7) = 0.149
+  Q2 diag  Data: frac(Q2<1.7) = 0.275
+  Saved figD_Q2_diagnostic.png
+  Q2 pre-cut PWIA vs FULL: mean |diff| 0.24%, max 0.70%  (must be statistical only)
+  Saved figD_Q2_stages.png
+  Saved figD_origins.png
+  Saved fig8_pcm_GCF_vs_MF.png
+  Saved fig9_theta_pmiss_q_GCF_vs_MF.png
+  Saved fig10_ratio_GCF_vs_MF.png
+
+Done.

@@ -1,0 +1,2 @@
+/home/ilayws/Ilay-Generators/src/programs/genQE_FSI/analysis/natalie_paper_plots.py:277: RuntimeWarning: invalid value encountered in sqrt
+  mmiss = np.where(mmiss_sq > 0, np.sqrt(mmiss_sq), -np.sqrt(-mmiss_sq))

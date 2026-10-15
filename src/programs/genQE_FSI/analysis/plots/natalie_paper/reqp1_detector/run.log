@@ -1,0 +1,55 @@
+/home/ilayws/Ilay-Generators/src/programs/genQE_FSI/analysis/natalie_paper_plots.py:280: RuntimeWarning: invalid value encountered in sqrt
+  mmiss = np.where(mmiss_sq > 0, np.sqrt(mmiss_sq), -np.sqrt(-mmiss_sq))
+/home/ilayws/Ilay-Generators/src/programs/genQE_FSI/analysis/natalie_paper_plots.py:1148: RuntimeWarning: invalid value encountered in sqrt
+  mmiss  = np.where(mmiss2 > 0, np.sqrt(mmiss2), -np.sqrt(-mmiss2))
+Convention: detector-style (default)
+CLAS acceptance enabled  (map=Acceptance/map_eg2_adin.root, seed=12345  [user-supplied], map_smoothing_radius=1)
+Loading PWIA (SRC): events/natalie/pwia_SRC_reqp1.root
+  30000000 rows loaded, 30000000 with weight > 0 kept
+    metadata: wf_mode=SRC_only  N_saved=30000000  Sigma_w=1451110860
+    accepted nucleons per event:  0: 8822052   1: 14878385   2: 6299563   >=3: 0   (none dropped)
+    channels: (e,e'p) 6398748   (e,e'pp) 1090684
+Loading FSI  (SRC): events/natalie/fsi_hA_SRC_reqp1.root
+  30000000 rows loaded, 30000000 with weight > 0 kept
+    metadata: wf_mode=SRC_only  N_saved=30000000  Sigma_w=1449248870
+    accepted nucleons per event:  0: 13911975   1: 11443736   2: 3466983   >=3: 1177306   (none dropped)
+    channels: (e,e'p) 9481480   (e,e'pp) 2807933
+Loading FSI  (MF, single nucleon): events/natalie/fsi_hA_MF_localFG_notail.root
+  60000000 rows loaded, 60000000 with weight > 0 kept
+    metadata: wf_mode=MF_1N  N_saved=60000000  Sigma_w=2096824.9
+    accepted nucleons per event:  0: 37238495   1: 18457249   2: 2774866   >=3: 1529390   (none dropped)
+    channels: (e,e'p) 13933832   (e,e'pp) 2360886
+Loading CLAS paper hists: Acceptance/SRC_eg2_Hists_C.root
+  Loaded 12 panel(s): [('fig2', 'src'), ('fig3_lead', 'src'), ('fig3_rec', 'src'), ('fig4_ep', 'src'), ('fig4_epp', 'src'), ('fig5_ratio', 'src'), ('fig6_x', 'src'), ('fig6_y', 'src'), ('fig6_z', 'src'), ('fig7_prel', 'src'), ('fig9_ep', 'src'), ('fig9_epp', 'src')]
+  Paper-PDF extracted points loaded for figs 6/7/8 (11 panels)
+Loading CLAS raw events: data/clas/SRC_e2p_C_GoodRuns_coulomb.root
+  605 events; after SRC cuts: 567 (e,e'p), 556 (e,e'pp)  [paper: 363 (e,e'pp)]
+
+==============================================================
+  Effective Transparencies  (within CLAS acceptance, SRC cuts)
+  Both samples rescaled to equivalent experimental luminosity.
+==============================================================
+  Channel           T+SCX       Full   (paper: T+SCX / Full)
+  (e,e'p)           0.520      0.838   (paper: 0.61  / 0.58)
+  (e,e'pp)          0.566      1.546   (paper: 0.83  / 0.73)
+==============================================================
+
+Generating plots in analysis/plots/natalie_paper/reqp1_detector/
+  Saved fig2_pLead_eep.png
+  Saved fig3_pLead_pRec_eepp.png
+  Saved fig4_pmiss.png
+  Saved fig5_ratio_eepp_eep.png
+  Saved fig6_pcm_components.png
+  Saved fig7_prel_eepp.png
+  Q2 diag  PWIA: frac(Q2<1.7) = 0.099
+  Q2 diag  FULL: frac(Q2<1.7) = 0.151
+  Q2 diag  Data: frac(Q2<1.7) = 0.275
+  Saved figD_Q2_diagnostic.png
+  Q2 pre-cut PWIA vs FULL: mean |diff| 0.23%, max 0.72%  (must be statistical only)
+  Saved figD_Q2_stages.png
+  Saved figD_origins.png
+  Saved fig8_pcm_GCF_vs_MF.png
+  Saved fig9_theta_pmiss_q_GCF_vs_MF.png
+  Saved fig10_ratio_GCF_vs_MF.png
+
+Done.

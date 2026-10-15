@@ -78,3 +78,6 @@ src/programs/sfSampler/sfSamplerLC
 events/
 *.root.meta.txt
 *.part[0-9][0-9][0-9].log
+
+# N. Wright GCF_GENIE fork build, third-party builds and her-code production (1+ GB, never commit)
+/wright_genie/

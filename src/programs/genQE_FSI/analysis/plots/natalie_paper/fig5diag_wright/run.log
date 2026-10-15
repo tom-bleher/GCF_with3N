@@ -1,0 +1,71 @@
+/home/ilayws/Ilay-Generators/src/programs/genQE_FSI/analysis/natalie_paper_plots.py:280: RuntimeWarning: invalid value encountered in sqrt
+  mmiss = np.where(mmiss_sq > 0, np.sqrt(mmiss_sq), -np.sqrt(-mmiss_sq))
+/home/ilayws/Ilay-Generators/src/programs/genQE_FSI/analysis/natalie_paper_plots.py:1148: RuntimeWarning: invalid value encountered in sqrt
+  mmiss  = np.where(mmiss2 > 0, np.sqrt(mmiss2), -np.sqrt(-mmiss2))
+/home/ilayws/Ilay-Generators/src/programs/genQE_FSI/analysis/natalie_paper_plots.py:1748: UserWarning: This figure includes Axes that are not compatible with tight_layout, so results might be incorrect.
+  fig.tight_layout()
+Convention: WRIGHT (genie_gcf_loop.C) — |p_N|/|q| < 0.96, absorption veto, multi-recoil events discarded, truth p_rel > 0.25
+CLAS acceptance enabled  (map=Acceptance/map_eg2_adin.root, seed=12345  [user-supplied], map_smoothing_radius=1)
+Loading PWIA (SRC): events/natalie/pwia_SRC.root
+    [cap] reading 30000000 of 60000000 entries
+  30000000 rows loaded, 30000000 with weight > 0 kept
+    metadata: wf_mode=SRC_only  N_saved=60000000  Sigma_w=2899248000
+    [wright] discarded 27877089 of 30000000 events (92.9%) via absorption veto / no lead / multi-recoil / truth p_rel<0.25
+    accepted nucleons per event:  0: 19964034   1: 9110708   2: 925258   >=3: 0   (none dropped)
+    channels: (e,e'p) 1220374   (e,e'pp) 106273
+Loading FSI  (SRC): events/natalie/fsi_hA_SRC_rho1_notail.root
+    [cap] reading 30000000 of 60000000 entries
+  30000000 rows loaded, 30000000 with weight > 0 kept
+    metadata: wf_mode=SRC_only  N_saved=60000000  Sigma_w=2900156600
+    [wright] discarded 28070721 of 30000000 events (93.6%) via absorption veto / no lead / multi-recoil / truth p_rel<0.25
+    accepted nucleons per event:  0: 16888948   1: 10358219   2: 2376437   >=3: 376396   (none dropped)
+    channels: (e,e'p) 1088746   (e,e'pp) 191543
+Loading CLAS paper hists: Acceptance/SRC_eg2_Hists_C.root
+  Loaded 12 panel(s): [('fig2', 'src'), ('fig3_lead', 'src'), ('fig3_rec', 'src'), ('fig4_ep', 'src'), ('fig4_epp', 'src'), ('fig5_ratio', 'src'), ('fig6_x', 'src'), ('fig6_y', 'src'), ('fig6_z', 'src'), ('fig7_prel', 'src'), ('fig9_ep', 'src'), ('fig9_epp', 'src')]
+  Paper-PDF extracted points loaded for figs 6/7/8 (11 panels)
+Loading CLAS raw events: data/clas/SRC_e2p_C_GoodRuns_coulomb.root
+  605 events; after SRC cuts: 567 (e,e'p), 556 (e,e'pp)  [paper: 363 (e,e'pp)]
+
+==============================================================
+  Effective Transparencies  (within CLAS acceptance, SRC cuts)
+  Both samples rescaled to equivalent experimental luminosity.
+==============================================================
+  Channel           T+SCX       Full   (paper: T+SCX / Full)
+  (e,e'p)           0.509      0.613   (paper: 0.61  / 0.58)
+  (e,e'pp)          0.400      1.138   (paper: 0.83  / 0.73)
+==============================================================
+
+Generating plots in analysis/plots/natalie_paper/fig5diag_wright/
+  Saved fig2_pLead_eep.png
+  Saved fig3_pLead_pRec_eepp.png
+  Saved fig4_pmiss.png
+  Saved fig5_ratio_eepp_eep.png
+  Saved figD_fig5_components.png
+  Fig5 components (matched luminosity):
+       pmiss     ep PWIA     ep FULL    T_ep    epp PWIA    epp FULL   T_epp
+       0.425   2.661e+05   1.507e+05   0.567        2281        4839   2.121
+       0.475   2.022e+05   1.151e+05   0.569        4482        6808   1.519
+       0.525   1.458e+05   8.669e+04   0.594        7477        7037   0.941
+       0.575    1.01e+05   7.344e+04   0.727        6485        7537   1.162
+       0.625   6.694e+04   4.298e+04   0.642        6145        4871   0.793
+       0.675   4.063e+04   2.696e+04   0.663        4485        4557   1.016
+       0.725   2.503e+04   1.694e+04   0.677        2871        3009   1.048
+       0.775   1.426e+04   1.129e+04   0.791        2024        2405   1.188
+       0.825        7534        6436   0.854        1163        1386   1.192
+       0.875        4015        3412   0.850       608.1       644.9   1.060
+       0.925        2215        2033   0.918       352.5       520.3   1.476
+       0.975        1070        1462   1.366       196.1         270   1.377
+  Saved fig6_pcm_components.png
+  Saved fig7_prel_eepp.png
+  Q2 diag  PWIA: frac(Q2<1.7) = 0.217
+  Q2 diag  FULL: frac(Q2<1.7) = 0.230
+  Q2 diag  Data: frac(Q2<1.7) = 0.275
+  Saved figD_Q2_diagnostic.png
+  Q2 pre-cut PWIA vs FULL: mean |diff| 0.24%, max 0.70%  (must be statistical only)
+  Saved figD_Q2_stages.png
+  Saved figD_origins.png
+  [SKIP] fig8 — no MF sample provided
+  [SKIP] fig9 — no MF sample provided
+  [SKIP] fig10 — no MF sample provided
+
+Done.

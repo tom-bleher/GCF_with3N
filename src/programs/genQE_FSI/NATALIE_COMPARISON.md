@@ -397,3 +397,43 @@ input), so her MF curve cannot be checked against code.
 Correction to an earlier statement in this file's history: the back-to-back
 MF correlation is not produced by the SRC cuts; it follows from momentum
 conservation in the 2->2 knock-out.
+
+## 2026-09-14 — her own code, run at her scale
+
+To separate "our re-implementation" from "her chain", her unmodified GENIE fork
+(GCF_GENIE `fc45782a`, the commit before the arXiv posting) was built on this
+node and run with her `gevgen` settings (recovered from her own log: e- 5.01 GeV
+on 12C, tune G18_10a_02_11a, event list EMQE, unweighted, her own spline from
+`204c1bbc`), and every event was analysed by her `genie_gcf_loop.C`. Nothing in
+her source was changed; build accommodations (TPythia6 add-on for ROOT 6.36, a
+ROOTSYS layout shim, a force-included std-namespace header through her own
+ENV_CXXFLAGS hook, LHAPDF6, libnsl) and a 38-line working copy of the macro
+(output path and doFS/cx/doMF flags only) live in `/home/ilayws/wright_genie`.
+FSI off for PWIA is her `HadronTransp-Enable` switch set to false.
+
+Cross-checks from her binary: 3.2 % of generated events are SRC pairs; the
+struck-nucleon hA fates are 58/12/6/15/10 % (no-int/CEx/inel/abs/pi-prod),
+equal to our R-3.06.02 values (57.7/11.5/5.9/15.2/9.7); her cascade partners
+carry a 0.86 % tail (unit slip), matching our no-tail medium.
+
+Effective transparencies computed from HER histograms (`pn_ep_hist`,
+`pn_epp_hist`), ~1.04e9 FSI-on and 1.05e9 FSI-off generated events:
+
+| | (e,e'p) | (e,e'pp) |
+|---|---|---|
+| her code, FULL / PWIA | **0.597 +- 0.005** | **1.207 +- 0.045** |
+| our re-implementation of her conventions (`--convention wright`) | 0.619 | 1.192 |
+| paper | 0.58 | 0.73 |
+
+**Her code reproduces her published (e,e'p) value and does not reproduce her
+(e,e'pp) value**: it gives 1.21 +- 0.05, about 10 sigma above 0.73, and agrees
+with our re-implementation. The excess over 1 is a property of her chain, not of
+ours. Per stage, FULL/PWIA is 0.77 at event level, falls to 0.60 through the
+(e,e'p) cuts, and is 2.7 once a detected recoil is required: FSI creates
+detected recoils. Her macro's `cx` flag alone gives 0.95 / 0.94 because T_N and
+T_NN are applied by hand in `gst_plotter.C`, so that row is not the paper's
+T+SCX.
+
+Open question for the authors: which configuration or calculation produced the
+published (e,e'pp) 0.73, given that the committed macro on the committed
+generator gives 1.21.

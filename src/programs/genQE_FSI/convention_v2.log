@@ -1,0 +1,181 @@
+[2026-09-13 17:12:16] ======== CONVENTION V2 ========
+Mem:             251          80         101           0          70         170
+[2026-09-13 17:12:16] --- detector_unique -> analysis/plots/natalie_paper/v2_detector_unique   (--convention detector --epp-recoil unique)
+[2026-09-13 17:32:18] STOPPED by hand (memory pressure: fig8_rules.py diagnostic ran concurrently). Relaunch unchanged.
+[2026-09-13 17:33:56] fig8_split.py start
+[2026-09-13 17:46:58] fig8_split.py done rc=0 -> relaunching pipeline
+[2026-09-13 17:46:58] ======== CONVENTION V2 ========
+Mem:             251          73         123           0          56         177
+[2026-09-13 17:46:58] --- detector_unique -> analysis/plots/natalie_paper/v2_detector_unique   (--convention detector --epp-recoil unique)
+[2026-09-13 17:53:43] STOPPED by hand: absorption-veto default was inverted (user: absorbed events must be thrown away). Queue rewritten and relaunched.
+[2026-09-13 17:56:15] ======== CONVENTION V2 (absorption veto ON) ========
+Mem:             251          73         122           0          57         177
+[2026-09-13 17:56:15] --- detector_unique -> analysis/plots/natalie_paper/v2_detector_unique   (--convention detector --epp-recoil unique)
+[2026-09-13 17:57:50] queue bash stopped; pass 1 (pid 2873302) left running. Queue rewritten to {abs kept, abs thrown away} x {unique, all}.
+[2026-09-13 17:57:50] waiting for pid 2873302 to finish
+[2026-09-13 18:18:50] ======== {abs kept, abs thrown away} x {unique, all} ========
+Mem:             251          73         122           0          57         177
+[2026-09-13 18:18:50] --- detector_unique: already done, skipping
+[2026-09-13 18:18:50] --- detector_all -> analysis/plots/natalie_paper/v2_detector_all   (--convention detector --epp-recoil all)
+[2026-09-13 18:41:56]     rc=0
+[2026-09-13 18:41:56] --- detector_unique_keepabs -> analysis/plots/natalie_paper/v2_detector_unique_keepabs   (--convention detector --epp-recoil unique --no-absorption-veto)
+[2026-09-13 19:04:08]     rc=0
+[2026-09-13 19:04:08] --- detector_all_keepabs -> analysis/plots/natalie_paper/v2_detector_all_keepabs   (--convention detector --epp-recoil all --no-absorption-veto)
+[2026-09-13 19:26:58]     rc=0
+
+[2026-09-13 19:26:58] ===== SUMMARY (Full effective transparencies) =====
+recoil rule                absorbed events     (e,e'p)   (e,e'pp)
+unique                     thrown away           0.684      1.286
+all                        thrown away           0.684      1.304
+unique                     kept                  0.829      1.653
+all                        kept                  0.829      1.759
+PAPER (Full)                                      0.58       0.73
+
+## detector_unique
+    [detector] absorption veto ON: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'unique' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 6415050   (e,e'pp) 86323 entries (86323 events)
+    possible recoils per event [accepted e + lead]   0: 6173470 (93.75%)   1: 241580 (6.25%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 48997 (60.53%)   1: 42659 (39.47%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto ON: 5146754 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'unique' (kept as (e,e'p) only): 8751
+    channels: (e,e'p) 7132843   (e,e'pp) 179582 entries (179582 events)
+    possible recoils per event [accepted e + lead]   0: 6948262 (97.44%)   1: 179582 (2.51%)   2: 4982 (0.05%)   3: 17 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 46645 (90.93%)   1: 11839 (9.00%)   2: 103 (0.07%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto ON: 7116585 of 60000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'unique' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 10841950   (e,e'pp) 437334 entries (437334 events)
+    possible recoils per event [accepted e + lead]   0: 10404616 (96.89%)   1: 437334 (3.11%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 19695 (89.02%)   1: 2224 (10.98%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+
+## detector_all
+    [detector] absorption veto ON: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 6415050   (e,e'pp) 86323 entries (86323 events)
+    possible recoils per event [accepted e + lead]   0: 6173470 (93.75%)   1: 241580 (6.25%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 48997 (60.53%)   1: 42659 (39.47%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto ON: 5146754 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 7132843   (e,e'pp) 189597 entries (184581 events)
+    possible recoils per event [accepted e + lead]   0: 6948262 (97.44%)   1: 179582 (2.51%)   2: 4982 (0.05%)   3: 17 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 46645 (90.93%)   1: 11839 (9.00%)   2: 103 (0.07%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto ON: 7116585 of 60000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 10841950   (e,e'pp) 437334 entries (437334 events)
+    possible recoils per event [accepted e + lead]   0: 10404616 (96.89%)   1: 437334 (3.11%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 19695 (89.02%)   1: 2224 (10.98%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+
+## detector_unique_keepabs
+    [detector] absorption veto off: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'unique' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 6415050   (e,e'pp) 86323 entries (86323 events)
+    possible recoils per event [accepted e + lead]   0: 6173470 (93.75%)   1: 241580 (6.25%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 48997 (60.53%)   1: 42659 (39.47%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto off: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'unique' (kept as (e,e'p) only): 257234
+    channels: (e,e'p) 9542922   (e,e'pp) 422152 entries (422152 events)
+    possible recoils per event [accepted e + lead]   0: 8971363 (93.82%)   1: 422152 (4.82%)   2: 111686 (1.09%)   3: 31585 (0.24%)   >=4: 6136 (0.03%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 56391 (90.08%)   1: 13393 (9.60%)   2: 269 (0.31%)   3: 9 (0.01%)   >=4: 0 (0.00%)
+    [detector] absorption veto off: 0 of 60000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'unique' (kept as (e,e'p) only): 1172294
+    channels: (e,e'p) 13934027   (e,e'pp) 1481937 entries (1481937 events)
+    possible recoils per event [accepted e + lead]   0: 11758314 (89.44%)   1: 1481937 (8.03%)   2: 501689 (2.03%)   3: 156992 (0.44%)   >=4: 35095 (0.06%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 20366 (85.19%)   1: 2707 (13.89%)   2: 114 (0.91%)   3: 2 (0.01%)   >=4: 0 (0.00%)
+
+## detector_all_keepabs
+    [detector] absorption veto off: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 6415050   (e,e'pp) 86323 entries (86323 events)
+    possible recoils per event [accepted e + lead]   0: 6173470 (93.75%)   1: 241580 (6.25%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 48997 (60.53%)   1: 42659 (39.47%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto off: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 9542922   (e,e'pp) 765336 entries (571559 events)
+    possible recoils per event [accepted e + lead]   0: 8971363 (93.82%)   1: 422152 (4.82%)   2: 111686 (1.09%)   3: 31585 (0.24%)   >=4: 6136 (0.03%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 56391 (90.08%)   1: 13393 (9.60%)   2: 269 (0.31%)   3: 9 (0.01%)   >=4: 0 (0.00%)
+    [detector] absorption veto off: 0 of 60000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 13934027   (e,e'pp) 3099816 entries (2175713 events)
+    possible recoils per event [accepted e + lead]   0: 11758314 (89.44%)   1: 1481937 (8.03%)   2: 501689 (2.03%)   3: 156992 (0.44%)   >=4: 35095 (0.06%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 20366 (85.19%)   1: 2707 (13.89%)   2: 114 (0.91%)   3: 2 (0.01%)   >=4: 0 (0.00%)
+[2026-09-13 19:26:58] ======== DONE ========
+[2026-09-14 04:42:29] relaunch: adding detector_exactly2 and wright (with phi rotation) cells
+[2026-09-14 04:42:29] ======== {abs kept, abs thrown away} x {unique, all} ========
+Mem:             251          73         122           0          57         178
+[2026-09-14 04:42:29] --- detector_unique: already done, skipping
+[2026-09-14 04:42:29] --- detector_all: already done, skipping
+[2026-09-14 04:42:29] --- detector_unique_keepabs: already done, skipping
+[2026-09-14 04:42:29] --- detector_all_keepabs: already done, skipping
+[2026-09-14 04:42:29] --- detector_exactly2 -> analysis/plots/natalie_paper/v2_detector_exactly2   (--convention detector --epp-recoil exactly2)
+[2026-09-14 05:05:00]     rc=0
+[2026-09-14 05:05:00] --- wright -> analysis/plots/natalie_paper/v2_wright   (--convention wright)
+[2026-09-14 06:24:01]     rc=0
+
+[2026-09-14 06:24:01] ===== SUMMARY (Full effective transparencies) =====
+recoil rule                absorbed events     (e,e'p)   (e,e'pp)
+unique                     thrown away           0.684      1.286
+all                        thrown away           0.684      1.304
+unique                     kept                  0.829      1.653
+all                        kept                  0.829      1.759
+exactly2                   thrown away           0.684      1.224
+wright (hers)              thrown away           0.619      1.192
+PAPER (Full)                                      0.58       0.73
+
+## detector_unique
+    [detector] absorption veto ON: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'unique' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 6415050   (e,e'pp) 86323 entries (86323 events)
+    possible recoils per event [accepted e + lead]   0: 6173470 (93.75%)   1: 241580 (6.25%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 48997 (60.53%)   1: 42659 (39.47%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto ON: 5146754 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'unique' (kept as (e,e'p) only): 8751
+    channels: (e,e'p) 7132843   (e,e'pp) 179582 entries (179582 events)
+    possible recoils per event [accepted e + lead]   0: 6948262 (97.44%)   1: 179582 (2.51%)   2: 4982 (0.05%)   3: 17 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 46645 (90.93%)   1: 11839 (9.00%)   2: 103 (0.07%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto ON: 7116585 of 60000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'unique' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 10841950   (e,e'pp) 437334 entries (437334 events)
+    possible recoils per event [accepted e + lead]   0: 10404616 (96.89%)   1: 437334 (3.11%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 19695 (89.02%)   1: 2224 (10.98%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+
+## detector_all
+    [detector] absorption veto ON: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 6415050   (e,e'pp) 86323 entries (86323 events)
+    possible recoils per event [accepted e + lead]   0: 6173470 (93.75%)   1: 241580 (6.25%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 48997 (60.53%)   1: 42659 (39.47%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto ON: 5146754 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 7132843   (e,e'pp) 189597 entries (184581 events)
+    possible recoils per event [accepted e + lead]   0: 6948262 (97.44%)   1: 179582 (2.51%)   2: 4982 (0.05%)   3: 17 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 46645 (90.93%)   1: 11839 (9.00%)   2: 103 (0.07%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto ON: 7116585 of 60000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 10841950   (e,e'pp) 437334 entries (437334 events)
+    possible recoils per event [accepted e + lead]   0: 10404616 (96.89%)   1: 437334 (3.11%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 19695 (89.02%)   1: 2224 (10.98%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+
+## detector_unique_keepabs
+    [detector] absorption veto off: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'unique' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 6415050   (e,e'pp) 86323 entries (86323 events)
+    possible recoils per event [accepted e + lead]   0: 6173470 (93.75%)   1: 241580 (6.25%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 48997 (60.53%)   1: 42659 (39.47%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto off: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'unique' (kept as (e,e'p) only): 257234
+    channels: (e,e'p) 9542922   (e,e'pp) 422152 entries (422152 events)
+    possible recoils per event [accepted e + lead]   0: 8971363 (93.82%)   1: 422152 (4.82%)   2: 111686 (1.09%)   3: 31585 (0.24%)   >=4: 6136 (0.03%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 56391 (90.08%)   1: 13393 (9.60%)   2: 269 (0.31%)   3: 9 (0.01%)   >=4: 0 (0.00%)
+    [detector] absorption veto off: 0 of 60000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'unique' (kept as (e,e'p) only): 1172294
+    channels: (e,e'p) 13934027   (e,e'pp) 1481937 entries (1481937 events)
+    possible recoils per event [accepted e + lead]   0: 11758314 (89.44%)   1: 1481937 (8.03%)   2: 501689 (2.03%)   3: 156992 (0.44%)   >=4: 35095 (0.06%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 20366 (85.19%)   1: 2707 (13.89%)   2: 114 (0.91%)   3: 2 (0.01%)   >=4: 0 (0.00%)
+
+## detector_all_keepabs
+    [detector] absorption veto off: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 6415050   (e,e'pp) 86323 entries (86323 events)
+    possible recoils per event [accepted e + lead]   0: 6173470 (93.75%)   1: 241580 (6.25%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 48997 (60.53%)   1: 42659 (39.47%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto off: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 9542922   (e,e'pp) 765336 entries (571559 events)
+    possible recoils per event [accepted e + lead]   0: 8971363 (93.82%)   1: 422152 (4.82%)   2: 111686 (1.09%)   3: 31585 (0.24%)   >=4: 6136 (0.03%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 56391 (90.08%)   1: 13393 (9.60%)   2: 269 (0.31%)   3: 9 (0.01%)   >=4: 0 (0.00%)
+    [detector] absorption veto off: 0 of 60000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'all' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 13934027   (e,e'pp) 3099816 entries (2175713 events)
+    possible recoils per event [accepted e + lead]   0: 11758314 (89.44%)   1: 1481937 (8.03%)   2: 501689 (2.03%)   3: 156992 (0.44%)   >=4: 35095 (0.06%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 20366 (85.19%)   1: 2707 (13.89%)   2: 114 (0.91%)   3: 2 (0.01%)   >=4: 0 (0.00%)
+
+## detector_exactly2
+    [detector] absorption veto ON: 0 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'exactly2' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 6415050   (e,e'pp) 1103516 entries (1103516 events)
+    possible recoils per event [accepted e + lead]   0: 6173470 (93.75%)   1: 241580 (6.25%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 48997 (60.53%)   1: 42659 (39.47%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto ON: 5146754 of 30000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'exactly2' (kept as (e,e'p) only): 73417
+    channels: (e,e'p) 7132843   (e,e'pp) 1333632 entries (1333632 events)
+    possible recoils per event [accepted e + lead]   0: 6948262 (97.44%)   1: 179582 (2.51%)   2: 4982 (0.05%)   3: 17 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 46645 (90.93%)   1: 11839 (9.00%)   2: 103 (0.07%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    [detector] absorption veto ON: 7116585 of 60000000 events thrown away (weight 0)   (e,e'pp) ambiguous under 'exactly2' (kept as (e,e'p) only): 0
+    channels: (e,e'p) 10841950   (e,e'pp) 487162 entries (487162 events)
+    possible recoils per event [accepted e + lead]   0: 10404616 (96.89%)   1: 437334 (3.11%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+    possible recoils per event [+ SRC cuts on e and lead]   0: 19695 (89.02%)   1: 2224 (10.98%)   2: 0 (0.00%)   3: 0 (0.00%)   >=4: 0 (0.00%)
+[2026-09-14 06:24:01] ======== DONE ========

@@ -1,0 +1,20 @@
+GCF (SRC)  protons  >350 MeV/c after SRC cuts: mean 1.14, P(>=2) =  13.6 %, P(>=3) =  0.6 %
+GCF (SRC)  nucleons >350 MeV/c after SRC cuts: mean 1.58, P(>=2) =  53.4 %, P(>=3) =  3.9 %
+MF         protons  >350 MeV/c after SRC cuts: mean 1.26, P(>=2) =  23.4 %, P(>=3) =  2.2 %
+MF         nucleons >350 MeV/c after SRC cuts: mean 1.76, P(>=2) =  69.3 %, P(>=3) =  5.8 %
+actual GCF pairs (true SRC partner)        <theta(pmiss,rec)> =  141.3 deg   frac > 120 deg =  81.5 %
+selected GCF pairs                         <theta(pmiss,rec)> =  140.6 deg   frac > 120 deg =  81.2 %
+all MF candidates (multi-fill)             <theta(pmiss,rec)> =  139.3 deg   frac > 120 deg =  79.5 %
+selected MF pairs                          <theta(pmiss,rec)> =  142.8 deg   frac > 120 deg =  84.7 %
+
+MF selected recoil provenance (ancestor fate, generation):
+   Inelastic        gen 1    49.0 %
+   Absorption       gen 2    43.0 %
+   PiProd           gen 1     8.0 %
+MF lead provenance:
+   Inelastic        gen 1    49.0 %
+   Absorption       gen 2    43.0 %
+   PiProd           gen 1     8.0 %
+GCF: the detected lead is the SRC *partner* (not the struck nucleon) in 1.6 % of SRC-cut events
+GCF (SRC)  (e,e'pp)/(e,e'p) at truth level = 0.1357
+MF         (e,e'pp)/(e,e'p) at truth level = 0.2340

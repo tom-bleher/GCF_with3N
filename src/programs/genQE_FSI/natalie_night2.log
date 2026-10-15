@@ -1,0 +1,677 @@
+[2026-08-31 00:15:26] ============ NIGHT 2: analysis + no-tail comparison ============
+[2026-08-31 00:15:26] analysis caps: 30000000 SRC / 60000000 MF  (peak RSS ~105 GB)
+Mem:             251          72         166           0          14         178
+
+[2026-08-31 00:15:26] ===== STAGE A: srctail medium, both conventions =====
+[2026-08-31 00:15:26] --- wright -> analysis/plots/natalie_paper/final_srctail_wright
+[2026-08-31 01:06:03]     rc=0
+  Channel           T+SCX       Full   (paper: T+SCX / Full)
+  (e,e'p)           0.509      0.632   (paper: 0.61  / 0.58)
+  (e,e'pp)          0.400      1.186   (paper: 0.83  / 0.73)
+==============================================================
+[2026-08-31 01:06:03] --- detector -> analysis/plots/natalie_paper/final_srctail_detector
+[2026-08-31 01:28:24]     rc=0
+  Channel           T+SCX       Full   (paper: T+SCX / Full)
+  (e,e'p)           0.518      0.840   (paper: 0.61  / 0.58)
+  (e,e'pp)          0.576      1.703   (paper: 0.83  / 0.73)
+==============================================================
+
+[2026-08-31 01:28:24] ===== STAGE B: generate no-tail medium samples =====
+==================================================================
+ Parallel SRC_analysis_2N generation
+   total events : 60000000  (successful)
+   workers      : 150  (each ~400000 events; first 0 get +1)
+   output       : events/natalie/fsi_hA_SRC_rho1_notail.root
+   doFSI/model  : 1 / hA  (indep=0)
+   sigmaCM / kF : 0.150 / 0.25 GeV/c
+   wf_mode/fg   : 2 / global  (vertex rho^1)
+   Ebeam        : 5.01 GeV
+   parts dir    : /home/ilayws/Ilay-Generators/src/programs/genQE_FSI/events/natalie/parts_fsi_hA_SRC_rho1_notail_1324817
+==================================================================
+  launched worker 0  pid=1324977  events=400000  -> fsi_hA_SRC_rho1_notail.part000.root
+  launched worker 1  pid=1324997  events=400000  -> fsi_hA_SRC_rho1_notail.part001.root
+  launched worker 2  pid=1325021  events=400000  -> fsi_hA_SRC_rho1_notail.part002.root
+  launched worker 3  pid=1325040  events=400000  -> fsi_hA_SRC_rho1_notail.part003.root
+  launched worker 4  pid=1325059  events=400000  -> fsi_hA_SRC_rho1_notail.part004.root
+  launched worker 5  pid=1325078  events=400000  -> fsi_hA_SRC_rho1_notail.part005.root
+  launched worker 6  pid=1325097  events=400000  -> fsi_hA_SRC_rho1_notail.part006.root
+  launched worker 7  pid=1325116  events=400000  -> fsi_hA_SRC_rho1_notail.part007.root
+  launched worker 8  pid=1325135  events=400000  -> fsi_hA_SRC_rho1_notail.part008.root
+  launched worker 9  pid=1325154  events=400000  -> fsi_hA_SRC_rho1_notail.part009.root
+  launched worker 10  pid=1325173  events=400000  -> fsi_hA_SRC_rho1_notail.part010.root
+  launched worker 11  pid=1325192  events=400000  -> fsi_hA_SRC_rho1_notail.part011.root
+  launched worker 12  pid=1325215  events=400000  -> fsi_hA_SRC_rho1_notail.part012.root
+  launched worker 13  pid=1325234  events=400000  -> fsi_hA_SRC_rho1_notail.part013.root
+  launched worker 14  pid=1325254  events=400000  -> fsi_hA_SRC_rho1_notail.part014.root
+  launched worker 15  pid=1325273  events=400000  -> fsi_hA_SRC_rho1_notail.part015.root
+  launched worker 16  pid=1325292  events=400000  -> fsi_hA_SRC_rho1_notail.part016.root
+  launched worker 17  pid=1325311  events=400000  -> fsi_hA_SRC_rho1_notail.part017.root
+  launched worker 18  pid=1325330  events=400000  -> fsi_hA_SRC_rho1_notail.part018.root
+  launched worker 19  pid=1325349  events=400000  -> fsi_hA_SRC_rho1_notail.part019.root
+  launched worker 20  pid=1325368  events=400000  -> fsi_hA_SRC_rho1_notail.part020.root
+  launched worker 21  pid=1325387  events=400000  -> fsi_hA_SRC_rho1_notail.part021.root
+  launched worker 22  pid=1325410  events=400000  -> fsi_hA_SRC_rho1_notail.part022.root
+  launched worker 23  pid=1325429  events=400000  -> fsi_hA_SRC_rho1_notail.part023.root
+  launched worker 24  pid=1325448  events=400000  -> fsi_hA_SRC_rho1_notail.part024.root
+  launched worker 25  pid=1325467  events=400000  -> fsi_hA_SRC_rho1_notail.part025.root
+  launched worker 26  pid=1325486  events=400000  -> fsi_hA_SRC_rho1_notail.part026.root
+  launched worker 27  pid=1325505  events=400000  -> fsi_hA_SRC_rho1_notail.part027.root
+  launched worker 28  pid=1325524  events=400000  -> fsi_hA_SRC_rho1_notail.part028.root
+  launched worker 29  pid=1325543  events=400000  -> fsi_hA_SRC_rho1_notail.part029.root
+  launched worker 30  pid=1325562  events=400000  -> fsi_hA_SRC_rho1_notail.part030.root
+  launched worker 31  pid=1325581  events=400000  -> fsi_hA_SRC_rho1_notail.part031.root
+  launched worker 32  pid=1325603  events=400000  -> fsi_hA_SRC_rho1_notail.part032.root
+  launched worker 33  pid=1325622  events=400000  -> fsi_hA_SRC_rho1_notail.part033.root
+  launched worker 34  pid=1325641  events=400000  -> fsi_hA_SRC_rho1_notail.part034.root
+  launched worker 35  pid=1325660  events=400000  -> fsi_hA_SRC_rho1_notail.part035.root
+  launched worker 36  pid=1325679  events=400000  -> fsi_hA_SRC_rho1_notail.part036.root
+  launched worker 37  pid=1325698  events=400000  -> fsi_hA_SRC_rho1_notail.part037.root
+  launched worker 38  pid=1325717  events=400000  -> fsi_hA_SRC_rho1_notail.part038.root
+  launched worker 39  pid=1325736  events=400000  -> fsi_hA_SRC_rho1_notail.part039.root
+  launched worker 40  pid=1325755  events=400000  -> fsi_hA_SRC_rho1_notail.part040.root
+  launched worker 41  pid=1325774  events=400000  -> fsi_hA_SRC_rho1_notail.part041.root
+  launched worker 42  pid=1325797  events=400000  -> fsi_hA_SRC_rho1_notail.part042.root
+  launched worker 43  pid=1325816  events=400000  -> fsi_hA_SRC_rho1_notail.part043.root
+  launched worker 44  pid=1325835  events=400000  -> fsi_hA_SRC_rho1_notail.part044.root
+  launched worker 45  pid=1325854  events=400000  -> fsi_hA_SRC_rho1_notail.part045.root
+  launched worker 46  pid=1325873  events=400000  -> fsi_hA_SRC_rho1_notail.part046.root
+  launched worker 47  pid=1325892  events=400000  -> fsi_hA_SRC_rho1_notail.part047.root
+  launched worker 48  pid=1325911  events=400000  -> fsi_hA_SRC_rho1_notail.part048.root
+  launched worker 49  pid=1325930  events=400000  -> fsi_hA_SRC_rho1_notail.part049.root
+  launched worker 50  pid=1325949  events=400000  -> fsi_hA_SRC_rho1_notail.part050.root
+  launched worker 51  pid=1325968  events=400000  -> fsi_hA_SRC_rho1_notail.part051.root
+  launched worker 52  pid=1325991  events=400000  -> fsi_hA_SRC_rho1_notail.part052.root
+  launched worker 53  pid=1326010  events=400000  -> fsi_hA_SRC_rho1_notail.part053.root
+  launched worker 54  pid=1326029  events=400000  -> fsi_hA_SRC_rho1_notail.part054.root
+  launched worker 55  pid=1326048  events=400000  -> fsi_hA_SRC_rho1_notail.part055.root
+  launched worker 56  pid=1326067  events=400000  -> fsi_hA_SRC_rho1_notail.part056.root
+  launched worker 57  pid=1326086  events=400000  -> fsi_hA_SRC_rho1_notail.part057.root
+  launched worker 58  pid=1326105  events=400000  -> fsi_hA_SRC_rho1_notail.part058.root
+  launched worker 59  pid=1326124  events=400000  -> fsi_hA_SRC_rho1_notail.part059.root
+  launched worker 60  pid=1326143  events=400000  -> fsi_hA_SRC_rho1_notail.part060.root
+  launched worker 61  pid=1326162  events=400000  -> fsi_hA_SRC_rho1_notail.part061.root
+  launched worker 62  pid=1326184  events=400000  -> fsi_hA_SRC_rho1_notail.part062.root
+  launched worker 63  pid=1326203  events=400000  -> fsi_hA_SRC_rho1_notail.part063.root
+  launched worker 64  pid=1326222  events=400000  -> fsi_hA_SRC_rho1_notail.part064.root
+  launched worker 65  pid=1326241  events=400000  -> fsi_hA_SRC_rho1_notail.part065.root
+  launched worker 66  pid=1326260  events=400000  -> fsi_hA_SRC_rho1_notail.part066.root
+  launched worker 67  pid=1326279  events=400000  -> fsi_hA_SRC_rho1_notail.part067.root
+  launched worker 68  pid=1326298  events=400000  -> fsi_hA_SRC_rho1_notail.part068.root
+  launched worker 69  pid=1326317  events=400000  -> fsi_hA_SRC_rho1_notail.part069.root
+  launched worker 70  pid=1326337  events=400000  -> fsi_hA_SRC_rho1_notail.part070.root
+  launched worker 71  pid=1326356  events=400000  -> fsi_hA_SRC_rho1_notail.part071.root
+  launched worker 72  pid=1326380  events=400000  -> fsi_hA_SRC_rho1_notail.part072.root
+  launched worker 73  pid=1326400  events=400000  -> fsi_hA_SRC_rho1_notail.part073.root
+  launched worker 74  pid=1326419  events=400000  -> fsi_hA_SRC_rho1_notail.part074.root
+  launched worker 75  pid=1326438  events=400000  -> fsi_hA_SRC_rho1_notail.part075.root
+  launched worker 76  pid=1326457  events=400000  -> fsi_hA_SRC_rho1_notail.part076.root
+  launched worker 77  pid=1326476  events=400000  -> fsi_hA_SRC_rho1_notail.part077.root
+  launched worker 78  pid=1326495  events=400000  -> fsi_hA_SRC_rho1_notail.part078.root
+  launched worker 79  pid=1326514  events=400000  -> fsi_hA_SRC_rho1_notail.part079.root
+  launched worker 80  pid=1326533  events=400000  -> fsi_hA_SRC_rho1_notail.part080.root
+  launched worker 81  pid=1326552  events=400000  -> fsi_hA_SRC_rho1_notail.part081.root
+  launched worker 82  pid=1326576  events=400000  -> fsi_hA_SRC_rho1_notail.part082.root
+  launched worker 83  pid=1326595  events=400000  -> fsi_hA_SRC_rho1_notail.part083.root
+  launched worker 84  pid=1326614  events=400000  -> fsi_hA_SRC_rho1_notail.part084.root
+  launched worker 85  pid=1326633  events=400000  -> fsi_hA_SRC_rho1_notail.part085.root
+  launched worker 86  pid=1326652  events=400000  -> fsi_hA_SRC_rho1_notail.part086.root
+  launched worker 87  pid=1326671  events=400000  -> fsi_hA_SRC_rho1_notail.part087.root
+  launched worker 88  pid=1326690  events=400000  -> fsi_hA_SRC_rho1_notail.part088.root
+  launched worker 89  pid=1326709  events=400000  -> fsi_hA_SRC_rho1_notail.part089.root
+  launched worker 90  pid=1326728  events=400000  -> fsi_hA_SRC_rho1_notail.part090.root
+  launched worker 91  pid=1326747  events=400000  -> fsi_hA_SRC_rho1_notail.part091.root
+  launched worker 92  pid=1326769  events=400000  -> fsi_hA_SRC_rho1_notail.part092.root
+  launched worker 93  pid=1326788  events=400000  -> fsi_hA_SRC_rho1_notail.part093.root
+  launched worker 94  pid=1326807  events=400000  -> fsi_hA_SRC_rho1_notail.part094.root
+  launched worker 95  pid=1326826  events=400000  -> fsi_hA_SRC_rho1_notail.part095.root
+  launched worker 96  pid=1326845  events=400000  -> fsi_hA_SRC_rho1_notail.part096.root
+  launched worker 97  pid=1326864  events=400000  -> fsi_hA_SRC_rho1_notail.part097.root
+  launched worker 98  pid=1326883  events=400000  -> fsi_hA_SRC_rho1_notail.part098.root
+  launched worker 99  pid=1326902  events=400000  -> fsi_hA_SRC_rho1_notail.part099.root
+  launched worker 100  pid=1326921  events=400000  -> fsi_hA_SRC_rho1_notail.part100.root
+  launched worker 101  pid=1326940  events=400000  -> fsi_hA_SRC_rho1_notail.part101.root
+  launched worker 102  pid=1326963  events=400000  -> fsi_hA_SRC_rho1_notail.part102.root
+  launched worker 103  pid=1326982  events=400000  -> fsi_hA_SRC_rho1_notail.part103.root
+  launched worker 104  pid=1327001  events=400000  -> fsi_hA_SRC_rho1_notail.part104.root
+  launched worker 105  pid=1327020  events=400000  -> fsi_hA_SRC_rho1_notail.part105.root
+  launched worker 106  pid=1327039  events=400000  -> fsi_hA_SRC_rho1_notail.part106.root
+  launched worker 107  pid=1327058  events=400000  -> fsi_hA_SRC_rho1_notail.part107.root
+  launched worker 108  pid=1327077  events=400000  -> fsi_hA_SRC_rho1_notail.part108.root
+  launched worker 109  pid=1327096  events=400000  -> fsi_hA_SRC_rho1_notail.part109.root
+  launched worker 110  pid=1327115  events=400000  -> fsi_hA_SRC_rho1_notail.part110.root
+  launched worker 111  pid=1327134  events=400000  -> fsi_hA_SRC_rho1_notail.part111.root
+  launched worker 112  pid=1327157  events=400000  -> fsi_hA_SRC_rho1_notail.part112.root
+  launched worker 113  pid=1327176  events=400000  -> fsi_hA_SRC_rho1_notail.part113.root
+  launched worker 114  pid=1327195  events=400000  -> fsi_hA_SRC_rho1_notail.part114.root
+  launched worker 115  pid=1327214  events=400000  -> fsi_hA_SRC_rho1_notail.part115.root
+  launched worker 116  pid=1327233  events=400000  -> fsi_hA_SRC_rho1_notail.part116.root
+  launched worker 117  pid=1327253  events=400000  -> fsi_hA_SRC_rho1_notail.part117.root
+  launched worker 118  pid=1327272  events=400000  -> fsi_hA_SRC_rho1_notail.part118.root
+  launched worker 119  pid=1327295  events=400000  -> fsi_hA_SRC_rho1_notail.part119.root
+  launched worker 120  pid=1327314  events=400000  -> fsi_hA_SRC_rho1_notail.part120.root
+  launched worker 121  pid=1327333  events=400000  -> fsi_hA_SRC_rho1_notail.part121.root
+  launched worker 122  pid=1327357  events=400000  -> fsi_hA_SRC_rho1_notail.part122.root
+  launched worker 123  pid=1327376  events=400000  -> fsi_hA_SRC_rho1_notail.part123.root
+  launched worker 124  pid=1327395  events=400000  -> fsi_hA_SRC_rho1_notail.part124.root
+  launched worker 125  pid=1327414  events=400000  -> fsi_hA_SRC_rho1_notail.part125.root
+  launched worker 126  pid=1327433  events=400000  -> fsi_hA_SRC_rho1_notail.part126.root
+  launched worker 127  pid=1327452  events=400000  -> fsi_hA_SRC_rho1_notail.part127.root
+  launched worker 128  pid=1327471  events=400000  -> fsi_hA_SRC_rho1_notail.part128.root
+  launched worker 129  pid=1327490  events=400000  -> fsi_hA_SRC_rho1_notail.part129.root
+  launched worker 130  pid=1327509  events=400000  -> fsi_hA_SRC_rho1_notail.part130.root
+  launched worker 131  pid=1327528  events=400000  -> fsi_hA_SRC_rho1_notail.part131.root
+  launched worker 132  pid=1327550  events=400000  -> fsi_hA_SRC_rho1_notail.part132.root
+  launched worker 133  pid=1327569  events=400000  -> fsi_hA_SRC_rho1_notail.part133.root
+  launched worker 134  pid=1327588  events=400000  -> fsi_hA_SRC_rho1_notail.part134.root
+  launched worker 135  pid=1327607  events=400000  -> fsi_hA_SRC_rho1_notail.part135.root
+  launched worker 136  pid=1327626  events=400000  -> fsi_hA_SRC_rho1_notail.part136.root
+  launched worker 137  pid=1327645  events=400000  -> fsi_hA_SRC_rho1_notail.part137.root
+  launched worker 138  pid=1327664  events=400000  -> fsi_hA_SRC_rho1_notail.part138.root
+  launched worker 139  pid=1327683  events=400000  -> fsi_hA_SRC_rho1_notail.part139.root
+  launched worker 140  pid=1327702  events=400000  -> fsi_hA_SRC_rho1_notail.part140.root
+  launched worker 141  pid=1327721  events=400000  -> fsi_hA_SRC_rho1_notail.part141.root
+  launched worker 142  pid=1327745  events=400000  -> fsi_hA_SRC_rho1_notail.part142.root
+  launched worker 143  pid=1327764  events=400000  -> fsi_hA_SRC_rho1_notail.part143.root
+  launched worker 144  pid=1327783  events=400000  -> fsi_hA_SRC_rho1_notail.part144.root
+  launched worker 145  pid=1327802  events=400000  -> fsi_hA_SRC_rho1_notail.part145.root
+  launched worker 146  pid=1327821  events=400000  -> fsi_hA_SRC_rho1_notail.part146.root
+  launched worker 147  pid=1327840  events=400000  -> fsi_hA_SRC_rho1_notail.part147.root
+  launched worker 148  pid=1327859  events=400000  -> fsi_hA_SRC_rho1_notail.part148.root
+  launched worker 149  pid=1327878  events=400000  -> fsi_hA_SRC_rho1_notail.part149.root
+Waiting for 150 workers...
+  worker 0 done ok
+  worker 1 done ok
+  worker 2 done ok
+  worker 3 done ok
+  worker 4 done ok
+  worker 5 done ok
+  worker 6 done ok
+  worker 7 done ok
+  worker 8 done ok
+  worker 9 done ok
+  worker 10 done ok
+  worker 11 done ok
+  worker 12 done ok
+  worker 13 done ok
+  worker 14 done ok
+  worker 15 done ok
+  worker 16 done ok
+  worker 17 done ok
+  worker 18 done ok
+  worker 19 done ok
+  worker 20 done ok
+  worker 21 done ok
+  worker 22 done ok
+  worker 23 done ok
+  worker 24 done ok
+  worker 25 done ok
+  worker 26 done ok
+  worker 27 done ok
+  worker 28 done ok
+  worker 29 done ok
+  worker 30 done ok
+  worker 31 done ok
+  worker 32 done ok
+  worker 33 done ok
+  worker 34 done ok
+  worker 35 done ok
+  worker 36 done ok
+  worker 37 done ok
+  worker 38 done ok
+  worker 39 done ok
+  worker 40 done ok
+  worker 41 done ok
+  worker 42 done ok
+  worker 43 done ok
+  worker 44 done ok
+  worker 45 done ok
+  worker 46 done ok
+  worker 47 done ok
+  worker 48 done ok
+  worker 49 done ok
+  worker 50 done ok
+  worker 51 done ok
+  worker 52 done ok
+  worker 53 done ok
+  worker 54 done ok
+  worker 55 done ok
+  worker 56 done ok
+  worker 57 done ok
+  worker 58 done ok
+  worker 59 done ok
+  worker 60 done ok
+  worker 61 done ok
+  worker 62 done ok
+  worker 63 done ok
+  worker 64 done ok
+  worker 65 done ok
+  worker 66 done ok
+  worker 67 done ok
+  worker 68 done ok
+  worker 69 done ok
+  worker 70 done ok
+  worker 71 done ok
+  worker 72 done ok
+  worker 73 done ok
+  worker 74 done ok
+  worker 75 done ok
+  worker 76 done ok
+  worker 77 done ok
+  worker 78 done ok
+  worker 79 done ok
+  worker 80 done ok
+  worker 81 done ok
+  worker 82 done ok
+  worker 83 done ok
+  worker 84 done ok
+  worker 85 done ok
+  worker 86 done ok
+  worker 87 done ok
+  worker 88 done ok
+  worker 89 done ok
+  worker 90 done ok
+  worker 91 done ok
+  worker 92 done ok
+  worker 93 done ok
+  worker 94 done ok
+  worker 95 done ok
+  worker 96 done ok
+  worker 97 done ok
+  worker 98 done ok
+  worker 99 done ok
+  worker 100 done ok
+  worker 101 done ok
+  worker 102 done ok
+  worker 103 done ok
+  worker 104 done ok
+  worker 105 done ok
+  worker 106 done ok
+  worker 107 done ok
+  worker 108 done ok
+  worker 109 done ok
+  worker 110 done ok
+  worker 111 done ok
+  worker 112 done ok
+  worker 113 done ok
+  worker 114 done ok
+  worker 115 done ok
+  worker 116 done ok
+  worker 117 done ok
+  worker 118 done ok
+  worker 119 done ok
+  worker 120 done ok
+  worker 121 done ok
+  worker 122 done ok
+  worker 123 done ok
+  worker 124 done ok
+  worker 125 done ok
+  worker 126 done ok
+  worker 127 done ok
+  worker 128 done ok
+  worker 129 done ok
+  worker 130 done ok
+  worker 131 done ok
+  worker 132 done ok
+  worker 133 done ok
+  worker 134 done ok
+  worker 135 done ok
+  worker 136 done ok
+  worker 137 done ok
+  worker 138 done ok
+  worker 139 done ok
+  worker 140 done ok
+  worker 141 done ok
+  worker 142 done ok
+  worker 143 done ok
+  worker 144 done ok
+  worker 145 done ok
+  worker 146 done ok
+  worker 147 done ok
+  worker 148 done ok
+  worker 149 done ok
+Merging 150 files with hadd -> events/natalie/fsi_hA_SRC_rho1_notail.root
+Merged metadata -> events/natalie/fsi_hA_SRC_rho1_notail.root.meta.txt
+merged 'events' entries: 60000000  (expected 60000000)
+Done. Output: events/natalie/fsi_hA_SRC_rho1_notail.root
+==================================================================
+ Parallel SRC_analysis_2N generation
+   total events : 60000000  (successful)
+   workers      : 150  (each ~400000 events; first 0 get +1)
+   output       : events/natalie/fsi_hA_MF_localFG_notail.root
+   doFSI/model  : 1 / hA  (indep=0)
+   sigmaCM / kF : 0.150 / 0.25 GeV/c
+   wf_mode/fg   : 4 / local  (vertex rho^1)
+   Ebeam        : 5.01 GeV
+   parts dir    : /home/ilayws/Ilay-Generators/src/programs/genQE_FSI/events/natalie/parts_fsi_hA_MF_localFG_notail_1328209
+==================================================================
+  launched worker 0  pid=1328369  events=400000  -> fsi_hA_MF_localFG_notail.part000.root
+  launched worker 1  pid=1328388  events=400000  -> fsi_hA_MF_localFG_notail.part001.root
+  launched worker 2  pid=1328407  events=400000  -> fsi_hA_MF_localFG_notail.part002.root
+  launched worker 3  pid=1328426  events=400000  -> fsi_hA_MF_localFG_notail.part003.root
+  launched worker 4  pid=1328445  events=400000  -> fsi_hA_MF_localFG_notail.part004.root
+  launched worker 5  pid=1328468  events=400000  -> fsi_hA_MF_localFG_notail.part005.root
+  launched worker 6  pid=1328487  events=400000  -> fsi_hA_MF_localFG_notail.part006.root
+  launched worker 7  pid=1328506  events=400000  -> fsi_hA_MF_localFG_notail.part007.root
+  launched worker 8  pid=1328525  events=400000  -> fsi_hA_MF_localFG_notail.part008.root
+  launched worker 9  pid=1328544  events=400000  -> fsi_hA_MF_localFG_notail.part009.root
+  launched worker 10  pid=1328564  events=400000  -> fsi_hA_MF_localFG_notail.part010.root
+  launched worker 11  pid=1328583  events=400000  -> fsi_hA_MF_localFG_notail.part011.root
+  launched worker 12  pid=1328602  events=400000  -> fsi_hA_MF_localFG_notail.part012.root
+  launched worker 13  pid=1328621  events=400000  -> fsi_hA_MF_localFG_notail.part013.root
+  launched worker 14  pid=1328640  events=400000  -> fsi_hA_MF_localFG_notail.part014.root
+  launched worker 15  pid=1328663  events=400000  -> fsi_hA_MF_localFG_notail.part015.root
+  launched worker 16  pid=1328682  events=400000  -> fsi_hA_MF_localFG_notail.part016.root
+  launched worker 17  pid=1328701  events=400000  -> fsi_hA_MF_localFG_notail.part017.root
+  launched worker 18  pid=1328720  events=400000  -> fsi_hA_MF_localFG_notail.part018.root
+  launched worker 19  pid=1328739  events=400000  -> fsi_hA_MF_localFG_notail.part019.root
+  launched worker 20  pid=1328758  events=400000  -> fsi_hA_MF_localFG_notail.part020.root
+  launched worker 21  pid=1328777  events=400000  -> fsi_hA_MF_localFG_notail.part021.root
+  launched worker 22  pid=1328796  events=400000  -> fsi_hA_MF_localFG_notail.part022.root
+  launched worker 23  pid=1328815  events=400000  -> fsi_hA_MF_localFG_notail.part023.root
+  launched worker 24  pid=1328834  events=400000  -> fsi_hA_MF_localFG_notail.part024.root
+  launched worker 25  pid=1328858  events=400000  -> fsi_hA_MF_localFG_notail.part025.root
+  launched worker 26  pid=1328877  events=400000  -> fsi_hA_MF_localFG_notail.part026.root
+  launched worker 27  pid=1328896  events=400000  -> fsi_hA_MF_localFG_notail.part027.root
+  launched worker 28  pid=1328915  events=400000  -> fsi_hA_MF_localFG_notail.part028.root
+  launched worker 29  pid=1328934  events=400000  -> fsi_hA_MF_localFG_notail.part029.root
+  launched worker 30  pid=1328953  events=400000  -> fsi_hA_MF_localFG_notail.part030.root
+  launched worker 31  pid=1328972  events=400000  -> fsi_hA_MF_localFG_notail.part031.root
+  launched worker 32  pid=1328991  events=400000  -> fsi_hA_MF_localFG_notail.part032.root
+  launched worker 33  pid=1329010  events=400000  -> fsi_hA_MF_localFG_notail.part033.root
+  launched worker 34  pid=1329029  events=400000  -> fsi_hA_MF_localFG_notail.part034.root
+  launched worker 35  pid=1329053  events=400000  -> fsi_hA_MF_localFG_notail.part035.root
+  launched worker 36  pid=1329073  events=400000  -> fsi_hA_MF_localFG_notail.part036.root
+  launched worker 37  pid=1329092  events=400000  -> fsi_hA_MF_localFG_notail.part037.root
+  launched worker 38  pid=1329111  events=400000  -> fsi_hA_MF_localFG_notail.part038.root
+  launched worker 39  pid=1329130  events=400000  -> fsi_hA_MF_localFG_notail.part039.root
+  launched worker 40  pid=1329149  events=400000  -> fsi_hA_MF_localFG_notail.part040.root
+  launched worker 41  pid=1329168  events=400000  -> fsi_hA_MF_localFG_notail.part041.root
+  launched worker 42  pid=1329187  events=400000  -> fsi_hA_MF_localFG_notail.part042.root
+  launched worker 43  pid=1329206  events=400000  -> fsi_hA_MF_localFG_notail.part043.root
+  launched worker 44  pid=1329225  events=400000  -> fsi_hA_MF_localFG_notail.part044.root
+  launched worker 45  pid=1329247  events=400000  -> fsi_hA_MF_localFG_notail.part045.root
+  launched worker 46  pid=1329266  events=400000  -> fsi_hA_MF_localFG_notail.part046.root
+  launched worker 47  pid=1329285  events=400000  -> fsi_hA_MF_localFG_notail.part047.root
+  launched worker 48  pid=1329304  events=400000  -> fsi_hA_MF_localFG_notail.part048.root
+  launched worker 49  pid=1329323  events=400000  -> fsi_hA_MF_localFG_notail.part049.root
+  launched worker 50  pid=1329342  events=400000  -> fsi_hA_MF_localFG_notail.part050.root
+  launched worker 51  pid=1329361  events=400000  -> fsi_hA_MF_localFG_notail.part051.root
+  launched worker 52  pid=1329380  events=400000  -> fsi_hA_MF_localFG_notail.part052.root
+  launched worker 53  pid=1329399  events=400000  -> fsi_hA_MF_localFG_notail.part053.root
+  launched worker 54  pid=1329418  events=400000  -> fsi_hA_MF_localFG_notail.part054.root
+  launched worker 55  pid=1329440  events=400000  -> fsi_hA_MF_localFG_notail.part055.root
+  launched worker 56  pid=1329459  events=400000  -> fsi_hA_MF_localFG_notail.part056.root
+  launched worker 57  pid=1329478  events=400000  -> fsi_hA_MF_localFG_notail.part057.root
+  launched worker 58  pid=1329497  events=400000  -> fsi_hA_MF_localFG_notail.part058.root
+  launched worker 59  pid=1329516  events=400000  -> fsi_hA_MF_localFG_notail.part059.root
+  launched worker 60  pid=1329535  events=400000  -> fsi_hA_MF_localFG_notail.part060.root
+  launched worker 61  pid=1329554  events=400000  -> fsi_hA_MF_localFG_notail.part061.root
+  launched worker 62  pid=1329573  events=400000  -> fsi_hA_MF_localFG_notail.part062.root
+  launched worker 63  pid=1329592  events=400000  -> fsi_hA_MF_localFG_notail.part063.root
+  launched worker 64  pid=1329611  events=400000  -> fsi_hA_MF_localFG_notail.part064.root
+  launched worker 65  pid=1329633  events=400000  -> fsi_hA_MF_localFG_notail.part065.root
+  launched worker 66  pid=1329652  events=400000  -> fsi_hA_MF_localFG_notail.part066.root
+  launched worker 67  pid=1329671  events=400000  -> fsi_hA_MF_localFG_notail.part067.root
+  launched worker 68  pid=1329694  events=400000  -> fsi_hA_MF_localFG_notail.part068.root
+  launched worker 69  pid=1329713  events=400000  -> fsi_hA_MF_localFG_notail.part069.root
+  launched worker 70  pid=1329732  events=400000  -> fsi_hA_MF_localFG_notail.part070.root
+  launched worker 71  pid=1329751  events=400000  -> fsi_hA_MF_localFG_notail.part071.root
+  launched worker 72  pid=1329770  events=400000  -> fsi_hA_MF_localFG_notail.part072.root
+  launched worker 73  pid=1329789  events=400000  -> fsi_hA_MF_localFG_notail.part073.root
+  launched worker 74  pid=1329808  events=400000  -> fsi_hA_MF_localFG_notail.part074.root
+  launched worker 75  pid=1329830  events=400000  -> fsi_hA_MF_localFG_notail.part075.root
+  launched worker 76  pid=1329849  events=400000  -> fsi_hA_MF_localFG_notail.part076.root
+  launched worker 77  pid=1329868  events=400000  -> fsi_hA_MF_localFG_notail.part077.root
+  launched worker 78  pid=1329887  events=400000  -> fsi_hA_MF_localFG_notail.part078.root
+  launched worker 79  pid=1329906  events=400000  -> fsi_hA_MF_localFG_notail.part079.root
+  launched worker 80  pid=1329925  events=400000  -> fsi_hA_MF_localFG_notail.part080.root
+  launched worker 81  pid=1329944  events=400000  -> fsi_hA_MF_localFG_notail.part081.root
+  launched worker 82  pid=1329965  events=400000  -> fsi_hA_MF_localFG_notail.part082.root
+  launched worker 83  pid=1329984  events=400000  -> fsi_hA_MF_localFG_notail.part083.root
+  launched worker 84  pid=1330003  events=400000  -> fsi_hA_MF_localFG_notail.part084.root
+  launched worker 85  pid=1330025  events=400000  -> fsi_hA_MF_localFG_notail.part085.root
+  launched worker 86  pid=1330044  events=400000  -> fsi_hA_MF_localFG_notail.part086.root
+  launched worker 87  pid=1330063  events=400000  -> fsi_hA_MF_localFG_notail.part087.root
+  launched worker 88  pid=1330082  events=400000  -> fsi_hA_MF_localFG_notail.part088.root
+  launched worker 89  pid=1330101  events=400000  -> fsi_hA_MF_localFG_notail.part089.root
+  launched worker 90  pid=1330120  events=400000  -> fsi_hA_MF_localFG_notail.part090.root
+  launched worker 91  pid=1330139  events=400000  -> fsi_hA_MF_localFG_notail.part091.root
+  launched worker 92  pid=1330158  events=400000  -> fsi_hA_MF_localFG_notail.part092.root
+  launched worker 93  pid=1330177  events=400000  -> fsi_hA_MF_localFG_notail.part093.root
+  launched worker 94  pid=1330196  events=400000  -> fsi_hA_MF_localFG_notail.part094.root
+  launched worker 95  pid=1330219  events=400000  -> fsi_hA_MF_localFG_notail.part095.root
+  launched worker 96  pid=1330238  events=400000  -> fsi_hA_MF_localFG_notail.part096.root
+  launched worker 97  pid=1330257  events=400000  -> fsi_hA_MF_localFG_notail.part097.root
+  launched worker 98  pid=1330276  events=400000  -> fsi_hA_MF_localFG_notail.part098.root
+  launched worker 99  pid=1330295  events=400000  -> fsi_hA_MF_localFG_notail.part099.root
+  launched worker 100  pid=1330314  events=400000  -> fsi_hA_MF_localFG_notail.part100.root
+  launched worker 101  pid=1330333  events=400000  -> fsi_hA_MF_localFG_notail.part101.root
+  launched worker 102  pid=1330352  events=400000  -> fsi_hA_MF_localFG_notail.part102.root
+  launched worker 103  pid=1330371  events=400000  -> fsi_hA_MF_localFG_notail.part103.root
+  launched worker 104  pid=1330390  events=400000  -> fsi_hA_MF_localFG_notail.part104.root
+  launched worker 105  pid=1330414  events=400000  -> fsi_hA_MF_localFG_notail.part105.root
+  launched worker 106  pid=1330433  events=400000  -> fsi_hA_MF_localFG_notail.part106.root
+  launched worker 107  pid=1330452  events=400000  -> fsi_hA_MF_localFG_notail.part107.root
+  launched worker 108  pid=1330471  events=400000  -> fsi_hA_MF_localFG_notail.part108.root
+  launched worker 109  pid=1330490  events=400000  -> fsi_hA_MF_localFG_notail.part109.root
+  launched worker 110  pid=1330509  events=400000  -> fsi_hA_MF_localFG_notail.part110.root
+  launched worker 111  pid=1330528  events=400000  -> fsi_hA_MF_localFG_notail.part111.root
+  launched worker 112  pid=1330547  events=400000  -> fsi_hA_MF_localFG_notail.part112.root
+  launched worker 113  pid=1330566  events=400000  -> fsi_hA_MF_localFG_notail.part113.root
+  launched worker 114  pid=1330585  events=400000  -> fsi_hA_MF_localFG_notail.part114.root
+  launched worker 115  pid=1330608  events=400000  -> fsi_hA_MF_localFG_notail.part115.root
+  launched worker 116  pid=1330627  events=400000  -> fsi_hA_MF_localFG_notail.part116.root
+  launched worker 117  pid=1330646  events=400000  -> fsi_hA_MF_localFG_notail.part117.root
+  launched worker 118  pid=1330665  events=400000  -> fsi_hA_MF_localFG_notail.part118.root
+  launched worker 119  pid=1330684  events=400000  -> fsi_hA_MF_localFG_notail.part119.root
+  launched worker 120  pid=1330703  events=400000  -> fsi_hA_MF_localFG_notail.part120.root
+  launched worker 121  pid=1330722  events=400000  -> fsi_hA_MF_localFG_notail.part121.root
+  launched worker 122  pid=1330741  events=400000  -> fsi_hA_MF_localFG_notail.part122.root
+  launched worker 123  pid=1330760  events=400000  -> fsi_hA_MF_localFG_notail.part123.root
+  launched worker 124  pid=1330779  events=400000  -> fsi_hA_MF_localFG_notail.part124.root
+  launched worker 125  pid=1330802  events=400000  -> fsi_hA_MF_localFG_notail.part125.root
+  launched worker 126  pid=1330821  events=400000  -> fsi_hA_MF_localFG_notail.part126.root
+  launched worker 127  pid=1330840  events=400000  -> fsi_hA_MF_localFG_notail.part127.root
+  launched worker 128  pid=1330859  events=400000  -> fsi_hA_MF_localFG_notail.part128.root
+  launched worker 129  pid=1330878  events=400000  -> fsi_hA_MF_localFG_notail.part129.root
+  launched worker 130  pid=1330897  events=400000  -> fsi_hA_MF_localFG_notail.part130.root
+  launched worker 131  pid=1330916  events=400000  -> fsi_hA_MF_localFG_notail.part131.root
+  launched worker 132  pid=1330935  events=400000  -> fsi_hA_MF_localFG_notail.part132.root
+  launched worker 133  pid=1330954  events=400000  -> fsi_hA_MF_localFG_notail.part133.root
+  launched worker 134  pid=1330975  events=400000  -> fsi_hA_MF_localFG_notail.part134.root
+  launched worker 135  pid=1330996  events=400000  -> fsi_hA_MF_localFG_notail.part135.root
+  launched worker 136  pid=1331015  events=400000  -> fsi_hA_MF_localFG_notail.part136.root
+  launched worker 137  pid=1331034  events=400000  -> fsi_hA_MF_localFG_notail.part137.root
+  launched worker 138  pid=1331054  events=400000  -> fsi_hA_MF_localFG_notail.part138.root
+  launched worker 139  pid=1331073  events=400000  -> fsi_hA_MF_localFG_notail.part139.root
+  launched worker 140  pid=1331092  events=400000  -> fsi_hA_MF_localFG_notail.part140.root
+  launched worker 141  pid=1331112  events=400000  -> fsi_hA_MF_localFG_notail.part141.root
+  launched worker 142  pid=1331131  events=400000  -> fsi_hA_MF_localFG_notail.part142.root
+  launched worker 143  pid=1331150  events=400000  -> fsi_hA_MF_localFG_notail.part143.root
+  launched worker 144  pid=1331173  events=400000  -> fsi_hA_MF_localFG_notail.part144.root
+  launched worker 145  pid=1331192  events=400000  -> fsi_hA_MF_localFG_notail.part145.root
+  launched worker 146  pid=1331211  events=400000  -> fsi_hA_MF_localFG_notail.part146.root
+  launched worker 147  pid=1331231  events=400000  -> fsi_hA_MF_localFG_notail.part147.root
+  launched worker 148  pid=1331250  events=400000  -> fsi_hA_MF_localFG_notail.part148.root
+  launched worker 149  pid=1331269  events=400000  -> fsi_hA_MF_localFG_notail.part149.root
+Waiting for 150 workers...
+  worker 0 done ok
+  worker 1 done ok
+  worker 2 done ok
+  worker 3 done ok
+  worker 4 done ok
+  worker 5 done ok
+  worker 6 done ok
+  worker 7 done ok
+  worker 8 done ok
+  worker 9 done ok
+  worker 10 done ok
+  worker 11 done ok
+  worker 12 done ok
+  worker 13 done ok
+  worker 14 done ok
+  worker 15 done ok
+  worker 16 done ok
+  worker 17 done ok
+  worker 18 done ok
+  worker 19 done ok
+  worker 20 done ok
+  worker 21 done ok
+  worker 22 done ok
+  worker 23 done ok
+  worker 24 done ok
+  worker 25 done ok
+  worker 26 done ok
+  worker 27 done ok
+  worker 28 done ok
+  worker 29 done ok
+  worker 30 done ok
+  worker 31 done ok
+  worker 32 done ok
+  worker 33 done ok
+  worker 34 done ok
+  worker 35 done ok
+  worker 36 done ok
+  worker 37 done ok
+  worker 38 done ok
+  worker 39 done ok
+  worker 40 done ok
+  worker 41 done ok
+  worker 42 done ok
+  worker 43 done ok
+  worker 44 done ok
+  worker 45 done ok
+  worker 46 done ok
+  worker 47 done ok
+  worker 48 done ok
+  worker 49 done ok
+  worker 50 done ok
+  worker 51 done ok
+  worker 52 done ok
+  worker 53 done ok
+  worker 54 done ok
+  worker 55 done ok
+  worker 56 done ok
+  worker 57 done ok
+  worker 58 done ok
+  worker 59 done ok
+  worker 60 done ok
+  worker 61 done ok
+  worker 62 done ok
+  worker 63 done ok
+  worker 64 done ok
+  worker 65 done ok
+  worker 66 done ok
+  worker 67 done ok
+  worker 68 done ok
+  worker 69 done ok
+  worker 70 done ok
+  worker 71 done ok
+  worker 72 done ok
+  worker 73 done ok
+  worker 74 done ok
+  worker 75 done ok
+  worker 76 done ok
+  worker 77 done ok
+  worker 78 done ok
+  worker 79 done ok
+  worker 80 done ok
+  worker 81 done ok
+  worker 82 done ok
+  worker 83 done ok
+  worker 84 done ok
+  worker 85 done ok
+  worker 86 done ok
+  worker 87 done ok
+  worker 88 done ok
+  worker 89 done ok
+  worker 90 done ok
+  worker 91 done ok
+  worker 92 done ok
+  worker 93 done ok
+  worker 94 done ok
+  worker 95 done ok
+  worker 96 done ok
+  worker 97 done ok
+  worker 98 done ok
+  worker 99 done ok
+  worker 100 done ok
+  worker 101 done ok
+  worker 102 done ok
+  worker 103 done ok
+  worker 104 done ok
+  worker 105 done ok
+  worker 106 done ok
+  worker 107 done ok
+  worker 108 done ok
+  worker 109 done ok
+  worker 110 done ok
+  worker 111 done ok
+  worker 112 done ok
+  worker 113 done ok
+  worker 114 done ok
+  worker 115 done ok
+  worker 116 done ok
+  worker 117 done ok
+  worker 118 done ok
+  worker 119 done ok
+  worker 120 done ok
+  worker 121 done ok
+  worker 122 done ok
+  worker 123 done ok
+  worker 124 done ok
+  worker 125 done ok
+  worker 126 done ok
+  worker 127 done ok
+  worker 128 done ok
+  worker 129 done ok
+  worker 130 done ok
+  worker 131 done ok
+  worker 132 done ok
+  worker 133 done ok
+  worker 134 done ok
+  worker 135 done ok
+  worker 136 done ok
+  worker 137 done ok
+  worker 138 done ok
+  worker 139 done ok
+  worker 140 done ok
+  worker 141 done ok
+  worker 142 done ok
+  worker 143 done ok
+  worker 144 done ok
+  worker 145 done ok
+  worker 146 done ok
+  worker 147 done ok
+  worker 148 done ok
+  worker 149 done ok
+Merging 150 files with hadd -> events/natalie/fsi_hA_MF_localFG_notail.root
+Merged metadata -> events/natalie/fsi_hA_MF_localFG_notail.root.meta.txt
+merged 'events' entries: 60000000  (expected 60000000)
+Done. Output: events/natalie/fsi_hA_MF_localFG_notail.root
+
+[2026-08-31 01:45:06] ===== STAGE C: no-tail medium, both conventions =====
+[2026-08-31 01:45:06] --- wright -> analysis/plots/natalie_paper/final_notail_wright
+[2026-08-31 02:35:45]     rc=0
+  Channel           T+SCX       Full   (paper: T+SCX / Full)
+  (e,e'p)           0.509      0.613   (paper: 0.61  / 0.58)
+  (e,e'pp)          0.400      1.138   (paper: 0.83  / 0.73)
+==============================================================
+[2026-08-31 02:35:45] --- detector -> analysis/plots/natalie_paper/final_notail_detector
+[2026-08-31 02:58:22]     rc=0
+  Channel           T+SCX       Full   (paper: T+SCX / Full)
+  (e,e'p)           0.518      0.834   (paper: 0.61  / 0.58)
+  (e,e'pp)          0.576      1.678   (paper: 0.83  / 0.73)
+==============================================================
+
+[2026-08-31 02:58:22] ===== SUMMARY =====
+configuration                         (e,e'p)   (e,e'pp)
+final_notail_detector                   0.834      1.678
+final_notail_wright                     0.613      1.138
+final_srctail_detector                  0.840      1.703
+final_srctail_wright                    0.632      1.186
+final_wright                                -          -
+PAPER (Full)                             0.58       0.73
+
+[2026-08-31 02:58:22] ============ ALL DONE ============
+/dev/nvme0n1p4 1008G  851G  106G  89% /home
