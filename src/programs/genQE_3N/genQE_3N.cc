@@ -3,6 +3,7 @@
 #include <math.h>
 #include "TFile.h"
 #include "TTree.h"
+#include "TH1D.h"
 #include "QEGenerator_3N.hh"
 #include "constants.hh"
 #include "helpers.hh"
@@ -11,6 +12,7 @@ using namespace std;
 
 int nEvents;
 TFile * outfile;
+long long totalAttempts = 0;
 bool verbose = false;
 bool useCM   = true;   // -C 0 to disable CM smearing
 gcfNucleus * myInfo;
@@ -34,6 +36,7 @@ void Usage()
        << "-Z: Target charge number (default 6)\n"
        << "-s: CM Gaussian width sigCM in GeV/c per component (default 0.15)\n"
        << "-C: Toggle CM smearing: 1=on (default), 0=off\n"
+       << "-S: Random seed (positive integer; default 0 = random, printed at start)\n"
        << "-h: Print this message and exit\n\n\n";
 }
 
@@ -50,7 +53,6 @@ bool init(int argc, char ** argv)
   // Read in the arguments
   double Ebeam = atof(argv[1]);
   double u = atoi(argv[2]);
-  outfile = new TFile(argv[3],"RECREATE");
   nEvents = atoi(argv[4]);
 
   ffModel ffMod=kelly;
@@ -59,9 +61,10 @@ bool init(int argc, char ** argv)
   int targetZ = 6;
   double sigCM_GeV = 0.15;
   bool   sigCM_set = false;
+  UInt_t seed = 0;
 
   int c;
-  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vc:A:Z:s:C:h")) != -1)
+  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vc:A:Z:s:C:S:h")) != -1)
     switch(c)
       {
 
@@ -78,7 +81,7 @@ bool init(int argc, char ** argv)
 	else
 	  {
 	    cerr << "Invalid cross section designation. Allowed values are onshell, cc1 and cc2. Aborting...\n";
-	    return -1;
+	    return false;
 	  }
 	break;
       case 'A':
@@ -89,15 +92,23 @@ bool init(int argc, char ** argv)
 	sigCM_GeV = atof(optarg); sigCM_set = true; break;
       case 'C':
 	useCM = (atoi(optarg) != 0); break;
+      case 'S':
+	seed = strtoul(optarg, nullptr, 10); break;
       case 'h':
 	Usage();
 	return false;
       default:
-	abort();
+	// getopt already printed "invalid option"
+	Usage();
+	return false;
       }
 
   // Initialize objects
-  myRand = new TRandom3(0);
+  // Seed 0 (the default) draws a fresh seed; print it either way so any run
+  // (e.g. a crashed parallel worker) can be replayed exactly with -S.
+  if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
+  cout << "Random seed: " << seed << "\n";
+  myRand = new TRandom3(seed);
   myCS = new eNCrossSection(csMeth,ffMod);
   
   // Initialize generator
@@ -106,6 +117,10 @@ bool init(int argc, char ** argv)
   if (sigCM_set) myGen->SetSigCM(sigCM_GeV);
   myGen->set_theta_k_maxmin(5,40);
   // Set up the tree
+  // Open the output only after the generator is set up: exit() from a
+  // setup error with an open TFile crashes in ROOT's teardown and buries
+  // the real error message.
+  outfile = new TFile(argv[3],"RECREATE");
   outfile->cd();
   outtree = new TTree("genTbuffer","Generator Tree");
   outtree->Branch("N1_type",&N1_type,"N1_type/I");
@@ -158,6 +173,12 @@ void fini()
 {
   outtree->SetName("genT");
   outtree->Write();
+  // Total generation attempts (including weight = 0 rejections, which are
+  // not stored in the tree), as in genQE_3N_FSI: a 1-bin histogram so hadd
+  // sums it across parallel chunks, for per-attempt weight normalization.
+  TH1D hAttempts("hAttempts", "generation attempts", 1, 0., 1.);
+  hAttempts.SetBinContent(1, (double)totalAttempts);
+  hAttempts.Write();
   outfile->Delete("genTbuffer;*");
   outfile->Close();
 }
@@ -170,6 +191,7 @@ int main(int argc, char ** argv)
 
   // Count successful (weight > 0) events. Keep generating until the target
   // number of successful events has been written to the tree.
+  const long long kMaxAttemptsWithoutSuccess = 100000000LL;
   long long attempts = 0;
   long long filled   = 0;
   while (filled < (long long)nEvents) {
@@ -179,7 +201,18 @@ int main(int argc, char ** argv)
     evnt((int)attempts);
     if (weight > 0.) filled++;
     attempts++;
+    // An impossible -t/-q/target choice has zero acceptance and would
+    // otherwise loop forever; give up once it is clear nothing gets through.
+    if (filled == 0 && attempts >= kMaxAttemptsWithoutSuccess) {
+      cerr << "No accepted events after " << attempts << " attempts: the "
+           << "requested phase space looks empty. Check the beam energy and "
+           << "-t/-q/-A/-Z settings. Aborting.\n";
+      totalAttempts = attempts;
+      fini();
+      return 2;
+    }
   }
+  totalAttempts = attempts;
   if (verbose) {
     cout << "Done: " << filled << " filled out of " << attempts
          << " attempts (efficiency " << 100.0 * filled / attempts
