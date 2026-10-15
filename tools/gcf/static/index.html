@@ -6,116 +6,166 @@
 <title>GCF pipeline</title>
 <style>
 :root {
-  --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5d6677; --line: #d9dde5;
-  --accent: #2f6fd1; --accent-text: #ffffff; --ok: #1f8a4c; --warn: #b7791f; --bad: #c0392b;
-  --code-bg: #f0f2f5; --bar-bg: #e6e9ef;
+  --bg: #f4f5f8; --card: #ffffff; --text: #1d2330; --muted: #5d6677; --line: #d9dde5;
+  --accent: #2f6fd1; --accent-soft: #e8f0fc; --accent-text: #ffffff;
+  --ok: #1f8a4c; --warn: #b7791f; --bad: #c0392b; --bad-soft: #fdecea;
+  --code-bg: #f0f2f5; --bar-bg: #e6e9ef; --focus: #9cc0f5;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #14171c; --card: #1c2027; --text: #e3e6eb; --muted: #9aa3b2; --line: #313743;
-    --accent: #5b93ec; --accent-text: #0e1116; --ok: #46b97a; --warn: #e0a84a; --bad: #e46a5d;
-    --code-bg: #232831; --bar-bg: #2b313b;
+    --accent: #5b93ec; --accent-soft: #233149; --accent-text: #0e1116;
+    --ok: #46b97a; --warn: #e0a84a; --bad: #e46a5d; --bad-soft: #3a2422;
+    --code-bg: #232831; --bar-bg: #2b313b; --focus: #3f67a8;
   }
 }
 * { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--bg); color: var(--text);
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
-header { padding: 18px 24px 6px; }
-h1 { margin: 0; font-size: 22px; }
-h2 { margin: 0 0 12px; font-size: 16px; }
-.sub { margin: 4px 0 0; color: var(--muted); max-width: 900px; }
-main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px;
-  padding: 12px 24px 32px; align-items: start; }
-@media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+a { color: var(--accent); }
+header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; padding: 16px 24px 4px; }
+h1 { margin: 0; font-size: 21px; }
+h2 { margin: 0 0 10px; font-size: 16px; }
+h3 { margin: 14px 0 6px; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.sub { color: var(--muted); margin: 0; }
+.links { margin-left: auto; color: var(--muted); font-size: 13px; }
+main { display: grid; grid-template-columns: minmax(380px, 520px) minmax(0, 1fr); gap: 16px;
+  padding: 10px 24px 32px; align-items: start; }
+@media (max-width: 980px) { main { grid-template-columns: 1fr; } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; min-width: 0; }
+.stack { min-width: 0; }
+@media (min-width: 981px) {
+  #form-card { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+}
 .stack { display: grid; gap: 16px; }
-fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 12px 0 0; padding: 10px 12px 12px; }
+.stages { display: grid; gap: 6px; margin: 4px 0 10px; }
+.stages label { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; align-items: baseline;
+  padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; cursor: pointer; }
+.stages label:has(input:checked) { border-color: var(--accent); background: var(--accent-soft); }
+.stages small { grid-column: 2; color: var(--muted); }
+fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 10px 0 0; padding: 8px 12px 12px; }
 legend { padding: 0 6px; font-weight: 600; }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 14px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 14px; }
 .field label { display: block; font-weight: 500; margin-bottom: 3px; }
 .field .unit { color: var(--muted); font-weight: 400; }
 .field .help { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+.field.invalid input, .field.invalid select { border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad-soft); }
+.field .ferr { display: block; color: var(--bad); font-size: 12px; margin-top: 3px; }
+.field.wide { grid-column: 1 / -1; }
 input[type=number], input[type=text], select {
   width: 100%; padding: 5px 7px; border: 1px solid var(--line); border-radius: 5px;
   background: var(--card); color: var(--text); font: inherit; }
+input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--focus); }
 .pair { display: flex; gap: 6px; }
-.pair input { min-width: 0; }
-.check { display: flex; align-items: center; gap: 6px; }
-.stages { display: flex; flex-wrap: wrap; gap: 6px 18px; }
-.stages label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-button { font: inherit; padding: 6px 12px; border-radius: 5px; border: 1px solid var(--line);
+.pair input, .pair select { min-width: 0; }
+.check { display: flex; align-items: center; gap: 6px; padding-top: 22px; }
+details.adv { margin-top: 10px; }
+details.adv > summary { cursor: pointer; color: var(--muted); font-size: 13px; user-select: none; }
+details.adv > summary .n { color: var(--accent); font-weight: 600; }
+details.adv > .grid { margin-top: 8px; }
+.chan { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 18px; margin-top: 6px; }
+.chan h4 { grid-column: 1 / -1; margin: 6px 0 0; font-size: 12px; color: var(--muted); font-weight: 600; }
+.chan label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.chan label.na { color: var(--muted); cursor: default; }
+.chan label.na span { text-decoration: line-through; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
+button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);
   background: var(--card); color: var(--text); cursor: pointer; }
-button:hover { border-color: var(--accent); }
-button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button:hover:not(:disabled) { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
+button.danger:hover:not(:disabled) { border-color: var(--bad); color: var(--bad); }
 button.small { padding: 2px 8px; font-size: 12px; }
 button:disabled { opacity: .5; cursor: default; }
-pre { background: var(--code-bg); padding: 10px; border-radius: 6px; overflow: auto;
+pre { background: var(--code-bg); padding: 10px; border-radius: 6px; overflow: auto; min-width: 0; max-width: 100%;
   font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 340px; margin: 8px 0 0; }
 code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .hidden { display: none !important; }
-.error { color: var(--bad); white-space: pre-wrap; margin-top: 10px; }
-.banner { margin: 8px 24px 0; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--warn);
-  color: var(--warn); }
+.msg { margin-top: 10px; padding: 8px 10px; border-radius: 6px; font-size: 13px; white-space: pre-wrap; }
+.msg.err { background: var(--bad-soft); color: var(--bad); }
+.msg.ok { background: var(--accent-soft); }
+.banner { margin: 8px 24px 0; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--warn); color: var(--warn); }
 .muted { color: var(--muted); font-weight: 400; }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 th { font-weight: 600; color: var(--muted); font-size: 12px; }
 tr.run { cursor: pointer; }
-tr.run:hover, tr.run.selected { background: var(--code-bg); }
-.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px;
-  border: 1px solid currentColor; }
+tr.run:hover { background: var(--code-bg); }
+tr.run.selected { background: var(--accent-soft); }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; border: 1px solid currentColor; white-space: nowrap; }
 .s-done { color: var(--ok); } .s-failed, .s-stopped { color: var(--bad); }
 .s-running, .s-merging, .s-starting { color: var(--accent); } .s-cancelled, .s-unknown { color: var(--muted); }
-.bar { height: 7px; background: var(--bar-bg); border-radius: 4px; overflow: hidden; min-width: 70px; }
-.bar > div { height: 100%; background: var(--accent); }
-.barlabel { font-size: 11px; color: var(--muted); }
+.bar { height: 7px; background: var(--bar-bg); border-radius: 4px; overflow: hidden; min-width: 90px; }
+.bar > div { height: 100%; background: var(--accent); transition: width .5s; }
+.barlabel { font-size: 11px; color: var(--muted); white-space: nowrap; }
 .kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 6px 0; }
 .kv div:nth-child(odd) { color: var(--muted); }
-.path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
-img.plot { width: 100%; border: 1px solid var(--line); border-radius: 6px; margin-top: 10px; background: #fff; }
+.path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; overflow-wrap: anywhere; min-width: 0; }
+table { table-layout: auto; } td { min-width: 0; }
+.out { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+.out .path { grid-column: 1 / -1; }
+img.plot { width: 100%; border: 1px solid var(--line); border-radius: 6px; margin-top: 8px; background: #fff; }
 details { margin-top: 6px; }
 summary { cursor: pointer; }
-dialog { border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text);
+dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text);
   width: min(720px, 92vw); padding: 16px; }
 dialog::backdrop { background: rgba(0,0,0,.35); }
 .filelist { max-height: 50vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; margin-top: 8px; }
 .filelist div { padding: 4px 10px; cursor: pointer; display: flex; justify-content: space-between; }
 .filelist div:hover { background: var(--code-bg); }
+.toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg);
+  padding: 8px 14px; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: .92; }
 </style>
 </head>
 <body>
 <header>
   <h1>GCF pipeline</h1>
-  <p class="sub">Generate Generalized Contact Formalism quasi-elastic events in PWIA, and/or add
-    final-state interactions with the GENIE intranuclear cascade. Every run is saved with its
-    full config, so it can be repeated from a terminal with <code>gcf run config.toml</code>.
-    Format and options: <code>docs/PIPELINE.md</code>.</p>
+  <p class="sub">Generate GCF quasi-elastic events (PWIA), add GENIE final-state interactions, or both.
+    Every run keeps its config, so it can be repeated with <code>gcf run config.toml</code>.</p>
+  <span class="links"><a id="docs-link" href="#" target="_blank" rel="noopener">Documentation</a></span>
 </header>
 <div id="banner" class="banner hidden"></div>
 <main>
-  <section class="card">
+  <section class="card" id="form-card">
     <h2>New run</h2>
-    <div class="stages" role="radiogroup" aria-label="Stages to run">
-      <label><input type="radio" name="stages" value="generate,fsi" checked> Generate + FSI</label>
-      <label><input type="radio" name="stages" value="generate"> Generate only (PWIA)</label>
-      <label><input type="radio" name="stages" value="fsi"> FSI on an existing event file</label>
+    <div class="stages" role="radiogroup" aria-label="What to run">
+      <label><input type="radio" name="stages" value="generate,fsi" checked> Generate + FSI
+        <small>PWIA events, then the GENIE cascade; two output files</small></label>
+      <label><input type="radio" name="stages" value="generate"> Generate only
+        <small>PWIA events without final-state interactions</small></label>
+      <label><input type="radio" name="stages" value="fsi"> FSI on an existing file
+        <small>any event file in the GCF format, also from other generators</small></label>
     </div>
-    <fieldset><legend>Run</legend><div class="grid" id="grid-run"></div></fieldset>
-    <fieldset id="fs-generate"><legend>Generator (PWIA)</legend><div class="grid" id="grid-generate"></div></fieldset>
-    <fieldset id="fs-fsi"><legend>FSI (GENIE intranuclear cascade)</legend><div class="grid" id="grid-fsi"></div></fieldset>
+
+    <fieldset><legend>Run</legend>
+      <div class="grid" id="grid-run"></div>
+      <details class="adv"><summary>Advanced <span class="n" id="adv-run"></span></summary><div class="grid" id="adv-grid-run"></div></details>
+    </fieldset>
+    <fieldset id="fs-generate"><legend>Generator (PWIA)</legend>
+      <div class="grid" id="grid-generate"></div>
+      <details class="adv"><summary>Advanced <span class="n" id="adv-generate"></span></summary><div class="grid" id="adv-grid-generate"></div></details>
+    </fieldset>
+    <fieldset id="fs-fsi"><legend>FSI (GENIE intranuclear cascade)</legend>
+      <div class="grid" id="grid-fsi"></div>
+      <h3>Interaction channels</h3>
+      <div class="chan" id="channels"></div>
+      <details class="adv"><summary>Advanced <span class="n" id="adv-fsi"></span></summary><div class="grid" id="adv-grid-fsi"></div></details>
+    </fieldset>
+
     <div class="actions">
-      <button type="button" id="btn-preview">Show config</button>
-      <button type="button" id="btn-download">Download config</button>
       <button type="button" class="primary" id="btn-start">Start run</button>
+      <button type="button" id="btn-check">Check &amp; show config</button>
+      <button type="button" id="btn-download">Download config</button>
+      <button type="button" id="btn-reset">Reset</button>
     </div>
-    <div id="form-error" class="error hidden"></div>
+    <div id="form-msg" class="msg hidden"></div>
     <pre id="preview" class="hidden"></pre>
   </section>
 
   <div class="stack">
     <section class="card">
-      <h2>Runs <span class="muted" id="runs-dir"></span></h2>
+      <h2>Runs <span class="muted" id="runs-dir" style="font-size:12px"></span></h2>
       <div id="runs"><p class="muted">Loading…</p></div>
     </section>
     <section class="card hidden" id="details">
@@ -132,20 +182,20 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
   <div class="filelist" id="f-list"></div>
   <div class="actions"><button type="button" id="f-close">Close</button></div>
 </dialog>
+<div class="toast" id="toast" role="status"></div>
 
 <script>
 "use strict";
 const TOKEN = new URLSearchParams(location.search).get("token") || "";
-let SCHEMA = null;
-let selected = null;          // name of the run shown in the details panel
-let detailsTimer = null;
+const STORAGE_KEY = "gcf-gui-form";
+let SCHEMA = null, CHANNELS = [], TARGETS = {};
+let selected = null, detailsTimer = null;
+let validateTimer = null, lastPlot = {}, rates = {}, autoPlotted = {};
 
 async function api(path, body) {
   const opts = { headers: { "X-GCF-Token": TOKEN } };
   if (body !== undefined) {
-    opts.method = "POST";
-    opts.headers["Content-Type"] = "application/json";
-    opts.body = JSON.stringify(body);
+    opts.method = "POST"; opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body);
   }
   const r = await fetch(path, opts);
   let data = {};
@@ -153,7 +203,6 @@ async function api(path, body) {
   if (!r.ok) throw new Error(data.error || r.statusText);
   return data;
 }
-
 function el(tag, attrs, ...children) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs || {})) {
@@ -168,11 +217,9 @@ function el(tag, attrs, ...children) {
   }
   return e;
 }
-
 function fmtBytes(n) {
   if (n < 1024) return n + " B";
-  const u = ["kB", "MB", "GB", "TB"];
-  let i = -1;
+  const u = ["kB", "MB", "GB", "TB"]; let i = -1;
   do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
   return n.toFixed(n < 10 ? 1 : 0) + " " + u[i];
 }
@@ -182,80 +229,97 @@ function fmtDuration(s) {
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
   return h ? `${h}h ${m}m` : m ? `${m}m ${sec}s` : `${sec}s`;
 }
+function fmtInt(n) { return Number(n).toLocaleString(); }
+function toast(text) {
+  const t = document.getElementById("toast"); t.textContent = text; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 1800);
+}
+function tokenUrl(path) { return path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(TOKEN); }
 
 // ---------------------------------------------------------------- form ----
-const SKIP = { run: ["output_dir", "stages"] };
-
+const SKIP = { run: ["output_dir", "stages"], fsi: ["off"] };
 function fieldId(section, key, part) { return `f-${section}-${key}${part ? "-" + part : ""}`; }
+function opt(section, key) { return SCHEMA[section].find(o => o.key === key); }
 
 function makeField(section, o) {
   const id = fieldId(section, o.key);
-  const label = el("label", { for: id }, o.label, o.unit ? el("span", { class: "unit" }, ` (${o.unit})`) : null);
-  let input;
+  const unit = o.unit ? el("span", { class: "unit" }, ` (${o.unit})`) : null;
   const ph = o.default === null ? "default" : null;
+  let input, parts;
   if (o.kind === "bool") {
     input = el("input", { type: "checkbox", id, checked: !!o.default });
-    const box = el("div", { class: "check" }, input, el("label", { for: id }, o.label));
-    return wrap(section, o, [box]);
-  } else if (o.choices) {
-    input = el("select", { id });
-    if (o.default === null) input.append(el("option", { value: "" }, "default"));
-    for (const c of o.choices) input.append(el("option", { value: String(c), selected: c === o.default }, String(c)));
+    parts = [el("div", { class: "check" }, input, el("label", { for: id }, o.label))];
   } else if (o.kind === "range" || o.kind === "target") {
     const names = o.kind === "range" ? ["min", "max"] : ["A", "Z"];
     const d = o.default || [null, null];
     const inputs = names.map((n, i) => el("input", {
       type: "number", step: o.kind === "target" ? "1" : "any", id: fieldId(section, o.key, n),
       placeholder: d[i] === null ? n : null, value: d[i] === null ? null : d[i], "aria-label": `${o.label} ${n}` }));
-    return wrap(section, o, [el("label", { for: inputs[0].id }, o.label,
-      o.unit ? el("span", { class: "unit" }, ` (${o.unit})`) : null), el("div", { class: "pair" }, inputs)]);
+    const row = el("div", { class: "pair" }, ...inputs);
+    if (o.kind === "target" && section === "generate") {
+      const sel = el("select", { id: fieldId(section, o.key, "preset"), "aria-label": "Target preset",
+        onchange: () => { const v = sel.value; if (!v) return; const [A, Z] = v.split(":"); inputs[0].value = A; inputs[1].value = Z; changed(); } });
+      row.prepend(sel);
+    }
+    parts = [el("label", { for: inputs[0].id }, o.label, unit), row];
+  } else if (o.choices) {
+    input = el("select", { id });
+    if (o.default === null) input.append(el("option", { value: "" }, "default"));
+    for (const c of o.choices) input.append(el("option", { value: String(c), selected: c === o.default }, String(c)));
+    parts = [el("label", { for: id }, o.label, unit), input];
   } else if (o.kind === "float" || o.kind === "int") {
     input = el("input", { type: "number", step: o.kind === "int" ? "1" : "any", id,
       value: o.default === null ? null : o.default, placeholder: ph });
+    parts = [el("label", { for: id }, o.label, unit), input];
   } else {
     input = el("input", { type: "text", id, value: o.default === null ? null : o.default, placeholder: ph });
+    parts = [el("label", { for: id }, o.label, unit), input];
+    if (section === "fsi" && o.key === "input")
+      parts[1] = el("div", { class: "pair" }, input, el("button", { type: "button", onclick: openFiles }, "Browse…"));
   }
-  const parts = [label, input];
-  if (section === "fsi" && o.key === "input") {
-    parts[1] = el("div", { class: "pair" }, input, el("button", { type: "button", onclick: openFiles }, "Browse…"));
-  }
-  return wrap(section, o, parts);
-}
-
-function wrap(section, o, parts) {
-  const help = o.help ? el("span", { class: "help" }, o.help) : null;
-  return el("div", { class: "field", "data-section": section, "data-key": o.key,
-    "data-models": (o.models || []).join(",") }, ...parts, help);
+  const wide = section === "fsi" && (o.key === "input" || o.key === "keep");
+  return el("div", { class: "field" + (wide ? " wide" : ""), "data-section": section, "data-key": o.key,
+    "data-models": (o.models || []).join(","), "data-advanced": o.advanced ? "1" : "" },
+    ...parts, o.help ? el("span", { class: "help" }, o.help) : null, el("span", { class: "ferr hidden" }));
 }
 
 function buildForm() {
   for (const section of ["run", "generate", "fsi"]) {
-    const grid = document.getElementById("grid-" + section);
+    const grid = document.getElementById("grid-" + section), adv = document.getElementById("adv-grid-" + section);
     for (const o of SCHEMA[section]) {
       if ((SKIP[section] || []).includes(o.key)) continue;
-      grid.append(makeField(section, o));
+      (o.advanced ? adv : grid).append(makeField(section, o));
+    }
+  }
+  const chan = document.getElementById("channels");
+  for (const kind of ["nucleon", "pion"]) {
+    chan.append(el("h4", {}, kind === "nucleon" ? "Nucleons" : "Pions"));
+    for (const c of CHANNELS.filter(c => c.name.startsWith(kind + "."))) {
+      const cb = el("input", { type: "checkbox", id: "ch-" + c.name, checked: true, "data-channel": c.name });
+      chan.append(el("label", { for: "ch-" + c.name, "data-channel": c.name }, cb, el("span", {}, c.label)));
     }
   }
   document.getElementById(fieldId("run", "name")).value = defaultName();
-  document.querySelectorAll("input[name=stages]").forEach(r => r.addEventListener("change", updateVisibility));
+  document.querySelectorAll("input[name=stages]").forEach(r => r.addEventListener("change", () => { updateVisibility(); changed(); }));
   document.getElementById(fieldId("generate", "model")).addEventListener("change", () => {
-    updateVisibility();
-    document.getElementById(fieldId("run", "name")).value = defaultName();
-  });
+    updateVisibility(); document.getElementById(fieldId("run", "name")).value = defaultName(); });
+  document.getElementById(fieldId("fsi", "model")).addEventListener("change", updateVisibility);
+  document.getElementById("form-card").addEventListener("input", changed);
+  document.getElementById("form-card").addEventListener("change", changed);
   updateVisibility();
 }
 
 function stages() { return document.querySelector("input[name=stages]:checked").value.split(","); }
 function model() { return document.getElementById(fieldId("generate", "model")).value; }
-
+function fsiModel() { return document.getElementById(fieldId("fsi", "model")).value; }
 function defaultName() {
   const d = new Date(), p = n => String(n).padStart(2, "0");
-  const m = document.getElementById(fieldId("generate", "model"));
-  return `${m ? m.value : "run"}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+  const st = stages(), m = st.includes("generate") ? model() : "fsi";
+  return `${m}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
 function updateVisibility() {
-  const st = stages(), m = model();
+  const st = stages(), m = model(), fm = fsiModel();
   document.getElementById("fs-generate").classList.toggle("hidden", !st.includes("generate"));
   document.getElementById("fs-fsi").classList.toggle("hidden", !st.includes("fsi"));
   const fsiOnly = !st.includes("generate");
@@ -265,6 +329,30 @@ function updateVisibility() {
     if (f.dataset.section === "fsi" && ["input", "target"].includes(f.dataset.key)) show = fsiOnly;
     f.classList.toggle("hidden", !show);
   });
+  const preset = document.getElementById(fieldId("generate", "target", "preset"));
+  if (preset) {
+    const cur = preset.value;
+    preset.replaceChildren(el("option", { value: "" }, "preset…"), ...(TARGETS[m] || []).map(t => el("option", { value: `${t.A}:${t.Z}` }, t.name)));
+    preset.value = cur;
+  }
+  for (const c of CHANNELS) {
+    const lab = document.querySelector(`.chan label[data-channel="${c.name}"]`), cb = lab.querySelector("input");
+    const ok = fm === "hA" ? c.hA : c.hN;
+    lab.classList.toggle("na", !ok); cb.disabled = !ok;
+    lab.title = ok ? "" : `not a separate fate in the ${fm} cascade`;
+  }
+  updateAdvancedCounts();
+}
+
+function updateAdvancedCounts() {
+  for (const section of ["run", "generate", "fsi"]) {
+    let n = 0;
+    document.querySelectorAll(`#adv-grid-${section} .field:not(.hidden)`).forEach(f => {
+      const o = opt(section, f.dataset.key);
+      if (valueOf(section, o) !== null && JSON.stringify(valueOf(section, o)) !== JSON.stringify(o.default)) n++;
+    });
+    document.getElementById("adv-" + section).textContent = n ? `(${n} changed)` : "";
+  }
 }
 
 function readNumber(id, kind, label) {
@@ -273,6 +361,24 @@ function readNumber(id, kind, label) {
   const x = Number(v);
   if (!Number.isFinite(x) || (kind === "int" && !Number.isInteger(x))) throw new Error(`${label}: not a valid ${kind}`);
   return x;
+}
+// Value of a field as it would go into the config (null = unset/default).
+function valueOf(section, o) {
+  if (o.kind === "bool") {
+    const c = document.getElementById(fieldId(section, o.key)).checked;
+    return c === !!o.default ? null : c;
+  }
+  if (o.kind === "range" || o.kind === "target") {
+    const names = o.kind === "range" ? ["min", "max"] : ["A", "Z"], kind = o.kind === "range" ? "float" : "int";
+    const vals = names.map(n => readNumber(fieldId(section, o.key, n), kind, `${o.label} ${n}`));
+    if (vals.every(x => x !== null)) return vals;
+    if (vals.some(x => x !== null)) throw new Error(`${o.label}: give both ${names.join(" and ")}`);
+    return null;
+  }
+  if (o.kind === "float" || o.kind === "int") return readNumber(fieldId(section, o.key), o.kind, o.label);
+  const s = document.getElementById(fieldId(section, o.key)).value.trim();
+  if (s === "") return null;
+  return o.choices && typeof o.choices[0] === "number" ? Number(s) : s;
 }
 
 function collect() {
@@ -285,79 +391,166 @@ function collect() {
       if ((SKIP[section] || []).includes(o.key)) continue;
       const f = document.querySelector(`.field[data-section="${section}"][data-key="${o.key}"]`);
       if (!f || f.classList.contains("hidden")) continue;
-      let v = null;
-      if (o.kind === "bool") {
-        const c = document.getElementById(fieldId(section, o.key)).checked;
-        if (c !== !!o.default) v = c;
-      } else if (o.kind === "range" || o.kind === "target") {
-        const names = o.kind === "range" ? ["min", "max"] : ["A", "Z"];
-        const kind = o.kind === "range" ? "float" : "int";
-        const vals = names.map(n => readNumber(fieldId(section, o.key, n), kind, `${o.label} ${n}`));
-        if (vals.every(x => x !== null)) v = vals;
-        else if (vals.some(x => x !== null)) throw new Error(`${o.label}: give both ${names.join(" and ")}`);
-      } else if (o.kind === "float" || o.kind === "int") {
-        v = readNumber(fieldId(section, o.key), o.kind, o.label);
-      } else {
-        const s = document.getElementById(fieldId(section, o.key)).value.trim();
-        if (s !== "") v = o.choices && typeof o.choices[0] === "number" ? Number(s) : s;
-      }
+      const v = valueOf(section, o);
       if (v !== null) cfg[section][o.key] = v;
     }
+  }
+  if (cfg.fsi) {
+    const off = [...document.querySelectorAll(".chan input:not(:disabled):not(:checked)")].map(c => c.dataset.channel);
+    if (off.length) cfg.fsi.off = off;
   }
   return cfg;
 }
 
-function showFormError(msg) {
-  const e = document.getElementById("form-error");
-  e.textContent = msg || "";
-  e.classList.toggle("hidden", !msg);
+// Fill the form from a config (a run's config.toml, or the saved form state).
+function applyConfig(cfg) {
+  const st = (cfg.run && cfg.run.stages) || ["generate", "fsi"];
+  const radio = document.querySelector(`input[name=stages][value="${st.join(",")}"]`) || document.querySelector("input[name=stages]");
+  radio.checked = true;
+  resetFields();
+  for (const section of ["run", "generate", "fsi"]) {
+    const vals = cfg[section] || {};
+    for (const o of SCHEMA[section]) {
+      if ((SKIP[section] || []).includes(o.key) || !(o.key in vals)) continue;
+      const v = vals[o.key];
+      if (o.kind === "bool") document.getElementById(fieldId(section, o.key)).checked = !!v;
+      else if (o.kind === "range" || o.kind === "target") {
+        const names = o.kind === "range" ? ["min", "max"] : ["A", "Z"];
+        names.forEach((n, i) => document.getElementById(fieldId(section, o.key, n)).value = v[i]);
+      } else document.getElementById(fieldId(section, o.key)).value = v;
+    }
+  }
+  const off = new Set((cfg.fsi && cfg.fsi.off) || []);
+  document.querySelectorAll(".chan input").forEach(c => c.checked = !off.has(c.dataset.channel));
+  updateVisibility();
+}
+function resetFields() {
+  for (const section of ["run", "generate", "fsi"]) for (const o of SCHEMA[section]) {
+    if ((SKIP[section] || []).includes(o.key)) continue;
+    if (o.kind === "bool") document.getElementById(fieldId(section, o.key)).checked = !!o.default;
+    else if (o.kind === "range" || o.kind === "target") {
+      const names = o.kind === "range" ? ["min", "max"] : ["A", "Z"], d = o.default || [null, null];
+      names.forEach((n, i) => document.getElementById(fieldId(section, o.key, n)).value = d[i] === null ? "" : d[i]);
+    } else document.getElementById(fieldId(section, o.key)).value = o.default === null ? "" : o.default;
+  }
+  document.querySelectorAll(".chan input").forEach(c => c.checked = true);
+}
+function resetForm() {
+  resetFields();
+  document.querySelector("input[name=stages][value='generate,fsi']").checked = true;
+  updateVisibility();
+  document.getElementById(fieldId("run", "name")).value = defaultName();
+  try { localStorage.removeItem(STORAGE_KEY); } catch (e) {}
+  showMsg(""); document.getElementById("preview").classList.add("hidden");
+  clearFieldErrors();
 }
 
-async function preview() {
-  showFormError("");
+// -- live validation ---------------------------------------------------------
+function changed() {
+  updateAdvancedCounts();
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(collect())); } catch (e) {}
+  clearTimeout(validateTimer);
+  validateTimer = setTimeout(validate, 350);
+}
+function clearFieldErrors() {
+  document.querySelectorAll(".field.invalid").forEach(f => { f.classList.remove("invalid"); f.querySelector(".ferr").classList.add("hidden"); });
+}
+function markField(message) {
+  // "[section] key: text" or "[section] key applies to ..."
+  const m = /^\[(\w+)\] (\w+)\b:?\s*(.*)$/.exec(message);
+  if (!m) return false;
+  const f = document.querySelector(`.field[data-section="${m[1]}"][data-key="${m[2]}"]`);
+  if (!f) return false;
+  f.classList.add("invalid");
+  const e = f.querySelector(".ferr"); e.textContent = m[3] || message; e.classList.remove("hidden");
+  const adv = f.closest("details.adv"); if (adv) adv.open = true;
+  return true;
+}
+async function validate() {
+  clearFieldErrors();
+  let cfg;
+  try { cfg = collect(); } catch (e) { showMsg(e.message, "err"); return null; }
   try {
-    const r = await api("api/preview", collect());
+    const r = await api("api/preview", cfg);
+    if (document.getElementById("form-msg").classList.contains("err")) showMsg("");
     const p = document.getElementById("preview");
-    p.textContent = r.toml;
-    p.classList.remove("hidden");
+    if (!p.classList.contains("hidden")) p.textContent = r.toml;
     return r.toml;
-  } catch (e) { showFormError(e.message); return null; }
+  } catch (e) {
+    showMsg(e.message, "err"); markField(e.message); return null;
+  }
+}
+function showMsg(text, kind) {
+  const m = document.getElementById("form-msg");
+  m.textContent = text || ""; m.className = "msg " + (kind || "") + (text ? "" : " hidden");
 }
 
+async function checkConfig() {
+  clearFieldErrors(); showMsg("Checking…");
+  let cfg;
+  try { cfg = collect(); } catch (e) { showMsg(e.message, "err"); return null; }
+  const btn = document.getElementById("btn-check"); btn.disabled = true;
+  try {
+    const r = await api("api/check", cfg);
+    const p = document.getElementById("preview"); p.textContent = r.toml; p.classList.remove("hidden");
+    if (r.ok) showMsg("Setup check passed: the generator accepted these settings.", "ok");
+    else { showMsg("Problems:\n• " + r.problems.join("\n• "), "err"); r.problems.forEach(markField); }
+    return r;
+  } catch (e) { showMsg(e.message, "err"); markField(e.message); return null; }
+  finally { btn.disabled = false; }
+}
 async function downloadConfig() {
-  const toml = await preview();
+  const toml = await validate();
   if (!toml) return;
   const name = document.getElementById(fieldId("run", "name")).value || "run";
   const a = el("a", { href: URL.createObjectURL(new Blob([toml], { type: "text/plain" })), download: name + ".toml" });
   document.body.append(a); a.click(); a.remove();
 }
-
 async function startRun() {
-  showFormError("");
-  const btn = document.getElementById("btn-start");
-  btn.disabled = true;
+  clearFieldErrors();
+  let cfg;
+  try { cfg = collect(); } catch (e) { showMsg(e.message, "err"); return; }
+  const btn = document.getElementById("btn-start"); btn.disabled = true; showMsg("Checking and starting…");
   try {
-    const r = await api("api/runs", collect());
+    const r = await api("api/runs", cfg);
+    showMsg(`Started run ${r.name}.`, "ok");
     document.getElementById("preview").classList.add("hidden");
     document.getElementById(fieldId("run", "name")).value = defaultName();
+    changed();
     await refreshRuns();
     showDetails(r.name);
-  } catch (e) { showFormError(e.message); }
+  } catch (e) { showMsg(e.message, "err"); markField(e.message); }
   finally { btn.disabled = false; }
 }
 
 // -------------------------------------------------------------- runs ----
-function progressCell(stages) {
+function stageRate(runName, stage, s) {
+  // events/s from successive polls (sliding window), plus the time left.
+  const key = runName + "/" + stage, now = Date.now() / 1000;
+  const h = (rates[key] = rates[key] || []);
+  h.push([now, s.done]);
+  while (h.length > 2 && now - h[0][0] > 20) h.shift();
+  if (h.length < 2) return null;
+  const dt = now - h[0][0], dn = s.done - h[0][1];
+  if (dt < 2 || dn <= 0) return null;
+  const rate = dn / dt;
+  return { rate, eta: (s.total - s.done) / rate };
+}
+function progressCell(stages, runName, live) {
   const box = el("div");
   for (const [name, s] of Object.entries(stages || {})) {
     const pct = s.total ? Math.min(100, 100 * s.done / s.total) : 0;
-    box.append(el("div", { class: "barlabel" }, `${name} ${pct.toFixed(0)}%`),
+    let txt = `${name} ${pct.toFixed(0)}%`;
+    if (live) {
+      const r = live && s.done < s.total ? stageRate(runName, name, s) : null;
+      txt = `${name} ${fmtInt(s.done)} / ${fmtInt(s.total)}` + (r ? ` · ${r.rate >= 100 ? fmtInt(Math.round(r.rate)) : r.rate.toFixed(1)} ev/s · ~${fmtDuration(r.eta)} left` : "");
+    }
+    box.append(el("div", { class: "barlabel" }, txt),
       el("div", { class: "bar", role: "progressbar", "aria-valuenow": pct.toFixed(0), "aria-label": name },
         el("div", { style: `width:${pct}%` })));
   }
   return box;
 }
-
 function badge(state) { return el("span", { class: `badge s-${state}` }, state); }
 
 async function refreshRuns() {
@@ -365,13 +558,13 @@ async function refreshRuns() {
   try { data = await api("api/runs"); } catch (e) { return; }
   const box = document.getElementById("runs");
   box.replaceChildren();
-  if (!data.runs.length) { box.append(el("p", { class: "muted" }, "No runs yet.")); return; }
-  const rows = data.runs.map(r => el("tr", { class: "run" + (r.name === selected ? " selected" : ""),
-      onclick: () => showDetails(r.name) },
+  if (!data.runs.length) { box.append(el("p", { class: "muted" }, "No runs yet. Fill in the form and press Start run.")); return; }
+  const rows = data.runs.map(r => el("tr", { class: "run" + (r.name === selected ? " selected" : ""), onclick: () => showDetails(r.name) },
     el("td", {}, r.name), el("td", {}, badge(r.state)), el("td", {}, progressCell(r.stages)),
-    el("td", { class: "muted" }, fmtTime(r.started))));
+    el("td", { class: "muted", style: "white-space:nowrap" }, fmtTime(r.started)),
+    el("td", { class: "muted" }, r.started ? fmtDuration((r.finished || Date.now() / 1000) - r.started) : "")));
   box.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Name"), el("th", {}, "State"),
-    el("th", {}, "Progress"), el("th", {}, "Started"))), el("tbody", {}, rows)));
+    el("th", {}, "Progress"), el("th", {}, "Started"), el("th", {}, "Time"))), el("tbody", {}, rows)));
 }
 
 function showDetails(name) {
@@ -381,79 +574,95 @@ function showDetails(name) {
   document.getElementById("d-body").replaceChildren(el("p", { class: "muted" }, "Loading…"));
   if (detailsTimer) clearInterval(detailsTimer);
   refreshDetails(true);
-  detailsTimer = setInterval(refreshDetails, 2500);
+  detailsTimer = setInterval(refreshDetails, 2000);
   refreshRuns();
+  if (window.innerWidth <= 980) document.getElementById("details").scrollIntoView({ block: "start" });
 }
 
-let lastPlot = {};
 async function refreshDetails(first) {
   if (!selected) return;
   const name = selected;
   let d;
   try { d = await api("api/runs/" + encodeURIComponent(name)); }
-  catch (e) { document.getElementById("d-body").replaceChildren(el("p", { class: "error" }, e.message)); return; }
+  catch (e) { document.getElementById("d-body").replaceChildren(el("p", { class: "msg err" }, e.message)); return; }
   if (name !== selected) return;
-  const body = el("div");
   const running = ["running", "merging", "starting"].includes(d.state);
+  const body = el("div");
   const elapsed = d.started ? ((d.finished || Date.now() / 1000) - d.started) : 0;
   body.append(el("div", { class: "kv" },
     el("div", {}, "State"), el("div", {}, badge(d.state)),
     el("div", {}, "Started"), el("div", {}, fmtTime(d.started) || "–"),
     el("div", {}, running ? "Running for" : "Took"), el("div", {}, d.started ? fmtDuration(elapsed) : "–")));
-  body.append(progressCell(d.stages));
-  if (d.error) body.append(el("pre", { class: "error" }, d.error));
+  body.append(progressCell(d.stages, name, running));
+  if (d.error) body.append(el("pre", { class: "msg err" }, d.error));
+
   const actions = el("div", { class: "actions" });
-  if (running) actions.append(el("button", { type: "button", onclick: () => cancel(name) }, "Cancel run"));
-  actions.append(el("a", { href: `api/runs/${encodeURIComponent(name)}/config.toml?token=${encodeURIComponent(TOKEN)}&download=1` },
-    el("button", { type: "button" }, "Download config")));
+  if (running) actions.append(el("button", { type: "button", class: "danger", onclick: () => cancel(name) }, "Cancel run"));
+  if (d.config_data) actions.append(el("button", { type: "button", onclick: () => useAsTemplate(d) }, "Use as template"));
+  actions.append(el("a", { href: tokenUrl(`api/runs/${encodeURIComponent(name)}/config.toml`) + "&download=1" }, el("button", { type: "button" }, "Download config")));
+  if (!running) actions.append(el("button", { type: "button", class: "danger", onclick: () => deleteRun(name) }, "Delete"));
   body.append(actions);
 
   const outs = Object.entries(d.outputs || {});
   if (outs.length) {
-    body.append(el("h2", { style: "margin-top:14px" }, "Outputs"));
+    body.append(el("h3", {}, "Outputs"));
     for (const [stage, o] of outs) {
-      const plotBtn = el("button", { type: "button", class: "small", disabled: !o.exists,
-        onclick: () => quicklook(name, stage) }, o.plot ? "Redraw plots" : "Quick-look plots");
-      body.append(el("div", { style: "margin:6px 0" },
-        el("div", {}, el("b", {}, stage === "generate" ? "PWIA events" : "With FSI"), " ",
-          el("span", { class: "muted" }, o.exists ? fmtBytes(o.size) : "(not written yet)"), " ", plotBtn),
+      const plotBtn = el("button", { type: "button", class: "small", disabled: !o.exists, onclick: () => quicklook(name, stage) }, o.plot ? "Redraw plots" : "Quick-look plots");
+      const copyBtn = el("button", { type: "button", class: "small", disabled: !o.exists, onclick: () => { navigator.clipboard.writeText(o.path).then(() => toast("Path copied")); } }, "Copy path");
+      body.append(el("div", { class: "out" },
+        el("div", {}, el("b", {}, stage === "generate" ? "PWIA events" : "With FSI"), " ", el("span", { class: "muted" }, o.exists ? fmtBytes(o.size) : "(not written yet)")),
+        el("div", {}, plotBtn, " ", copyBtn),
         el("div", { class: "path" }, o.path)));
+      if (!o.plot && o.exists && d.state === "done" && !autoPlotted[name + stage]) {
+        autoPlotted[name + stage] = true;
+        api(`api/runs/${encodeURIComponent(name)}/quicklook`, { stage }).then(() => { lastPlot[name + stage] = Date.now(); refreshDetails(); }).catch(() => {});
+      }
       if (o.plot) {
-        const file = o.path.split("/").pop().replace(/\.root$/, ".png");
-        const key = name + stage;
+        const file = o.path.split("/").pop().replace(/\.root$/, ".png"), key = name + stage;
         if (!lastPlot[key]) lastPlot[key] = Date.now();
-        body.append(el("img", { class: "plot", alt: `Control plots of the ${stage} output`,
-          src: `api/runs/${encodeURIComponent(name)}/${encodeURIComponent(file)}?token=${encodeURIComponent(TOKEN)}&t=${lastPlot[key]}` }));
+        body.append(el("details", { open: true }, el("summary", {}, `Plots: ${stage === "generate" ? "PWIA" : "with FSI"}`),
+          el("img", { class: "plot", alt: `Control plots of the ${stage} output`, src: tokenUrl(`api/runs/${encodeURIComponent(name)}/${encodeURIComponent(file)}`) + "&t=" + lastPlot[key] })));
       }
     }
   }
   if (d.config) body.append(el("details", {}, el("summary", {}, "Config"), el("pre", {}, d.config)));
   if (d.logs && d.logs.length) {
-    const logs = el("details", { open: d.state === "failed" }, el("summary", {}, `Logs (${d.logs.length})`));
-    for (const l of d.logs) logs.append(el("div", { class: "muted", style: "margin-top:8px" }, l.name), el("pre", {}, l.tail));
+    const logs = el("details", { open: running || d.state === "failed" }, el("summary", {}, `Logs (${d.logs.length})` + (running ? " · live" : "")));
+    for (const l of d.logs) logs.append(el("div", { class: "muted", style: "margin-top:8px" }, l.name), el("pre", {}, l.tail || "(empty)"));
     body.append(logs);
   }
-  // keep open <details> open across refreshes
   const old = document.getElementById("d-body");
   const wasOpen = [...old.querySelectorAll("details")].map(x => x.open);
   old.replaceChildren(...body.childNodes);
-  if (!first) old.querySelectorAll("details").forEach((x, i) => { if (wasOpen[i]) x.open = true; });
+  if (!first) old.querySelectorAll("details").forEach((x, i) => { if (wasOpen[i] !== undefined) x.open = wasOpen[i]; });
   if (!running && !first) { clearInterval(detailsTimer); detailsTimer = null; }
 }
 
+function useAsTemplate(d) {
+  const cfg = JSON.parse(JSON.stringify(d.config_data));
+  if (cfg.run) { delete cfg.run.output_dir; cfg.run.seed = 0; }
+  applyConfig(cfg);
+  document.getElementById(fieldId("run", "name")).value = defaultName();
+  changed();
+  document.getElementById("form-card").scrollIntoView({ block: "start" });
+  toast("Form filled from " + d.name);
+}
 async function cancel(name) {
   if (!confirm(`Cancel run ${name}?`)) return;
   try { await api(`api/runs/${encodeURIComponent(name)}/cancel`, {}); } catch (e) { alert(e.message); }
   refreshDetails();
 }
-
+async function deleteRun(name) {
+  if (!confirm(`Delete run ${name} and its files? This cannot be undone.`)) return;
+  try { await api(`api/runs/${encodeURIComponent(name)}/delete`, {}); } catch (e) { alert(e.message); return; }
+  selected = null; clearInterval(detailsTimer); detailsTimer = null;
+  document.getElementById("details").classList.add("hidden");
+  refreshRuns(); toast("Deleted " + name);
+}
 async function quicklook(name, stage) {
-  const body = document.getElementById("d-body");
-  body.prepend(el("p", { class: "muted", id: "ql-msg" }, "Drawing plots…"));
-  try {
-    await api(`api/runs/${encodeURIComponent(name)}/quicklook`, { stage });
-    lastPlot[name + stage] = Date.now();
-  } catch (e) { alert(e.message); }
+  document.getElementById("d-body").prepend(el("p", { class: "muted" }, "Drawing plots…"));
+  try { await api(`api/runs/${encodeURIComponent(name)}/quicklook`, { stage }); lastPlot[name + stage] = Date.now(); }
+  catch (e) { alert(e.message); }
   await refreshDetails();
 }
 
@@ -465,43 +674,43 @@ async function listDir(path) {
     document.getElementById("f-path").value = d.path;
     list.replaceChildren(
       ...d.dirs.map(n => el("div", { onclick: () => listDir(d.path + "/" + n) }, el("span", {}, "📁 " + n))),
-      ...d.files.map(f => el("div", { onclick: () => pick(d.path + "/" + f.name) },
-        el("span", {}, f.name), el("span", { class: "muted" }, fmtBytes(f.size)))));
+      ...d.files.map(f => el("div", { onclick: () => pick(d.path + "/" + f.name) }, el("span", {}, f.name), el("span", { class: "muted" }, fmtBytes(f.size)))));
     if (!d.dirs.length && !d.files.length) list.append(el("div", { class: "muted" }, "No .root files or folders here."));
     document.getElementById("f-up").onclick = () => listDir(d.parent);
-  } catch (e) { list.replaceChildren(el("div", { class: "error" }, e.message)); }
+  } catch (e) { list.replaceChildren(el("div", { class: "msg err" }, e.message)); }
 }
 function openFiles() {
   const cur = document.getElementById(fieldId("fsi", "input")).value;
-  document.getElementById("files").showModal();
-  listDir(cur);
+  document.getElementById("files").showModal(); listDir(cur ? cur.replace(/\/[^/]*$/, "") : "");
 }
 function pick(path) {
   document.getElementById(fieldId("fsi", "input")).value = path;
-  document.getElementById("files").close();
+  document.getElementById("files").close(); changed();
 }
 
 // ---------------------------------------------------------------- init ----
 async function init() {
   if (!TOKEN) {
-    document.body.replaceChildren(el("p", { style: "padding:24px" },
-      "Open the full URL printed by gcf gui (it ends in ?token=…)."));
+    document.body.replaceChildren(el("p", { style: "padding:24px" }, "Open the full URL printed by gcf gui (it ends in ?token=…)."));
     return;
   }
   let info;
   try { info = await api("api/schema"); }
-  catch (e) { document.getElementById("runs").replaceChildren(el("p", { class: "error" }, e.message)); return; }
-  SCHEMA = info.schema;
+  catch (e) { document.getElementById("runs").replaceChildren(el("p", { class: "msg err" }, e.message)); return; }
+  SCHEMA = info.schema; CHANNELS = SCHEMA._channels || []; TARGETS = SCHEMA._targets || {};
   document.getElementById("runs-dir").textContent = "in " + info.runs_dir;
+  document.getElementById("docs-link").href = tokenUrl("api/docs");
   if (!info.binaries) {
     const b = document.getElementById("banner");
     b.textContent = "The stage programs (gcf_generate, gcf_fsi) are not built yet: run ./install.sh in the repository first.";
     b.classList.remove("hidden");
   }
   buildForm();
-  document.getElementById("btn-preview").onclick = preview;
+  try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) { applyConfig(JSON.parse(saved)); document.getElementById(fieldId("run", "name")).value = defaultName(); } } catch (e) {}
+  document.getElementById("btn-check").onclick = checkConfig;
   document.getElementById("btn-download").onclick = downloadConfig;
   document.getElementById("btn-start").onclick = startRun;
+  document.getElementById("btn-reset").onclick = resetForm;
   document.getElementById("f-go").onclick = () => listDir(document.getElementById("f-path").value);
   document.getElementById("f-close").onclick = () => document.getElementById("files").close();
   refreshRuns();

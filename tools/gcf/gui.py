@@ -14,6 +14,8 @@ import json
 import mimetypes
 import os
 import re
+import shutil
+import tomllib
 import secrets
 import signal
 import subprocess
@@ -96,14 +98,52 @@ class App:
             raise FileNotFoundError(name)
         out = self.run_summary(d)
         cfg = d / "config.toml"
+        if not cfg.exists():
+            cfg = d / "submitted.toml"
         out["config"] = cfg.read_text() if cfg.exists() else None
+        out["config_data"] = None
+        if cfg.exists():
+            try:
+                out["config_data"] = tomllib.loads(out["config"])
+            except tomllib.TOMLDecodeError:
+                pass
         logs = []
         for log in sorted((d / "logs").glob("*.log")) if (d / "logs").is_dir() else []:
             lines = log.read_text(errors="replace").splitlines()
             lines = [l for l in lines if not l.startswith("Progress:")]
-            logs.append({"name": log.name, "tail": "\n".join(lines[-15:])})
+            logs.append({"name": log.name, "tail": "\n".join(lines[-40:])})
+        gcf_log = d / "gcf.log"
+        if gcf_log.exists() and gcf_log.stat().st_size:
+            logs.insert(0, {"name": "gcf.log", "tail": gcf_log.read_text(errors="replace")[-3000:]})
         out["logs"] = logs
         return out
+
+    def check(self, raw):
+        """Validate a config and run the stages' setup checks; returns the
+        resolved TOML and a list of problems."""
+        raw = dict(raw)
+        raw["run"] = dict(raw.get("run", {}), output_dir=str(self.runs_dir))
+        cfg = config.validate(raw, base_dir=self.runs_dir)
+        problems = []
+        name = cfg["run"]["name"]
+        if not NAME_RE.match(name):
+            problems.append(f"invalid run name {name!r}: letters, digits, . _ + - only")
+        elif (self.runs_dir / name).exists():
+            problems.append(f"a run named {name!r} already exists; choose another name")
+        problems += runner.check_setup(cfg)
+        return {"toml": config.dumps(cfg, comment="Run with:  gcf run <this file>"),
+                "problems": problems, "ok": not problems}
+
+    def delete_run(self, name):
+        d = self.run_dir(name)
+        if not d.is_dir():
+            raise FileNotFoundError(name)
+        st = self.run_summary(d)
+        if st["state"] in ("running", "merging", "starting"):
+            raise ValueError("the run is still running; cancel it first")
+        shutil.rmtree(d)
+        with self.lock:
+            self.children.pop(name, None)
 
     def start_run(self, raw):
         raw = dict(raw)
@@ -115,6 +155,9 @@ class App:
         run["output_dir"] = str(self.runs_dir)
         raw["run"] = run
         cfg = config.validate(raw, base_dir=self.runs_dir)   # report errors now
+        problems = runner.check_setup(cfg)
+        if problems:
+            raise ValueError("; ".join(problems))
         d.mkdir(parents=True)
         submitted = d / "submitted.toml"
         submitted.write_text(config.dumps(cfg, comment="Submitted from gcf gui"))
@@ -197,7 +240,7 @@ def make_handler(app):
 
         def send_file(self, path, download=False):
             data = Path(path).read_bytes()
-            if path.suffix in (".toml", ".log"):
+            if path.suffix in (".toml", ".log", ".md"):
                 ctype = "text/plain"
             else:
                 ctype = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
@@ -253,6 +296,8 @@ def make_handler(app):
                     return self.send_file(f, download="download" in query)
                 if parts == ["api", "files"]:
                     return self.send_json(app.list_files(query.get("path", [""])[0]))
+                if parts == ["api", "docs"]:
+                    return self.send_file(runner.REPO / "docs" / "PIPELINE.md")
                 self.send_error_json("not found", HTTPStatus.NOT_FOUND)
             except FileNotFoundError as e:
                 self.send_error_json(f"not found: {e}", HTTPStatus.NOT_FOUND)
@@ -269,6 +314,11 @@ def make_handler(app):
                 body = self.read_json()
                 if parts == ["api", "preview"]:
                     return self.send_json({"toml": app.preview(body)})
+                if parts == ["api", "check"]:
+                    return self.send_json(app.check(body))
+                if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "delete":
+                    app.delete_run(parts[2])
+                    return self.send_json({"ok": True})
                 if parts == ["api", "runs"]:
                     return self.send_json({"name": app.start_run(body)})
                 if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "cancel":
@@ -277,7 +327,8 @@ def make_handler(app):
                 if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "quicklook":
                     return self.send_json({"plot": app.quicklook(parts[2], body.get("stage", "fsi"))})
                 self.send_error_json("not found", HTTPStatus.NOT_FOUND)
-            except (config.ConfigError, runner.RunError, ValueError, RuntimeError) as e:
+            except (config.ConfigError, runner.RunError, ValueError, RuntimeError,
+                    subprocess.TimeoutExpired) as e:
                 self.send_error_json(str(e))
             except FileNotFoundError as e:
                 self.send_error_json(f"not found: {e}", HTTPStatus.NOT_FOUND)
