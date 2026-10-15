@@ -183,6 +183,7 @@ int main(int argc, char ** argv)
 
   // Count successful (weight > 0) events. Keep generating until the target
   // number of successful events has been written to the tree.
+  const long long kMaxAttemptsWithoutSuccess = 100000000LL;
   long long attempts = 0;
   long long filled   = 0;
   while (filled < (long long)nEvents) {
@@ -192,6 +193,16 @@ int main(int argc, char ** argv)
     evnt((int)attempts);
     if (weight > 0.) filled++;
     attempts++;
+    // An impossible -t/-q/target choice has zero acceptance and would
+    // otherwise loop forever; give up once it is clear nothing gets through.
+    if (filled == 0 && attempts >= kMaxAttemptsWithoutSuccess) {
+      cerr << "No accepted events after " << attempts << " attempts: the "
+           << "requested phase space looks empty. Check the beam energy and "
+           << "-t/-q/-A/-Z settings. Aborting.\n";
+      totalAttempts = attempts;
+      fini();
+      return 2;
+    }
   }
   totalAttempts = attempts;
   if (verbose) {
