@@ -373,8 +373,8 @@ def make_handler(app):
             url = urllib.parse.urlparse(self.path)
             query = urllib.parse.parse_qs(url.query)
             if not self.authorized(query):
-                body = (b"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>gcf gui</title></head>"
-                        b"<body><h1>gcf gui</h1><p>Open the full URL printed by <code>gcf gui</code>; "
+                body = (b"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>GCF_with3N</title></head>"
+                        b"<body><h1>GCF_with3N</h1><p>Open the full URL printed by <code>gcf gui</code>; "
                         b"it ends in <code>?token=...</code>.</p></body></html>")
                 self.send_response(HTTPStatus.FORBIDDEN)
                 self.send_header("Content-Type", "text/html")
@@ -407,6 +407,8 @@ def make_handler(app):
                     return self.send_file(f, download="download" in query)
                 if parts == ["api", "files"]:
                     return self.send_json(app.list_files(query.get("path", [""])[0]))
+                if parts == ["docs"]:
+                    return self.send_file(STATIC / "docs.html")
                 if parts == ["api", "docs"]:
                     return self.send_file(runner.REPO / "docs" / "PIPELINE.md")
                 self.send_error_json("not found", HTTPStatus.NOT_FOUND)

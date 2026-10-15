@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GCF pipeline</title>
+<title>GCF_with3N</title>
 <style>
 :root {
   color-scheme: light dark;
@@ -161,10 +161,9 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 </head>
 <body>
 <header>
-  <h1>GCF pipeline</h1>
-  <p class="sub">Generate quasi-elastic events from the Generalized Contact Formalism (GCF, plane-wave impulse approximation), add GENIE final-state interactions, or both.
-    Every run keeps its config, so it can be repeated with <code>gcf run config.toml</code>.</p>
-  <span class="links"><a id="docs-link" href="#" target="_blank" rel="noopener" title="docs/PIPELINE.md (plain text)">Documentation</a></span>
+  <h1>GCF_with3N</h1>
+  <p class="sub">Generate quasi-elastic events from the Generalized Contact Formalism (GCF, plane-wave impulse approximation), add GENIE final-state interactions, or both.</p>
+  <span class="links"><a id="docs-link" href="#" target="_blank" rel="noopener">Documentation</a></span>
 </header>
 <div id="banner" class="banner hidden"></div>
 <main>
@@ -656,12 +655,12 @@ async function refreshRuns() {
   let data;
   const banner = document.getElementById("banner");
   try { data = await api("api/runs"); }
-  catch (e) { banner.textContent = plain(e); banner.classList.remove("hidden"); document.title = "GCF pipeline · disconnected"; return; }
+  catch (e) { banner.textContent = plain(e); banner.classList.remove("hidden"); document.title = "GCF_with3N · disconnected"; return; }
   if (banner.textContent.startsWith("Cannot reach")) banner.classList.add("hidden");
   runsCache = data.runs;
   document.getElementById("runs-filter").classList.toggle("hidden", runsCache.length < 6);
   const running = runsCache.filter(r => ["running", "merging", "starting"].includes(r.state)).length;
-  document.title = running ? `GCF pipeline · ${running} running` : "GCF pipeline";
+  document.title = running ? `GCF_with3N · ${running} running` : "GCF_with3N";
   renderRuns();
 }
 
@@ -828,7 +827,7 @@ async function init() {
   SCHEMA = info.schema; CHANNELS = SCHEMA._channels || []; TARGETS = SCHEMA._targets || {};
   RUNS_DIR = info.runs_dir;
   document.getElementById("runs-dir").textContent = "in " + info.runs_dir;
-  document.getElementById("docs-link").href = tokenUrl("api/docs");
+  document.getElementById("docs-link").href = tokenUrl("docs");
   const jobsOpt = SCHEMA.run.find(o => o.key === "jobs"); if (jobsOpt && info.cpus) jobsOpt.help += ` This machine has ${info.cpus} CPUs.`;
   if (!info.binaries) {
     const b = document.getElementById("banner");

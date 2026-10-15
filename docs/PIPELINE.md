@@ -1,4 +1,4 @@
-# The GCF pipeline: generation and FSI as separate stages
+# GCF_with3N pipeline: generation and FSI as separate stages
 
 The generators used to do everything in one run: `genQE_3N_FSI` / `genQE_FSI`
 generate GCF quasi-elastic events and immediately transport the outgoing
