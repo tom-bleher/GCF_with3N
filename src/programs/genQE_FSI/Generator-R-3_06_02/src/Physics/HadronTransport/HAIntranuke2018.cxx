@@ -211,12 +211,28 @@ void HAIntranuke2018::SimulateHadronicFinalStateKinematics(
         << " - After " << fNumIterations << " tries, still retrying...";
       this->SimulateHadronicFinalStateKinematics(ev,p);
     } else {
+      // GCF patch: each new fate gets another 100 attempts, so a hadron whose
+      // kinematics can never be satisfied recursed until the stack overflowed.
+      // Bound the fate restarts and let the hadron escape instead.
+      static int fateRestarts = 0;  // nested, like the retries themselves
+      const int kMaxFateRestarts = 20;
+      if (fateRestarts >= kMaxFateRestarts) {
+        LOG("HAIntranuke2018", pERROR)
+          << "Giving up on " << p->Name() << " after " << kMaxFateRestarts
+          << " fate choices x 100 attempts; it escapes without further "
+          << "interaction. Last failure: " << exception;
+        p->SetStatus(kIStStableFinalState);
+        ev->AddParticle(*p);
+        return;
+      }
       LOG("HAIntranuke2018", pNOTICE)
         << "Failed attempt to generate kinematics for "
         << p->Name() << " fate: " << INukeHadroFates::AsString(fate)
         << " after " << fNumIterations-1
         << " attempts. Trying a new fate...";
+      fateRestarts++;
       this->SimulateHadronicFinalState(ev,p);
+      fateRestarts--;
     }
     }
 }
