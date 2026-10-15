@@ -18,11 +18,19 @@
 #include "TStopwatch.h"
 #include "TTree.h"
 
+#include <cstdio>
 #include <cstdlib>
+#include <fstream>
 #include <getopt.h>
+#include <map>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <libxml/parser.h>
 #include <iostream>
 #include <regex>
 #include <set>
+#include <cerrno>
+#include <cstring>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -52,6 +60,10 @@ void Usage()
     "      --vertex-power auto|1|2|3\n"
     "                           rho^n weighting of the vertex for events without\n"
     "                           one (default auto: n = 1, 2, 3 for 1, 2, >=3 nucleons)\n"
+    "      --channel NAME=F     scale the rate of an interaction channel of the cascade\n"
+    "                           by F (0 = switch it off); repeatable. --list-channels\n"
+    "                           shows the names and which model each applies to\n"
+    "      --list-channels      print the channels and exit\n"
     "      --keep REGEX         input branches to copy (default: all)\n"
     "      --overwrite          replace FSI branches already in the input\n"
     "  -n, --max-events N       process at most N events\n"
@@ -59,6 +71,108 @@ void Usage()
     "      --no-copy-objects    don't copy hAttempts etc. (all but one chunk of a split file)\n"
     "      --count              print the number of events in the input and exit\n"
     "  -h, --help               this message\n";
+}
+
+// Interaction channels of the cascade that can be scaled or switched off,
+// and the GENIE configuration parameter(s) that do it in each model. The
+// cascade multiplies the channel's fate fraction by the factor and
+// renormalizes, so 0 switches the channel off. (hN's nucleon elastic /
+// inelastic and pion inelastic factors are a local GENIE patch; the others
+// are stock GENIE parameters.) The mean-free-path entries scale the
+// interaction probability per step rather than a branching fraction.
+struct Channel {
+  const char *name;
+  const char *help;
+  vector<string> paramsHN, paramsHA;
+  bool isBool;   // INUKE-DoCompoundNucleus: F == 0 -> false, else true
+};
+const vector<Channel> kChannels = {
+  {"nucleon.elastic",    "nucleon elastic scattering",             {"FSI-Nucleon-FracElasScale"}, {}, false},
+  {"nucleon.inelastic",  "nucleon inelastic scattering",           {"FSI-Nucleon-FracInelScale"}, {"FSI-Nucleon-FracInelScale"}, false},
+  {"nucleon.cex",        "nucleon charge exchange",                {}, {"FSI-Nucleon-FracCExScale"}, false},
+  {"nucleon.absorption", "nucleon absorption",                     {}, {"FSI-Nucleon-FracAbsScale"}, false},
+  {"nucleon.piprod",     "pion production by nucleons",            {}, {"FSI-Nucleon-FracPiProdScale"}, false},
+  {"nucleon.compound",   "compound-nucleus (pre-equilibrium) fate", {"INUKE-DoCompoundNucleus"}, {"INUKE-DoCompoundNucleus"}, true},
+  {"pion.elastic",       "pion elastic scattering",                {"INUKE-NucQEFac"}, {}, false},
+  {"pion.inelastic",     "pion inelastic scattering",              {"FSI-Pion-FracInelScale"}, {"FSI-Pion-FracInelScale"}, false},
+  {"pion.cex",           "pion charge exchange",                   {"INUKE-NucCEXFac"}, {"FSI-Pion-FracCExScale"}, false},
+  {"pion.absorption",    "pion absorption",                        {"INUKE-NucAbsFac"}, {"FSI-ChargedPion-FracAbsScale", "FSI-NeutralPion-FracAbsScale"}, false},
+  {"pion.piprod",        "pion production by pions",               {}, {"FSI-Pion-FracPiProdScale"}, false},
+  {"nucleon.mfp",        "nucleon mean free path (a scale, not a switch)", {"FSI-Nucleon-MFPScale"}, {"FSI-Nucleon-MFPScale"}, false},
+  {"pion.mfp",           "pion mean free path (a scale, not a switch)",    {"FSI-ChargedPion-MFPScale", "FSI-NeutralPion-MFPScale"}, {"FSI-ChargedPion-MFPScale", "FSI-NeutralPion-MFPScale"}, false},
+};
+
+void ListChannels()
+{
+  printf("%-20s %-4s %-4s %s\n", "channel", "hN", "hA", "meaning");
+  for (const Channel &c : kChannels)
+    printf("%-20s %-4s %-4s %s\n", c.name, c.paramsHN.empty() ? "-" : "yes",
+           c.paramsHA.empty() ? "-" : "yes", c.help);
+  printf("\nUse --channel NAME=FACTOR (0 switches the channel off). A channel marked '-'\n"
+         "is not a separate fate in that cascade model.\n");
+}
+
+// Write <dir>/{HN,HA}Intranuke2018.xml: the project's override files with the
+// requested parameters set in the "Default" parameter set. Returns false
+// with a message on failure.
+bool WriteOverride(const string &dir, const string &srcDir, FSIModel model,
+                   const map<string, string> &params, bool quietCascade, string &err)
+{
+  if (mkdir(dir.c_str(), 0775) != 0 && errno != EEXIST) {
+    err = "cannot create " + dir; return false;
+  }
+  for (const char *base : {"HNIntranuke2018.xml", "HAIntranuke2018.xml"}) {
+    ifstream in(srcDir + "/" + base);
+    if (!in) { err = "cannot read " + srcDir + "/" + base; return false; }
+    const bool edit = (model == kHN2018) == (string(base) == "HNIntranuke2018.xml");
+    ofstream out(dir + "/" + base);
+    string line;
+    bool inserted = false;
+    while (getline(in, line)) {
+      if (edit) {
+        bool drop = false;
+        for (const auto &kv : params)
+          if (line.find("name=\"" + kv.first + "\"") != string::npos && line.find("<param") != string::npos)
+            drop = true;   // our value replaces it (a commented-out copy is harmless to drop too)
+        if (drop) continue;
+      }
+      out << line << "\n";
+      if (edit && !inserted && line.find("<param_set name=\"Default\">") != string::npos) {
+        out << "    <!-- set by gcf_fsi (channel option) -->\n";
+        for (const auto &kv : params) {
+          const bool isBool = kv.second == "true" || kv.second == "false";
+          out << "    <param type=\"" << (isBool ? "bool" : "double") << "\" name=\"" << kv.first
+              << "\"> " << kv.second << " </param>\n";
+        }
+        inserted = true;
+      }
+    }
+    if (edit && !inserted) { err = string("no Default parameter set in ") + base; return false; }
+    out.close();
+    xmlDocPtr doc = xmlParseFile((dir + "/" + base).c_str());
+    if (!doc) { err = string("the generated ") + base + " is not well-formed XML"; return false; }
+    xmlFreeDoc(doc);
+  }
+  // With a channel switched off, hadrons left without any allowed fate make
+  // INTRANUKE log "Couldn't select a fate" at ERROR level for every such
+  // step: expected here, and enough to flood a log. Raise the two cascade
+  // streams to FATAL in a copy of the project's Messenger.xml.
+  if (quietCascade) {
+    ifstream in(srcDir + "/Messenger.xml");
+    if (!in) { err = "cannot read " + srcDir + "/Messenger.xml"; return false; }
+    ofstream out(dir + "/Messenger.xml");
+    string line;
+    while (getline(in, line)) {
+      if (line.find("msgstream=\"HNIntranuke2018\"") != string::npos ||
+          line.find("msgstream=\"HAIntranuke2018\"") != string::npos) {
+        const size_t a = line.find('>'), b = line.find("</priority>");
+        if (a != string::npos && b != string::npos && b > a)
+          line = line.substr(0, a + 1) + " FATAL " + line.substr(b);
+      }
+      out << line << "\n";
+    }
+  }
+  return true;
 }
 
 // Final-state buffers of the current event, shared by all output columns:
@@ -122,9 +236,10 @@ int main(int argc, char **argv)
   long long maxEvents = 0, firstEvent = 0;
   int defaultA = -1, defaultZ = -1;
   bool independent = false, overwrite = false, copyObjects = true, countOnly = false;
+  vector<pair<string, double>> channels;
 
   enum { kIndependent = 1000, kTarget, kVertexPower, kKeep, kOverwrite, kFirst,
-         kNoCopy, kCount };
+         kNoCopy, kCount, kChannel, kListChannels };
   static const option longOpts[] = {
     {"input", required_argument, nullptr, 'i'},
     {"output", required_argument, nullptr, 'o'},
@@ -141,6 +256,8 @@ int main(int argc, char **argv)
     {"first-event", required_argument, nullptr, kFirst},
     {"no-copy-objects", no_argument, nullptr, kNoCopy},
     {"count", no_argument, nullptr, kCount},
+    {"channel", required_argument, nullptr, kChannel},
+    {"list-channels", no_argument, nullptr, kListChannels},
     {nullptr, 0, nullptr, 0}};
 
   int c;
@@ -166,6 +283,18 @@ int main(int argc, char **argv)
       case kFirst: firstEvent = atoll(optarg); break;
       case kNoCopy: copyObjects = false; break;
       case kCount: countOnly = true; break;
+      case kChannel: {
+        const char *eq = strchr(optarg, '=');
+        char *end = nullptr;
+        const double f = eq ? strtod(eq + 1, &end) : -1.;
+        if (!eq || end == eq + 1 || *end != '\0' || f < 0.) {
+          cerr << "Invalid --channel (expect NAME=FACTOR with FACTOR >= 0, e.g. pion.absorption=0).\n";
+          return 1;
+        }
+        channels.emplace_back(string(optarg, eq - optarg), f);
+        break;
+      }
+      case kListChannels: ListChannels(); return 0;
       default: Usage(); return 1;
     }
   }
@@ -183,12 +312,56 @@ int main(int argc, char **argv)
   else if (vertexPowerName == "1" || vertexPowerName == "2" || vertexPowerName == "3")
     runner.vertexPower = atoi(vertexPowerName.c_str());
   else fail("--vertex-power must be auto, 1, 2 or 3");
+  map<string, string> overrideParams;
+  {
+    map<string, double> byName;
+    for (const auto &c : channels) {
+      const Channel *ch = nullptr;
+      for (const Channel &k : kChannels) if (c.first == k.name) ch = &k;
+      if (!ch) { fail("unknown channel '" + c.first + "' (see --list-channels)"); continue; }
+      const vector<string> &params = (modelName == "hA") ? ch->paramsHA : ch->paramsHN;
+      if (params.empty()) {
+        fail("channel '" + c.first + "' is not a separate fate in the " + modelName +
+             " cascade (see --list-channels)");
+        continue;
+      }
+      byName[c.first] = c.second;
+      for (const string &p : params)
+        overrideParams[p] = ch->isBool ? (c.second == 0. ? "false" : "true") : to_string(c.second);
+    }
+    if (modelName == "hA") {
+      // GENIE renormalizes these four by 1/sum: all off would divide by zero.
+      double sum = 0.;
+      for (const char *n : {"nucleon.inelastic", "nucleon.cex", "nucleon.absorption", "nucleon.piprod"})
+        sum += byName.count(n) ? byName[n] : 1.;
+      if (sum == 0.) fail("hA: at least one of nucleon.inelastic/cex/absorption/piprod must stay on");
+    }
+  }
   regex keepRe;
   try { keepRe = regex(keep); } catch (const regex_error &) { fail("--keep is not a valid regex"); }
   if (!countOnly && !getenv("GENIE")) fail("GENIE is not set; source setup_env.sh (or build/gcf_env.sh) first");
   if (!ok) { cerr << "(gcf_fsi --help for usage)\n"; return 1; }
   runner.mode = independent ? fsi::kIndependent : fsi::kSharedRemnant;
   if (runner.vertexPower == 2) fsi::SetSRCVertexRhoPower(2);
+  // Channel settings go into a private GENIE override directory, first on
+  // GXMLPATH, so GENIE reads the modified HN/HAIntranuke2018.xml. The
+  // project's own override directory stays next so nothing else changes.
+  string overrideDir;
+  if (!overrideParams.empty()) {
+    overrideDir = output + ".genie_override";
+    bool anyOff = false;
+    for (const auto &c : channels) if (c.second == 0.) anyOff = true;
+    if (anyOff)
+      cout << "Note: with a channel switched off, GENIE's per-step 'Couldn't select a fate' "
+              "messages are expected and are suppressed (cascade log streams set to FATAL).\n";
+    string err;
+    if (!WriteOverride(overrideDir, GENIE_OVERRIDE_DIR, runner.model, overrideParams, anyOff, err)) {
+      cerr << "Error: " << err << "\n"; return 1;
+    }
+    const char *old = getenv("GXMLPATH");
+    string path = overrideDir + ":" + string(GENIE_OVERRIDE_DIR) + (old && *old ? ":" + string(old) : "");
+    setenv("GXMLPATH", path.c_str(), 1);
+  }
   fsi::ResolveGenieXMLPath();
 
   if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
@@ -347,12 +520,20 @@ int main(int argc, char **argv)
          << "fsi_model: " << modelName << "\n"
          << "transport: " << (independent ? "independent" : "shared") << "\n"
          << "vertex_power: " << vertexPowerName << "\n"
+         << "channels:" << (channels.empty() ? " default" : "");
+    for (const auto &c : channels) prov << " " << c.first << "=" << c.second;
+    prov << "\n"
          << "events: " << runner.done << ", cascade ran: " << runner.nRan
          << ", vertex sampled: " << runner.nVertexSampled << "\n";
     out.cd();
     TNamed("gcf_fsi", prov.str().c_str()).Write("gcf_fsi", TObject::kOverwrite);
   }
 
+  if (!overrideDir.empty()) {   // the settings are in the provenance record
+    for (const char *base : {"HNIntranuke2018.xml", "HAIntranuke2018.xml", "Messenger.xml"})
+      remove((overrideDir + "/" + base).c_str());
+    rmdir(overrideDir.c_str());
+  }
   cout << "FSI (" << modelName << ", " << (independent ? "independent" : "shared")
        << ") applied to " << runner.done << " events in " << timer.RealTime() << " s: "
        << "cascade ran for " << runner.nRan << ", skipped for "
