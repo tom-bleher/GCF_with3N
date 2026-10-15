@@ -149,7 +149,9 @@ class App:
         logs = []
         for log in sorted((d / "logs").glob("*.log")) if (d / "logs").is_dir() else []:
             lines = log.read_text(errors="replace").splitlines()
-            lines = [l for l in lines if not l.startswith("Progress:")]
+            # drop progress lines and GENIE's start-up banner / messenger chatter
+            lines = [l for l in lines if l.strip() and not l.startswith("Progress:")
+                     and not l.lstrip().startswith("*") and "NOTICE Messenger" not in l]
             logs.append({"name": log.name, "tail": "\n".join(lines[-40:])})
         gcf_log = d / "gcf.log"
         if gcf_log.exists() and gcf_log.stat().st_size:

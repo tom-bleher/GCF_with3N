@@ -24,8 +24,11 @@ html { scroll-behavior: smooth; }
 body { margin: 0; background: var(--bg); color: var(--text);
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 a { color: var(--accent); }
-header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; padding: 16px 24px 4px; }
-h1 { margin: 0; font-size: 21px; }
+header { display: flex; flex-wrap: nowrap; align-items: baseline; gap: 6px 18px; padding: 16px 24px 4px; }
+header .sub { flex: 1 1 auto; min-width: 0; }
+header .links { flex: 0 0 auto; white-space: nowrap; }
+@media (max-width: 760px) { header { flex-wrap: wrap; } }
+h1 { margin: 0; font-size: 21px; white-space: nowrap; }
 h2 { margin: 0 0 10px; font-size: 16px; }
 h3 { margin: 10px 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
 .sub { color: var(--muted); margin: 0; }
@@ -40,7 +43,15 @@ main { display: grid; grid-template-columns: minmax(420px, 600px) minmax(0, 1fr)
   .stack { display: contents; }
 }
 @media (min-width: 981px) {
-  #form-card, #details { position: sticky; top: 12px; max-height: calc(100vh - 24px); overflow-y: auto; }
+  /* Cards fit the window even before the page is scrolled (header height is
+     measured by init() into --card-top), so the sticky action bar is always
+     on screen. */
+  #form-card, #details { position: sticky; top: 12px; max-height: calc(100vh - var(--card-top, 84px)); overflow-y: auto; }
+  #form-card { padding-bottom: 0; }
+  #form-card .actionbar { position: sticky; bottom: 0; background: var(--card); margin: 14px -16px 0; padding: 8px 16px 12px;
+    border-top: 1px solid var(--line); z-index: 2; }
+  #form-card .actions { margin-top: 0; }
+  #form-card .msg { margin: 0 0 8px; }
 }
 .stages { display: flex; margin: 4px 0 2px; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; }
 .stages label { flex: 1; text-align: center; padding: 7px 8px; cursor: pointer; border-right: 1px solid var(--line); }
@@ -121,7 +132,8 @@ tr.run.selected { background: var(--accent-soft); }
 table { table-layout: auto; } td { min-width: 0; }
 .out { display: grid; grid-template-columns: 1fr auto; gap: 2px 10px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
 .out .path { grid-column: 1 / -1; }
-img.plot { width: 100%; border: 1px solid var(--line); border-radius: 6px; margin-top: 8px; background: #fff; }
+img.plot { width: 100%; border: 1px solid var(--line); border-radius: 6px; margin-top: 8px; background: #fff; cursor: zoom-in; }
+.placeholder { color: var(--muted); padding: 24px 0; text-align: center; }
 details { margin-top: 6px; }
 summary { cursor: pointer; }
 dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text);
@@ -168,14 +180,16 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
       <details class="adv"><summary>Advanced <span class="n" id="adv-fsi"></span></summary><div class="grid" id="adv-grid-fsi"></div></details>
     </fieldset>
 
-    <div class="actions">
-      <button type="button" class="primary" id="btn-start">Start run</button>
-      <button type="button" id="btn-check">Check &amp; show config</button>
-      <button type="button" id="btn-download">Download config</button>
-      <button type="button" id="btn-reset">Reset</button>
-    </div>
-    <div id="form-msg" class="msg hidden"></div>
     <pre id="preview" class="hidden"></pre>
+    <div class="actionbar">
+      <div id="form-msg" class="msg hidden"></div>
+      <div class="actions">
+        <button type="button" class="primary" id="btn-start">Start run</button>
+        <button type="button" id="btn-check">Check &amp; show config</button>
+        <button type="button" id="btn-download">Download config</button>
+        <button type="button" id="btn-reset">Reset</button>
+      </div>
+    </div>
   </section>
 
   <div class="stack">
@@ -183,9 +197,9 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
       <h2>Runs <span class="muted" id="runs-dir" style="font-size:12px"></span></h2>
       <div id="runs"><p class="muted">Loading…</p></div>
     </section>
-    <section class="card hidden" id="details">
-      <h2 id="d-title"></h2>
-      <div id="d-body"></div>
+    <section class="card" id="details">
+      <h2 id="d-title">Run details</h2>
+      <div id="d-body"><p class="placeholder">Select a run to see its progress, outputs, plots and logs.</p></div>
     </section>
   </div>
 </main>
@@ -595,7 +609,7 @@ async function refreshRuns() {
 
 function showDetails(name) {
   selected = name;
-  document.getElementById("details").classList.remove("hidden");
+  try { localStorage.setItem("gcf-gui-selected", name); } catch (e) {}
   document.getElementById("d-title").textContent = name;
   document.getElementById("d-body").replaceChildren(el("p", { class: "muted" }, "Loading…"));
   if (detailsTimer) clearInterval(detailsTimer);
@@ -610,7 +624,13 @@ async function refreshDetails(first) {
   const name = selected;
   let d;
   try { d = await api("api/runs/" + encodeURIComponent(name)); }
-  catch (e) { document.getElementById("d-body").replaceChildren(el("p", { class: "msg err" }, e.message)); return; }
+  catch (e) {
+    if (/not found/.test(e.message)) { selected = null; clearInterval(detailsTimer); detailsTimer = null;
+      document.getElementById("d-title").textContent = "Run details";
+      document.getElementById("d-body").replaceChildren(el("p", { class: "placeholder" }, "Select a run to see its progress, outputs, plots and logs."));
+    } else document.getElementById("d-body").replaceChildren(el("p", { class: "msg err" }, e.message));
+    return;
+  }
   if (name !== selected) return;
   const running = ["running", "merging", "starting"].includes(d.state);
   const body = el("div");
@@ -645,7 +665,8 @@ async function refreshDetails(first) {
         const file = o.path.split("/").pop().replace(/\.root$/, ".png"), key = name + stage;
         if (!lastPlot[key]) lastPlot[key] = Date.now();
         body.append(el("details", { open: true }, el("summary", {}, `Plots: ${stage === "generate" ? "PWIA" : "with FSI"}`),
-          el("img", { class: "plot", alt: `Control plots of the ${stage} output`, src: tokenUrl(`api/runs/${encodeURIComponent(name)}/${encodeURIComponent(file)}`) + "&t=" + lastPlot[key] })));
+          el("a", { href: tokenUrl(`api/runs/${encodeURIComponent(name)}/${encodeURIComponent(file)}`), target: "_blank", rel: "noopener", title: "Open full size" },
+            el("img", { class: "plot", alt: `Control plots of the ${stage} output`, src: tokenUrl(`api/runs/${encodeURIComponent(name)}/${encodeURIComponent(file)}`) + "&t=" + lastPlot[key] }))));
       }
     }
   }
@@ -680,7 +701,8 @@ async function deleteRun(name) {
   if (!confirm(`Delete run ${name} and its files? This cannot be undone.`)) return;
   try { await api(`api/runs/${encodeURIComponent(name)}/delete`, {}); } catch (e) { alert(e.message); return; }
   selected = null; clearInterval(detailsTimer); detailsTimer = null;
-  document.getElementById("details").classList.add("hidden");
+  document.getElementById("d-title").textContent = "Run details";
+  document.getElementById("d-body").replaceChildren(el("p", { class: "placeholder" }, "Select a run to see its progress, outputs, plots and logs."));
   refreshRuns(); toast("Deleted " + name);
 }
 async function quicklook(name, stage) {
@@ -729,6 +751,9 @@ async function init() {
     b.textContent = "The stage programs (gcf_generate, gcf_fsi) are not built yet: run ./install.sh in the repository first.";
     b.classList.remove("hidden");
   }
+  const setCardTop = () => document.documentElement.style.setProperty("--card-top",
+    (document.querySelector("header").offsetHeight + 24) + "px");
+  setCardTop(); window.addEventListener("resize", setCardTop);
   buildForm();
   try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) { applyConfig(JSON.parse(saved)); document.getElementById(fieldId("run", "name")).value = defaultName(); } } catch (e) {}
   document.getElementById("btn-check").onclick = checkConfig;
@@ -739,6 +764,7 @@ async function init() {
   document.getElementById("f-close").onclick = () => document.getElementById("files").close();
   refreshRuns();
   setInterval(refreshRuns, 3000);
+  try { const last = localStorage.getItem("gcf-gui-selected"); if (last) showDetails(last); } catch (e) {}
 }
 init();
 </script>
