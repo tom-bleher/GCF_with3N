@@ -25,6 +25,9 @@
 #                  (default: root-config on PATH, else /opt/root-install)
 #   --no-fsi       skip log4cpp and GENIE; build only the non-FSI generators
 #   --force        clean-rebuild GENIE even if valid Linux libraries exist
+#   --rebuild-log4cpp
+#                  rebuild log4cpp even if it is installed (e.g. to replace
+#                  an unoptimized build from before this script used -O2)
 #   --no-test      skip the smoke test
 #   -h, --help     show this help
 #
@@ -139,6 +142,7 @@ JOBS=""
 ROOT_OPT=""
 DO_FSI=1
 FORCE=0
+REBUILD_LOG4CPP=0
 DO_TEST=1
 
 while [[ $# -gt 0 ]]; do
@@ -152,6 +156,7 @@ while [[ $# -gt 0 ]]; do
         --root=*)   ROOT_OPT="${1#*=}"; shift ;;
         --no-fsi)   DO_FSI=0; shift ;;
         --force)    FORCE=1; shift ;;
+        --rebuild-log4cpp) REBUILD_LOG4CPP=1; shift ;;
         --no-test)  DO_TEST=0; shift ;;
         -h|--help)  usage; exit 0 ;;
         *) echo "ERROR: unknown option '$1' (see --help)" >&2; exit 2 ;;
@@ -261,11 +266,15 @@ if [[ $DO_FSI -eq 1 ]]; then
         info "libxml2  $XML2_INC, $XML2_LIBDIR"
     fi
 
-    if [[ -f "$PREFIX/lib/liblog4cpp.so" && -f "$PREFIX/include/log4cpp/Category.hh" ]]; then
-        info "log4cpp  already installed in $PREFIX"
+    if [[ $REBUILD_LOG4CPP -eq 0 && -f "$PREFIX/lib/liblog4cpp.so" && -f "$PREFIX/include/log4cpp/Category.hh" ]]; then
+        info "log4cpp  already installed in $PREFIX (--rebuild-log4cpp to rebuild)"
     else
         LOG4CPP_NEEDED=1
-        info "log4cpp  not in $PREFIX — will be built"
+        if [[ $REBUILD_LOG4CPP -eq 1 ]]; then
+            info "log4cpp  will be rebuilt in $PREFIX (--rebuild-log4cpp)"
+        else
+            info "log4cpp  not in $PREFIX — will be built"
+        fi
         command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1 \
             || problems+=("neither 'curl' nor 'wget' found — needed to download log4cpp")
         need sha256sum "needed to verify the log4cpp download"
@@ -360,7 +369,11 @@ The download is corrupt or SourceForge served an error page; delete it and retry
         [[ -n "$cfg" ]] || die "no configure script found in $tarball"
         l4src="$(dirname "$cfg")"
         info "configure, make -j$JOBS, make install"
-        run_logged "$log" "$l4src" ./configure --prefix="$PREFIX" --with-pthreads
+        # log4cpp's configure drops the usual default -O2, and GENIE calls into
+        # log4cpp for every LOG statement, so an unoptimized build costs ~1.5x
+        # in FSI generation (#22).
+        run_logged "$log" "$l4src" ./configure --prefix="$PREFIX" --with-pthreads \
+            CXXFLAGS=-O2 CFLAGS=-O2
         run_logged "$log" "$l4src" make -j"$JOBS"
         run_logged "$log" "$l4src" make install
         [[ -f "$PREFIX/lib/liblog4cpp.so" && -f "$PREFIX/include/log4cpp/Category.hh" ]] \
