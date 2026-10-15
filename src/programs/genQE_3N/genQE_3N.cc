@@ -3,6 +3,7 @@
 #include <math.h>
 #include "TFile.h"
 #include "TTree.h"
+#include "TH1D.h"
 #include "QEGenerator_3N.hh"
 #include "constants.hh"
 #include "helpers.hh"
@@ -11,6 +12,7 @@ using namespace std;
 
 int nEvents;
 TFile * outfile;
+long long totalAttempts = 0;
 bool verbose = false;
 bool useCM   = true;   // -C 0 to disable CM smearing
 gcfNucleus * myInfo;
@@ -163,6 +165,12 @@ void fini()
 {
   outtree->SetName("genT");
   outtree->Write();
+  // Total generation attempts (including weight = 0 rejections, which are
+  // not stored in the tree), as in genQE_3N_FSI: a 1-bin histogram so hadd
+  // sums it across parallel chunks, for per-attempt weight normalization.
+  TH1D hAttempts("hAttempts", "generation attempts", 1, 0., 1.);
+  hAttempts.SetBinContent(1, (double)totalAttempts);
+  hAttempts.Write();
   outfile->Delete("genTbuffer;*");
   outfile->Close();
 }
@@ -185,6 +193,7 @@ int main(int argc, char ** argv)
     if (weight > 0.) filled++;
     attempts++;
   }
+  totalAttempts = attempts;
   if (verbose) {
     cout << "Done: " << filled << " filled out of " << attempts
          << " attempts (efficiency " << 100.0 * filled / attempts
