@@ -514,8 +514,14 @@ bool QEGeneratorFSI::sample_FG_momentum(int nucleon_type, double &weight,
   // sphere of radius kmax has n_local(p) = 3 / (4 pi kmax^3) for p<=kmax.
   const double n_local = 3.0 / (4.0*M_PI*pow(kmax,3));
 
-  // Phase space (dphi=2pi, dcos=2, dp=kmax) * p^2 * n_local / (2 pi)^3.
-  weight *= (2.*M_PI) * 2. * kmax * sq(p) * n_local / pow(2.*M_PI,3);
+  // Phase space (dphi=2pi, dcos=2, dp=kmax) * p^2 * n_local, times the number
+  // of nucleons of this isospin. n_local (and the local-FG joint (r, p)
+  // density) is normalized to ONE nucleon; multiplying by N_q puts the
+  // mean-field weight on the same footing as the SRC weight, whose
+  // k^2 S(k)/(2 pi)^3 integrates to the number of pairs: both then read
+  // "number of nucleons (pairs) x density x cross section" per attempt.
+  const int N_q = (nucleon_type == pCode) ? fZ : (fA - fZ);
+  weight *= (2.*M_PI) * 2. * kmax * sq(p) * n_local * N_q;
 
   // Record the actual per-event density used in the weight.
   fLastMFRho = n_local;
