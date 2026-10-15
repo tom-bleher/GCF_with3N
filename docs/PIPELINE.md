@@ -179,9 +179,9 @@ and fm; the frame is the target rest frame with the beam along +z.
 | `target_A`, `target_Z` | int | target nucleus |
 | `beam_E` | double | beam energy |
 | `e_px e_py e_pz e_E` | double | scattered electron |
-| `nuc_pdg` | vector&lt;int&gt; | particles leaving the primary vertex: the struck nucleon and its correlated partners |
-| `nuc_role` | vector&lt;int&gt; | 0 = struck nucleon, 1, 2 = partners |
-| `nuc_px nuc_py nuc_pz nuc_E` | vector&lt;double&gt; | their 4-momenta |
+| `nuc_pdg` | `vector<int>` | particles leaving the primary vertex: the struck nucleon and its correlated partners |
+| `nuc_role` | `vector<int>` | 0 = struck nucleon, 1, 2 = partners |
+| `nuc_px nuc_py nuc_pz nuc_E` | `vector<double>` | their 4-momenta |
 | `vtx_valid` | int | 1 if `vtx_*` hold the interaction vertex |
 | `vtx_x vtx_y vtx_z` | double | vertex inside the nucleus (fm) |
 | `res_px res_py res_pz res_E` | double | residual nucleus before FSI |
