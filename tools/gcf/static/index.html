@@ -6,21 +6,25 @@
 <title>GCF pipeline</title>
 <style>
 :root {
+  color-scheme: light dark;
   --bg: #f4f5f8; --card: #ffffff; --text: #1d2330; --muted: #5d6677; --line: #d9dde5;
-  --accent: #2f6fd1; --accent-soft: #e8f0fc; --accent-text: #ffffff;
-  --ok: #1f8a4c; --warn: #b7791f; --bad: #c0392b; --bad-soft: #fdecea;
-  --code-bg: #f0f2f5; --bar-bg: #e6e9ef; --focus: #9cc0f5;
+  --accent: #2f6fd1; --accent-soft: #e8f0fc; --accent-text: #ffffff; --line: #b8bfca;
+  --ok: #19743f; --warn: #8a5a12; --bad: #b8321f; --bad-soft: #fdecea;
+  --code-bg: #f0f2f5; --bar-bg: #e6e9ef; --focus: #1d4f9e;
 }
 @media (prefers-color-scheme: dark) {
   :root {
     --bg: #14171c; --card: #1c2027; --text: #e3e6eb; --muted: #9aa3b2; --line: #313743;
-    --accent: #5b93ec; --accent-soft: #233149; --accent-text: #0e1116;
-    --ok: #46b97a; --warn: #e0a84a; --bad: #e46a5d; --bad-soft: #3a2422;
-    --code-bg: #232831; --bar-bg: #2b313b; --focus: #3f67a8;
+    --accent: #5b93ec; --accent-soft: #233149; --accent-text: #0e1116; --line: #4a5262;
+    --ok: #5ccf8c; --warn: #e6b45e; --bad: #f08a7e; --bad-soft: #3a2422;
+    --code-bg: #232831; --bar-bg: #2b313b; --focus: #9cc0f5;
   }
 }
 * { box-sizing: border-box; }
 html { scroll-behavior: smooth; }
+@media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } *, *::after { transition: none !important; } }
+:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+button:focus-visible, .btn:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
 body { margin: 0; background: var(--bg); color: var(--text);
   font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
 a { color: var(--accent); }
@@ -58,7 +62,7 @@ main { display: grid; grid-template-columns: minmax(420px, 600px) minmax(0, 1fr)
 .stages label:last-child { border-right: 0; }
 .stages label:has(input:checked) { background: var(--accent); color: var(--accent-text); font-weight: 600; }
 .stages input { position: absolute; opacity: 0; width: 0; height: 0; }
-.stages label:has(input:focus-visible) { outline: 2px solid var(--focus); outline-offset: -2px; }
+.stages label:has(input:focus-visible) { outline: 2px solid var(--text); outline-offset: -3px; }
 #stage-help { color: var(--muted); font-size: 12px; margin: 4px 0 8px; min-height: 1.4em; }
 fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 8px 0 0; padding: 6px 12px 10px; }
 legend { padding: 0 6px; font-weight: 600; }
@@ -75,12 +79,15 @@ legend { padding: 0 6px; font-weight: 600; }
   padding: 7px 9px; border-radius: 6px; background: var(--text); color: var(--bg); box-shadow: 0 2px 10px rgba(0,0,0,.25);
   opacity: 0; pointer-events: none; transition: opacity .12s; z-index: 5; }
 .tip:hover::after, .tip:focus::after { opacity: 1; }
+.tip.flip::after { left: auto; right: -8px; transform: none; }
+.chan label.na { color: var(--muted); cursor: default; }
+.chan label.na small { font-size: 11px; }
 .field.check-field { align-self: end; }
 .field.invalid input, .field.invalid select { border-color: var(--bad); box-shadow: 0 0 0 2px var(--bad-soft); }
 .field .ferr { display: block; color: var(--bad); font-size: 12px; margin-top: 3px; }
 .field.wide { grid-column: 1 / -1; }
-input[type=number], input[type=text], select {
-  width: 100%; padding: 5px 7px; border: 1px solid var(--line); border-radius: 5px;
+input[type=number], input[type=text], input[type=search], select {
+  width: 100%; height: 32px; padding: 5px 7px; border: 1px solid var(--line); border-radius: 5px;
   background: var(--card); color: var(--text); font: inherit; }
 input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--focus); }
 .pair { display: flex; gap: 6px; }
@@ -95,10 +102,10 @@ details.adv > .grid { margin-top: 8px; }
 .chan h4 { grid-column: 1 / -1; margin: 6px 0 0; font-size: 12px; color: var(--muted); font-weight: 600; }
 .chan label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
 .chan label.na { color: var(--muted); cursor: default; }
-.chan label.na span { text-decoration: line-through; }
+.chan label.na span { opacity: .8; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
-button { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);
-  background: var(--card); color: var(--text); cursor: pointer; }
+button, .btn { font: inherit; padding: 6px 12px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); cursor: pointer; display: inline-block; text-decoration: none; line-height: 1.45; }
 button:hover:not(:disabled) { border-color: var(--accent); }
 button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); font-weight: 600; }
 button.danger:hover:not(:disabled) { border-color: var(--bad); color: var(--bad); }
@@ -117,6 +124,10 @@ table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; overflow-wrap: anywhere; }
 th { font-weight: 600; color: var(--muted); font-size: 12px; }
 tr.run { cursor: pointer; }
+tr.run:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+#d-title, pre.msg.err { overflow-wrap: anywhere; }
+.filelist button { display: flex; width: 100%; justify-content: space-between; border: 0; border-radius: 0; text-align: left; padding: 4px 10px; background: none; }
+.filelist button:hover, .filelist button:focus-visible { background: var(--code-bg); outline-offset: -2px; }
 tr.run:hover { background: var(--code-bg); }
 tr.run.selected { background: var(--accent-soft); }
 .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; border: 1px solid currentColor; white-space: nowrap; }
@@ -140,8 +151,7 @@ dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--c
   width: min(720px, 92vw); padding: 16px; }
 dialog::backdrop { background: rgba(0,0,0,.35); }
 .filelist { max-height: 50vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; margin-top: 8px; }
-.filelist div { padding: 4px 10px; cursor: pointer; display: flex; justify-content: space-between; }
-.filelist div:hover { background: var(--code-bg); }
+.filelist > div { padding: 6px 10px; }
 .toast { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg);
   padding: 8px 14px; border-radius: 6px; font-size: 13px; opacity: 0; transition: opacity .2s; pointer-events: none; }
 .toast.show { opacity: .92; }
@@ -150,9 +160,9 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 <body>
 <header>
   <h1>GCF pipeline</h1>
-  <p class="sub">Generate GCF quasi-elastic events (PWIA), add GENIE final-state interactions, or both.
+  <p class="sub">Generate quasi-elastic events from the Generalized Contact Formalism (GCF, plane-wave impulse approximation), add GENIE final-state interactions, or both.
     Every run keeps its config, so it can be repeated with <code>gcf run config.toml</code>.</p>
-  <span class="links"><a id="docs-link" href="#" target="_blank" rel="noopener">Documentation</a></span>
+  <span class="links"><a id="docs-link" href="#" target="_blank" rel="noopener" title="docs/PIPELINE.md (plain text)">Documentation</a></span>
 </header>
 <div id="banner" class="banner hidden"></div>
 <main>
@@ -182,7 +192,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 
     <pre id="preview" class="hidden"></pre>
     <div class="actionbar">
-      <div id="form-msg" class="msg hidden"></div>
+      <div id="form-msg" class="msg hidden" role="alert"></div>
       <div class="actions">
         <button type="button" class="primary" id="btn-start">Start run</button>
         <button type="button" id="btn-check">Check &amp; show config</button>
@@ -205,8 +215,8 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
   </div>
 </main>
 
-<dialog id="files">
-  <h2>Choose an event file</h2>
+<dialog id="files" aria-labelledby="files-title">
+  <h2 id="files-title">Choose an event file</h2>
   <div class="pair"><input type="text" id="f-path" aria-label="Directory"><button type="button" id="f-go">Go</button>
     <button type="button" id="f-up">Up</button></div>
   <div class="filelist" id="f-list"></div>
@@ -315,7 +325,12 @@ function makeField(section, o) {
 }
 function tip(o) {
   if (!o.help) return null;
-  return el("span", { class: "tip", "data-tip": o.help, tabindex: "0", role: "img", "aria-label": o.help }, "?");
+  const t = el("span", { class: "tip", "data-tip": o.help, tabindex: "0", role: "note", "aria-label": "Help: " + o.help, title: "" }, "?");
+  t.addEventListener("keydown", e => { if (e.key === "Escape") t.blur(); });
+  const place = () => { const card = document.getElementById("form-card").getBoundingClientRect(), r = t.getBoundingClientRect();
+    t.classList.toggle("flip", r.left + 140 > card.right); };
+  t.addEventListener("mouseenter", place); t.addEventListener("focus", place);
+  return t;
 }
 const STAGE_HELP = {
   "generate,fsi": "PWIA events, then the GENIE cascade: two output files (before and after FSI).",
@@ -335,12 +350,13 @@ function buildForm() {
   for (const kind of ["nucleon", "pion"]) {
     chan.append(el("h4", {}, kind === "nucleon" ? "Nucleons" : "Pions"));
     for (const c of CHANNELS.filter(c => c.name.startsWith(kind + "."))) {
-      const cb = el("input", { type: "checkbox", id: "ch-" + c.name, checked: true, "data-channel": c.name });
+      const cb = el("input", { type: "checkbox", id: "ch-" + c.name, checked: true, "data-channel": c.name,
+        onchange: () => { cb.dataset.wasOff = cb.checked ? "" : "1"; } });
       chan.append(el("label", { for: "ch-" + c.name, "data-channel": c.name }, cb, el("span", {}, c.label)));
     }
   }
   document.getElementById(fieldId("run", "name")).value = defaultName();
-  document.querySelectorAll("input[name=stages]").forEach(r => r.addEventListener("change", () => { updateVisibility(); changed(); }));
+  document.querySelectorAll("input[name=stages]").forEach(r => r.addEventListener("change", () => { updateVisibility(); document.getElementById(fieldId("run", "name")).value = defaultName(); changed(); }));
   document.getElementById(fieldId("generate", "model")).addEventListener("change", () => {
     updateVisibility(); document.getElementById(fieldId("run", "name")).value = defaultName(); });
   document.getElementById(fieldId("fsi", "model")).addEventListener("change", updateVisibility);
@@ -373,7 +389,7 @@ function updateVisibility() {
   document.querySelectorAll(".field").forEach(f => {
     let show = true;
     if (f.dataset.section === "generate") show = f.dataset.models.split(",").includes(m);
-    if (f.dataset.section === "fsi" && ["input", "target"].includes(f.dataset.key)) show = fsiOnly;
+    if (f.dataset.section === "fsi" && ["input", "target", "vertex_power", "keep"].includes(f.dataset.key)) show = fsiOnly;
     f.classList.toggle("hidden", !show);
   });
   const preset = document.getElementById(fieldId("generate", "target", "preset"));
@@ -386,7 +402,10 @@ function updateVisibility() {
     const lab = document.querySelector(`.chan label[data-channel="${c.name}"]`), cb = lab.querySelector("input");
     const ok = fm === "hA" ? c.hA : c.hN;
     lab.classList.toggle("na", !ok); cb.disabled = !ok;
-    lab.title = ok ? "" : `not a separate fate in the ${fm} cascade`;
+    if (!ok) cb.checked = false; else if (cb.dataset.wasOff !== "1") cb.checked = true;
+    let note = lab.querySelector("small");
+    if (!ok && !note) lab.append(note = el("small", {}, ` (not in ${fm})`)); else if (ok && note) note.remove(); else if (note) note.textContent = ` (not in ${fm})`;
+    lab.title = ok ? "" : `${c.label} is not a separate fate in the ${fm} cascade model`;
   }
   updateAdvancedCounts();
 }
@@ -468,7 +487,7 @@ function applyConfig(cfg) {
     }
   }
   const off = new Set((cfg.fsi && cfg.fsi.off) || []);
-  document.querySelectorAll(".chan input").forEach(c => c.checked = !off.has(c.dataset.channel));
+  document.querySelectorAll(".chan input").forEach(c => { c.checked = !off.has(c.dataset.channel); c.dataset.wasOff = c.checked ? "" : "1"; });
   updateVisibility();
 }
 function resetFields() {
@@ -480,7 +499,7 @@ function resetFields() {
       names.forEach((n, i) => document.getElementById(fieldId(section, o.key, n)).value = d[i] === null ? "" : d[i]);
     } else document.getElementById(fieldId(section, o.key)).value = o.default === null ? "" : o.default;
   }
-  document.querySelectorAll(".chan input").forEach(c => c.checked = true);
+  document.querySelectorAll(".chan input").forEach(c => { c.checked = true; c.dataset.wasOff = ""; });
 }
 function resetForm() {
   resetFields();
@@ -495,55 +514,69 @@ function resetForm() {
 // -- live validation ---------------------------------------------------------
 function changed() {
   updateAdvancedCounts();
+  if (msgOwner !== "validate") showMsg("");   // a check/start result no longer describes the edited form
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(collect())); } catch (e) {}
   clearTimeout(validateTimer);
   validateTimer = setTimeout(validate, 350);
 }
 function clearFieldErrors() {
-  document.querySelectorAll(".field.invalid").forEach(f => { f.classList.remove("invalid"); f.querySelector(".ferr").classList.add("hidden"); });
+  document.querySelectorAll(".field.invalid").forEach(f => { f.classList.remove("invalid"); f.querySelector(".ferr").classList.add("hidden");
+    f.querySelectorAll("[aria-invalid]").forEach(i => { i.removeAttribute("aria-invalid"); i.removeAttribute("aria-describedby"); }); });
 }
 function markField(message) {
   // "[section] key: text" or "[section] key applies to ..."
   const m = /^\[(\w+)\] (\w+)\b:?\s*(.*)$/.exec(message);
   if (!m) return false;
-  const f = document.querySelector(`.field[data-section="${m[1]}"][data-key="${m[2]}"]`);
+  let f = document.querySelector(`.field[data-section="${m[1]}"][data-key="${m[2]}"]`);
+  if (!f && m[1] === "run" && m[2] === "name") f = document.querySelector('.field[data-key="name"]');
   if (!f) return false;
   f.classList.add("invalid");
   const e = f.querySelector(".ferr"); e.textContent = m[3] || message; e.classList.remove("hidden");
+  e.id = e.id || `ferr-${m[1]}-${m[2]}`;
+  f.querySelectorAll("input, select").forEach(i => { i.setAttribute("aria-invalid", "true"); i.setAttribute("aria-describedby", e.id); });
   const adv = f.closest("details.adv"); if (adv) adv.open = true;
   return true;
 }
 async function validate() {
   clearFieldErrors();
   let cfg;
-  try { cfg = collect(); } catch (e) { showMsg(e.message, "err"); return null; }
+  try { cfg = collect(); } catch (e) { showMsg(e.message, "err", "validate"); return null; }
   try {
     const r = await api("api/preview", cfg);
-    if (document.getElementById("form-msg").classList.contains("err")) showMsg("");
+    if (msgOwner === "validate") showMsg("");
     const p = document.getElementById("preview");
     if (!p.classList.contains("hidden")) p.textContent = r.toml;
     return r.toml;
   } catch (e) {
-    showMsg(e.message, "err"); markField(e.message); return null;
+    showMsg(friendly(e.message), "err", "validate"); markField(e.message); return null;
   }
 }
-function showMsg(text, kind) {
+let msgOwner = "";
+function showMsg(text, kind, owner) {
   const m = document.getElementById("form-msg");
   m.textContent = text || ""; m.className = "msg " + (kind || "") + (text ? "" : " hidden");
+  msgOwner = text ? (owner || "") : "";
+}
+function friendly(message) {
+  // "[generate] theta_e: max must exceed min, got [50.0, 40.0]" -> "Electron angle window: max must exceed min ..."
+  const m = /^\[(\w+)\] (\w+)\b:?\s*(.*)$/.exec(message);
+  if (!m) return message;
+  const o = SCHEMA[m[1]] && SCHEMA[m[1]].find(x => x.key === m[2]);
+  return (o ? o.label : m[2]) + ": " + (m[3] || message);
 }
 
 async function checkConfig() {
-  clearFieldErrors(); showMsg("Checking…");
+  clearFieldErrors(); showMsg("Checking…", "", "check");
   let cfg;
   try { cfg = collect(); } catch (e) { showMsg(e.message, "err"); return null; }
   const btn = document.getElementById("btn-check"); btn.disabled = true;
   try {
     const r = await api("api/check", cfg);
     const p = document.getElementById("preview"); p.textContent = r.toml; p.classList.remove("hidden");
-    if (r.ok) showMsg("Setup check passed: the generator accepted these settings.", "ok");
-    else { showMsg("Problems:\n• " + r.problems.join("\n• "), "err"); r.problems.forEach(markField); }
+    if (r.ok) showMsg("Setup check passed: the generator accepted these settings.", "ok", "check");
+    else { showMsg("Problems:\n• " + r.problems.map(friendly).join("\n• "), "err", "check"); r.problems.forEach(markField); }
     return r;
-  } catch (e) { showMsg(e.message, "err"); markField(e.message); return null; }
+  } catch (e) { showMsg(friendly(plain(e)), "err", "check"); markField(e.message); return null; }
   finally { btn.disabled = false; }
 }
 async function downloadConfig() {
@@ -557,16 +590,16 @@ async function startRun() {
   clearFieldErrors();
   let cfg;
   try { cfg = collect(); } catch (e) { showMsg(e.message, "err"); return; }
-  const btn = document.getElementById("btn-start"); btn.disabled = true; showMsg("Checking and starting…");
+  const btn = document.getElementById("btn-start"); btn.disabled = true; showMsg("Checking and starting…", "", "start");
   try {
     const r = await api("api/runs", cfg);
-    showMsg(`Started run ${r.name}.`, "ok");
+    showMsg(`Started run ${r.name}.`, "ok", "start");
     document.getElementById("preview").classList.add("hidden");
     document.getElementById(fieldId("run", "name")).value = defaultName();
     changed();
     await refreshRuns();
     showDetails(r.name);
-  } catch (e) { showMsg(e.message, "err"); markField(e.message); }
+  } catch (e) { showMsg(friendly(plain(e)), "err", "start"); markField(e.message); }
   finally { btn.disabled = false; }
 }
 
@@ -593,7 +626,7 @@ function progressCell(stages, runName, live) {
       txt = `${name} ${fmtInt(s.done)} / ${fmtInt(s.total)}` + (r ? ` · ${r.rate >= 100 ? fmtInt(Math.round(r.rate)) : r.rate.toFixed(1)} ev/s · ~${fmtDuration(r.eta)} left` : "");
     }
     box.append(el("div", { class: "barlabel" }, txt),
-      el("div", { class: "bar", role: "progressbar", "aria-valuenow": pct.toFixed(0), "aria-label": name },
+      el("div", { class: "bar", role: "progressbar", "aria-valuenow": pct.toFixed(0), "aria-valuemin": "0", "aria-valuemax": "100", "aria-valuetext": txt, "aria-label": name },
         el("div", { style: `width:${pct}%` })));
   }
   return box;
@@ -609,16 +642,20 @@ function renderRuns() {
   if (!runsCache.length) { box.append(el("p", { class: "muted" }, "No runs yet. Fill in the form and press Start run.")); return; }
   if (!runs.length) { box.append(el("p", { class: "muted" }, "No run matches the filter.")); return; }
   const rows = runs.map(r => el("tr", { class: "run" + (r.name === selected ? " selected" : ""), onclick: () => showDetails(r.name),
-      title: r.setup || "" },
+      tabindex: "0", role: "button", "aria-current": r.name === selected ? "true" : null, "aria-label": `${r.name}, ${r.state}`,
+      onkeydown: e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showDetails(r.name); } }, title: r.setup || "" },
     el("td", {}, el("div", {}, r.name), el("div", { class: "setup" }, r.setup || ""),
       el("div", { class: "setup" }, r.started ? `${fmtTime(r.started)} · ${fmtDuration((r.finished || Date.now() / 1000) - r.started)}` : "")),
     el("td", {}, badge(r.state)), el("td", {}, progressCell(r.stages))));
-  box.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Run"), el("th", {}, "State"),
-    el("th", {}, "Progress"))), el("tbody", {}, rows)));
+  box.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", { scope: "col" }, "Run"), el("th", { scope: "col" }, "State"),
+    el("th", { scope: "col" }, "Progress"))), el("tbody", {}, rows)));
 }
 async function refreshRuns() {
   let data;
-  try { data = await api("api/runs"); } catch (e) { return; }
+  const banner = document.getElementById("banner");
+  try { data = await api("api/runs"); }
+  catch (e) { banner.textContent = plain(e); banner.classList.remove("hidden"); document.title = "GCF pipeline · disconnected"; return; }
+  if (banner.textContent.startsWith("Cannot reach")) banner.classList.add("hidden");
   runsCache = data.runs;
   document.getElementById("runs-filter").classList.toggle("hidden", runsCache.length < 6);
   const running = runsCache.filter(r => ["running", "merging", "starting"].includes(r.state)).length;
@@ -644,6 +681,7 @@ async function refreshDetails(first) {
   let d;
   try { d = await api("api/runs/" + encodeURIComponent(name)); }
   catch (e) {
+    e.message = plain(e);
     if (/not found/.test(e.message)) { selected = null; clearInterval(detailsTimer); detailsTimer = null;
       document.getElementById("d-title").textContent = "Run details";
       document.getElementById("d-body").replaceChildren(el("p", { class: "placeholder" }, "Select a run to see its progress, outputs, plots and logs."));
@@ -654,7 +692,7 @@ async function refreshDetails(first) {
   const running = ["running", "merging", "starting"].includes(d.state);
   const body = el("div");
   const elapsed = d.started ? ((d.finished || Date.now() / 1000) - d.started) : 0;
-  body.append(el("div", { class: "summary" }, badge(d.state), " ", el("b", {}, d.setup || ""),
+  body.append(el("div", { class: "summary", "aria-live": "polite" }, badge(d.state), " ", el("b", {}, d.setup || ""),
     d.started ? ` · started ${fmtTime(d.started)} · ${running ? "running for" : "took"} ${fmtDuration(elapsed)}` : ""));
   body.append(progressCell(d.stages, name, running));
   if (running && d.jobs && d.jobs.length > 1) {
@@ -678,9 +716,9 @@ async function refreshDetails(first) {
     d.orphans ? `Stop ${d.orphans} leftover job process${d.orphans > 1 ? "es" : ""}` : "Cancel run"));
   if (d.state === "stopped" && !d.orphans) body.append(el("p", { class: "setup" }, "The run's supervisor process is gone (killed, or the machine restarted); its outputs may be incomplete."));
   if (d.config_data) actions.append(el("button", { type: "button", onclick: () => useAsTemplate(d) }, "Use as template"));
-  actions.append(el("a", { href: tokenUrl(`api/runs/${encodeURIComponent(name)}/config.toml`) + "&download=1" }, el("button", { type: "button" }, "Download config")));
+  actions.append(el("a", { class: "btn", href: tokenUrl(`api/runs/${encodeURIComponent(name)}/config.toml`) + "&download=1", download: "config.toml" }, "Download config"));
   actions.append(el("button", { type: "button", title: "Copy the terminal command that repeats this run (use --force to overwrite it)",
-    onclick: () => navigator.clipboard.writeText(`./gcf run '${RUNS_DIR}/${name}/config.toml'`).then(() => toast("Command copied")) }, "Copy run command"));
+    onclick: () => navigator.clipboard.writeText(`./gcf run '${RUNS_DIR}/${name}/config.toml'`).then(() => toast("Copied; run it from the repository root (add --force to overwrite this run)")) }, "Copy run command"));
   if (!running) actions.append(el("button", { type: "button", class: "danger", onclick: () => deleteRun(name) }, "Delete"));
   body.append(actions);
 
@@ -715,9 +753,10 @@ async function refreshDetails(first) {
     body.append(logs);
   }
   const old = document.getElementById("d-body");
-  const wasOpen = [...old.querySelectorAll("details")].map(x => x.open);
+  const wasOpen = {};
+  old.querySelectorAll("details").forEach(x => { wasOpen[x.querySelector("summary").textContent.replace(/\(\d+\)|· live/g, "")] = x.open; });
   old.replaceChildren(...body.childNodes);
-  if (!first) old.querySelectorAll("details").forEach((x, i) => { if (wasOpen[i] !== undefined) x.open = wasOpen[i]; });
+  if (!first) old.querySelectorAll("details").forEach(x => { const k = x.querySelector("summary").textContent.replace(/\(\d+\)|· live/g, ""); if (k in wasOpen) x.open = wasOpen[k]; });
   if (!running && !first) { clearInterval(detailsTimer); detailsTimer = null; }
 }
 
@@ -757,11 +796,14 @@ async function listDir(path) {
     const d = await api("api/files?path=" + encodeURIComponent(path || ""));
     document.getElementById("f-path").value = d.path;
     list.replaceChildren(
-      ...d.dirs.map(n => el("div", { onclick: () => listDir(d.path + "/" + n) }, el("span", {}, "📁 " + n))),
-      ...d.files.map(f => el("div", { onclick: () => pick(d.path + "/" + f.name) }, el("span", {}, f.name), el("span", { class: "muted" }, fmtBytes(f.size)))));
+      ...d.dirs.map(n => el("button", { type: "button", onclick: () => listDir(d.path + "/" + n) }, el("span", {}, "📁 " + n))),
+      ...d.files.map(f => el("button", { type: "button", onclick: () => pick(d.path + "/" + f.name) }, el("span", {}, f.name), el("span", { class: "muted" }, fmtBytes(f.size)))));
     if (!d.dirs.length && !d.files.length) list.append(el("div", { class: "muted" }, "No .root files or folders here."));
     document.getElementById("f-up").onclick = () => listDir(d.parent);
   } catch (e) { list.replaceChildren(el("div", { class: "msg err" }, e.message)); }
+}
+function plain(e) {
+  return /NetworkError|Failed to fetch|Load failed/.test(e.message) ? "Cannot reach gcf gui: it was stopped or the SSH tunnel is down. Restart it and reload this page." : e.message;
 }
 function openFiles() {
   const cur = document.getElementById(fieldId("fsi", "input")).value;
@@ -785,6 +827,7 @@ async function init() {
   RUNS_DIR = info.runs_dir;
   document.getElementById("runs-dir").textContent = "in " + info.runs_dir;
   document.getElementById("docs-link").href = tokenUrl("api/docs");
+  const jobsOpt = SCHEMA.run.find(o => o.key === "jobs"); if (jobsOpt && info.cpus) jobsOpt.help += ` This machine has ${info.cpus} CPUs.`;
   if (!info.binaries) {
     const b = document.getElementById("banner");
     b.textContent = "The stage programs (gcf_generate, gcf_fsi) are not built yet: run ./install.sh in the repository first.";

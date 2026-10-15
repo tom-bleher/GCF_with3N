@@ -174,7 +174,10 @@ class App:
             except tomllib.TOMLDecodeError:
                 pass
         logs = []
-        for log in sorted((d / "logs").glob("*.log")) if (d / "logs").is_dir() else []:
+        order = {"generate": 0, "fsi": 1, "merge": 2}
+        files = sorted((d / "logs").glob("*.log"), key=lambda p: (order.get(p.name.split("_")[0], 9), p.name)) \
+            if (d / "logs").is_dir() else []
+        for log in files:
             lines = log.read_text(errors="replace").splitlines()
             # drop progress lines and GENIE's start-up banner / messenger chatter
             lines = [l for l in lines if l.strip() and not l.startswith("Progress:")
@@ -370,8 +373,9 @@ def make_handler(app):
             url = urllib.parse.urlparse(self.path)
             query = urllib.parse.parse_qs(url.query)
             if not self.authorized(query):
-                body = (b"<h1>gcf gui</h1><p>Open the full URL printed by <code>gcf gui</code>; "
-                        b"it ends in <code>?token=...</code>.</p>")
+                body = (b"<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\"><title>gcf gui</title></head>"
+                        b"<body><h1>gcf gui</h1><p>Open the full URL printed by <code>gcf gui</code>; "
+                        b"it ends in <code>?token=...</code>.</p></body></html>")
                 self.send_response(HTTPStatus.FORBIDDEN)
                 self.send_header("Content-Type", "text/html")
                 self.send_header("Content-Length", str(len(body)))
@@ -387,7 +391,7 @@ def make_handler(app):
                                           cookie=f"gcf_token={app.token}; HttpOnly; SameSite=Strict; Path=/")
                 if parts == ["api", "schema"]:
                     return self.send_json({"schema": schema.to_json(), "examples": cli.EXAMPLES,
-                                           "runs_dir": str(app.runs_dir),
+                                           "runs_dir": str(app.runs_dir), "cpus": os.cpu_count() or 1,
                                            "binaries": all(os.access(runner.BIN_DIR / b, os.X_OK)
                                                            for b in ("gcf_generate", "gcf_fsi"))})
                 if parts == ["api", "runs"]:

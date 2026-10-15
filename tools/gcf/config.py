@@ -98,6 +98,11 @@ def validate(raw, base_dir="."):
         if gen["events"] < 1:
             raise ConfigError("[generate] events must be >= 1")
         model = gen["model"]
+        supported = [(a, z) for a, z, _ in schema.TARGETS[model]]
+        if tuple(gen["target"]) not in supported:
+            names = ", ".join(n for _, _, n in schema.TARGETS[model])
+            raise ConfigError(f"[generate] target: A={gen['target'][0]}, Z={gen['target'][1]} is not "
+                              f"in the {model} tables; supported: {names}")
         given = raw.get("generate", {})
         for o in schema.GENERATE:
             if o.key in given and model not in o.models:

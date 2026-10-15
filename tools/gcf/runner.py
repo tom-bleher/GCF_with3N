@@ -9,6 +9,7 @@ reads.
 
 import json
 import os
+import re
 import secrets
 import shutil
 import signal
@@ -151,7 +152,10 @@ def check_setup(cfg):
         if out.returncode != 0:
             msg = [l for l in (out.stderr + out.stdout).splitlines()
                    if l.strip() and not l.startswith(("eNCrossSection", "You are using"))]
-            problems.append("generator setup failed: " + (" ".join(msg[-3:]) or f"exit {out.returncode}"))
+            text = " ".join(msg[-3:]) or f"exit {out.returncode}"
+            text = re.sub(r"\s*Add it to constants/nuclearMasses\.hh.*$", "", text)
+            text = re.sub(r"^\w+::\w+: ", "", text)
+            problems.append("[generate] target: the generator can't run this setup: " + text)
     else:
         try:
             n = count_entries(fsi["input"])

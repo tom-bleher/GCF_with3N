@@ -67,15 +67,16 @@ GENERATE = [
     Opt("cs", "str", "--cs", "cc1", choices=["cc1", "cc2", "onshell"],
         label="eN cross section", help="De Forest cc1 (default), cc2, or on-shell.", advanced=True),
     Opt("sigma_cm", "float", "--sigma-cm", None, label="sigma_CM", unit="GeV/c",
-        help="CM momentum width per component. Default: 0.15 (3N), the "
-             "nucleus value (2N).", advanced=True),
+        help="CM momentum width of the SRC cluster per component. Default: 0.15 (3N), "
+             "the nucleus table value (2N/MF).", advanced=True),
     Opt("q2", "range", "--q2", None, label="Q^2 window", unit="GeV^2",
         help="Generation-time Q^2 window MIN:MAX. Default: open (3N), 1:10 (2N/MF).", advanced=True),
     # 3N
     Opt("wave_function", "str", "--wave-function", "AV18", choices=WAVE_FUNCTIONS_3N,
         models=["3N"], label="3N wave function",
-        help="3He Faddeev density: AV18, AV18+UIX, AV18+TM, CD-Bonn or CD-Bonn+TM; "
-             "the -pD variants keep only the deuteron (pD) channel."),
+        help="Nucleon interaction behind the three-body density (AV18, AV18+UIX, AV18+TM, "
+             "CDBonn, CDBonn+TM). The 3He Faddeev density is used for the SRC triplet in "
+             "every nucleus. The -pD variants keep only the deuteron (pD) channel."),
     Opt("theta_e", "range", "--theta-e", [5.0, 40.0], models=["3N"],
         label="Electron angle window", unit="deg", advanced=True),
     Opt("kF", "float", "--kF", None, models=["3N"], label="k_F cutoff", unit="GeV/c",
@@ -84,7 +85,7 @@ GENERATE = [
     Opt("cm", "bool", "--no-cm", True, models=["3N"], invert=True,
         label="CM motion of the triplet", advanced=True),
     # 2N / MF
-    Opt("nn", "str", "--nn", None, models=["2N", "MF"], label="NN interaction (2N wave function)",
+    Opt("nn", "str", "--nn", None, models=["2N", "MF"], label="NN interaction",
         choices=NN_INTERACTIONS,
         help="NN interaction behind the pair wave function and contacts (default AV18)."),
     Opt("estar", "float", "--estar", None, models=["2N", "MF"], label="E*", unit="GeV",
@@ -139,7 +140,9 @@ RUN = [
         help="Relative paths are relative to the config file's directory."),
     Opt("stages", "list", None, ["generate", "fsi"], label="Stages",
         choices=["generate", "fsi"]),
-    Opt("jobs", "int", None, 1, label="Parallel jobs"),
+    Opt("jobs", "int", None, 1, label="Parallel jobs",
+        help="Independent jobs run at the same time; their outputs are merged. "
+             "Each needs one CPU core."),
     Opt("seed", "int", None, 0, label="Base seed",
         help="0 = draw one and record it in the saved config. Job i uses seed + i.", advanced=True),
     Opt("keep_chunks", "bool", None, False, label="Keep per-job files", advanced=True),
