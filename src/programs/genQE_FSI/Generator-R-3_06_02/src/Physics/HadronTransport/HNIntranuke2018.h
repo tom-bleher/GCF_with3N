@@ -82,6 +82,11 @@ private:
 
   // data members specific to intranuke HN-mode
   double fNucQEFac;
+  // GCF: per-channel scale factors, like HAIntranuke2018's FSI-*-Frac*Scale
+  // (default 1; 0 switches the channel off). Read with GetParamDef.
+  double fNucleonFracElasScale;
+  double fNucleonFracInelScale;
+  double fPionFracInelScale;
 
 };
 

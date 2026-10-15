@@ -81,3 +81,6 @@ events/
 
 # N. Wright GCF_GENIE fork build, third-party builds and her-code production (1+ GB, never commit)
 /wright_genie/
+
+# Runs started with ./gcf gui (default --runs-dir)
+/runs/

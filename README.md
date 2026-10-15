@@ -3,6 +3,23 @@ A suite of event generators utilizing the Generalized Contact Formalism to descr
 
 This repository will contain the code and necessary libraries for generating events involving nuclear SRCs interacting in the PWIA framework.
 
+## Quick start: the pipeline
+
+Generation (PWIA) and final-state interactions (GENIE) can be run as separate
+stages, from config files, the command line or a web interface:
+
+```
+./install.sh                      # builds GENIE, the generators and the stages
+./gcf example 3N > my_run.toml    # then edit it
+./gcf run my_run.toml
+./gcf gui                         # web interface (open it through an SSH tunnel)
+```
+
+The FSI stage also accepts events from other generators, and lets you switch
+individual cascade channels (absorption, charge exchange, ...) off. What the
+generators compute, assumptions and expressions: [docs/PHYSICS.md](docs/PHYSICS.md). Event format, options
+and validation: [docs/PIPELINE.md](docs/PIPELINE.md).
+
 ## Compile
 
 Navigate to a build directory of your choice and execute the following:
