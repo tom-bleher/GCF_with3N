@@ -197,8 +197,26 @@ void HNIntranuke2018::SimulateHadronicFinalState(GHepRecord* ev, GHepParticle* p
     }
   catch(exceptions::INukeException exception)
     {
+      // GCF patch: the stock code retries by recursing with no limit. When
+      // the kinematics for this hadron can never be satisfied (seen in
+      // multi-primary 3N records), it recursed ~20k deep and overflowed the
+      // stack (the "rare per-event FSI segfault"). Bound the retries and let
+      // the hadron escape, as the "Couldn't select a fate" branch above does.
+      static int retryDepth = 0;  // consecutive failures; retries nest
+      const int kMaxRetries = 1000;
+      if (retryDepth >= kMaxRetries) {
+        LOG("HNIntranuke2018", pERROR)
+          << "Giving up on " << p->Name() << " after " << kMaxRetries
+          << " failed attempts; it escapes without further interaction. "
+          << "Last failure: " << exception;
+        p->SetStatus(kIStStableFinalState);
+        ev->AddParticle(*p);
+        return;
+      }
+      retryDepth++;
       this->SimulateHadronicFinalState(ev,p);
-       LOG("HNIntranuke2018", pNOTICE) 
+      retryDepth--;
+       LOG("HNIntranuke2018", pNOTICE)
          << "retry call to SimulateHadronicFinalState ";
        LOG("HNIntranuke2018", pNOTICE) << exception;
 
