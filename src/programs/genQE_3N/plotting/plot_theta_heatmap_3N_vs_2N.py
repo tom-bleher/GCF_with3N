@@ -26,6 +26,7 @@ import sys
 
 import numpy as np
 import uproot
+import awkward as ak
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 
@@ -58,10 +59,13 @@ def load_3N(path, ebeam, theta_e_max, Q2_min, xB_max, kF_thr,
             lead_over_q_max=1e9, xB_min=0.0, src_from_args=False):
     print(f'Reading 3N+FSI: {path}')
     with uproot.open(path) as f:
-        arr = f['genT'].arrays(
-            ['weight', 'pe', 'pLead', 'p2', 'p3'],
-            library='np',
-        )
+        tree = f['genT']
+        arr = tree.arrays(['weight', 'pe', 'pLead', 'p2', 'p3'], library='np')
+        # Secondaries added 2026-07-20 so 3N uses the identical detection rule
+        # as 2N/MF. Older samples lack them -> fall back to primaries only.
+        has_sec_branches = 'sec_px' in tree.keys()
+        sec = (tree.arrays(['sec_px', 'sec_py', 'sec_pz', 'sec_pdg'], library='ak')
+               if has_sec_branches else None)
     w  = arr['weight']
     pe = arr['pe']
     pL = arr['pLead']; p2 = arr['p2']; p3 = arr['p3']
@@ -86,22 +90,48 @@ def load_3N(path, ebeam, theta_e_max, Q2_min, xB_max, kF_thr,
     only_p3 = above_p3 & ~above_p2
     both    = above_p2 & above_p3
 
+    # Leading above-kF secondary nucleon and how many exist (for the detection
+    # rule + the nAboveKF count), identical to the 2N/MF treatment.
+    n = len(w)
+    if sec is not None:
+        smag = np.sqrt(sec['sec_px']**2 + sec['sec_py']**2 + sec['sec_pz']**2)
+        sec_above = ((sec['sec_pdg'] == 2212) | (sec['sec_pdg'] == 2112)) & (smag > kF_thr)
+        n_sec_above = ak.to_numpy(ak.sum(sec_above, axis=1))
+        skey = ak.where(sec_above, smag, -1.0)
+        has_sec = ak.to_numpy(ak.fill_none(ak.max(skey, axis=1) > 0, False))
+        sidx = ak.argmax(skey, axis=1, keepdims=True)
+        sec_x = ak.to_numpy(ak.fill_none(ak.flatten(sec['sec_px'][sidx]), 0.0))
+        sec_y = ak.to_numpy(ak.fill_none(ak.flatten(sec['sec_py'][sidx]), 0.0))
+        sec_z = ak.to_numpy(ak.fill_none(ak.flatten(sec['sec_pz'][sidx]), 0.0))
+    else:
+        n_sec_above = np.zeros(n, dtype=int)
+        has_sec = np.zeros(n, dtype=bool)
+        sec_x = sec_y = sec_z = np.zeros(n)
+
+    nAbove = (above_L.astype(int) + above_p2.astype(int)
+              + above_p3.astype(int) + n_sec_above)
+
     if mode == 'eq2':
-        # exactly 2 of {lead, p2, p3} above kF, with the lead always one of them
-        detector = above_L & (only_p2 | only_p3)
-        use_p2 = detector & only_p2
-        use_p3 = detector & only_p3
+        # Exactly 2 nucleons above kF among {lead, p2, p3, secondaries}; the
+        # lead is one, and the detected recoil is the UNIQUE other above-kF
+        # nucleon -- a surviving primary if it stayed above kF, else the leading
+        # above-kF ejected secondary. Same rule as load_2N.
+        detector = above_L & (nAbove == 2)
+        use_p2  = above_p2
+        use_p3  = above_p3 & ~above_p2
+        use_sec = (~above_p2) & (~above_p3) & has_sec
     elif mode == 'ge2':
         # lead above kF AND at least one recoil above kF; pick higher-|p|
         detector = above_L & (above_p2 | above_p3)
         use_p2 = detector & (only_p2 | (both & (p2_mag >= p3_mag)))
         use_p3 = detector & (only_p3 | (both & (p3_mag >  p2_mag)))
+        use_sec = np.zeros(n, dtype=bool)
     else:
         raise ValueError(f"mode must be 'eq2' or 'ge2', got {mode!r}")
 
-    rx = np.where(use_p2, p2[:, 0], p3[:, 0])
-    ry = np.where(use_p2, p2[:, 1], p3[:, 1])
-    rz = np.where(use_p2, p2[:, 2], p3[:, 2])
+    rx = np.where(use_p2, p2[:, 0], np.where(use_p3, p3[:, 0], sec_x))
+    ry = np.where(use_p2, p2[:, 1], np.where(use_p3, p3[:, 1], sec_y))
+    rz = np.where(use_p2, p2[:, 2], np.where(use_p3, p3[:, 2], sec_z))
 
     p_miss_x = pL[:, 0] - qx
     p_miss_y = pL[:, 1] - qy
@@ -129,15 +159,18 @@ def load_3N(path, ebeam, theta_e_max, Q2_min, xB_max, kF_thr,
     print(f'  total entries: {len(w)}; passing 3N cuts ({mode}): {int(mask.sum())}')
 
     if stats is not None:
+        # Base cuts contain NO xB requirement: theta_e window, Q2, and the
+        # detector tag only. Any xB window belongs to the chosen SRC cut set.
         ok = np.isfinite(w) & (w > 0)
         base = (ok & detector
                 & (theta_e > theta_e_min) & (theta_e < theta_e_max)
-                & (Q2 > Q2_min) & (xB > xB_min) & (xB < xB_max))
+                & (Q2 > Q2_min))
         if src_from_args:
             src = (base & (theta_pq < theta_pq_max)
                    & (lead_over_q > lead_over_q_min)
                    & (lead_over_q < lead_over_q_max)
-                   & (p_miss_mag > pmiss_lo) & (p_miss_mag < pmiss_hi))
+                   & (p_miss_mag > pmiss_lo) & (p_miss_mag < pmiss_hi)
+                   & (xB > xB_min) & (xB < xB_max))
         else:
             src = (base & (theta_pq < SRC_THETA_PQ_MAX)
                    & (lead_over_q > SRC_LEAD_OVER_Q_MIN)
@@ -157,11 +190,13 @@ def load_2N(path, theta_e_max, Q2_min, xB_max, kF_thr=kF,
             lead_over_q_max=1e9, xB_min=0.0, src_from_args=False):
     print(f'Reading 2N+FSI: {path}')
     with uproot.open(path) as f:
-        arr = f['events'].arrays(
+        ev = f['events']
+        arr = ev.arrays(
             ['weight', 'lead_post', 'recoil_post', 'q',
              'Q2', 'xB', 'scattering_angle', 'pmiss', 'nAboveKF'],
             library='np',
         )
+        sec = ev.arrays(['sec_px', 'sec_py', 'sec_pz', 'sec_pdg'], library='ak')
     w        = arr['weight']
     Q2       = arr['Q2']
     xB       = arr['xB']
@@ -174,10 +209,31 @@ def load_2N(path, theta_e_max, Q2_min, xB_max, kF_thr=kF,
     rp_mag = np.sqrt(rp[:, 0]**2 + rp[:, 1]**2 + rp[:, 2]**2)
     q_mag  = np.sqrt(q[:, 0]**2 + q[:, 1]**2 + q[:, 2]**2)
 
+    # Detection-based recoil: the two nucleons whose opening angles we form are
+    # the lead (fixed by the detector cuts, consistent with q) and the UNIQUE
+    # nucleon above kF. That is recoil_post when it survived FSI above kF;
+    # otherwise (recoil knocked below kF, an ejected secondary took its place in
+    # the nAboveKF==2 count) it is the leading above-kF secondary nucleon. Using
+    # the below-kF recoil_post for the angle would be using an undetected nucleon.
+    spx, spy, spz, spdg = sec['sec_px'], sec['sec_py'], sec['sec_pz'], sec['sec_pdg']
+    sp_mag = np.sqrt(spx**2 + spy**2 + spz**2)
+    sec_above = ((spdg == 2212) | (spdg == 2112)) & (sp_mag > kF_thr)
+    sp_key = ak.where(sec_above, sp_mag, -1.0)
+    has_sec = ak.to_numpy(ak.fill_none(ak.max(sp_key, axis=1) > 0, False))
+    sidx = ak.argmax(sp_key, axis=1, keepdims=True)
+    sec_x = ak.to_numpy(ak.fill_none(ak.flatten(spx[sidx]), 0.0))
+    sec_y = ak.to_numpy(ak.fill_none(ak.flatten(spy[sidx]), 0.0))
+    sec_z = ak.to_numpy(ak.fill_none(ak.flatten(spz[sidx]), 0.0))
+    use_recoil = rp_mag > kF_thr
+    rdx = np.where(use_recoil, rp[:, 0], sec_x)
+    rdy = np.where(use_recoil, rp[:, 1], sec_y)
+    rdz = np.where(use_recoil, rp[:, 2], sec_z)
+    have_recoil = use_recoil | has_sec   # a detected above-kF recoil exists
+
     if mode == 'eq2':
-        # Strict tag: tree's nAboveKF == 2 (no FSI secondary above kF).
-        # Mirrors the paper's 2N+FSI cut.
-        detector = (nAbove == 2)
+        # Strict tag: tree's nAboveKF == 2, with the detected above-kF recoil
+        # well-defined. Mirrors the paper's 2N+FSI cut.
+        detector = (nAbove == 2) & have_recoil
     elif mode == 'ge2':
         # Loose tag: lead and recoil both above kF (FSI may have kicked
         # extra nucleons above kF; we don't have their 4-vectors anyway).
@@ -189,13 +245,13 @@ def load_2N(path, theta_e_max, Q2_min, xB_max, kF_thr=kF,
     p_miss_y = lp[:, 1] - q[:, 1]
     p_miss_z = lp[:, 2] - q[:, 2]
 
-    p3rec_x = -(p_miss_x + rp[:, 0])
-    p3rec_y = -(p_miss_y + rp[:, 1])
-    p3rec_z = -(p_miss_z + rp[:, 2])
+    p3rec_x = -(p_miss_x + rdx)
+    p3rec_y = -(p_miss_y + rdy)
+    p3rec_z = -(p_miss_z + rdz)
 
     theta12 = angle_deg(p_miss_x, p_miss_y, p_miss_z,
-                        rp[:, 0], rp[:, 1], rp[:, 2])
-    theta23 = angle_deg(rp[:, 0], rp[:, 1], rp[:, 2],
+                        rdx, rdy, rdz)
+    theta23 = angle_deg(rdx, rdy, rdz,
                         p3rec_x, p3rec_y, p3rec_z)
 
     theta_pq    = angle_deg(lp[:, 0], lp[:, 1], lp[:, 2],
@@ -214,15 +270,17 @@ def load_2N(path, theta_e_max, Q2_min, xB_max, kF_thr=kF,
     print(f'  total entries: {len(w)}; passing 2N cuts ({mode}): {int(mask.sum())}')
 
     if stats is not None:
+        # Base cuts contain NO xB requirement (see load_3N).
         ok = np.isfinite(w) & (w > 0)
         base = (ok & detector
                 & (theta_e > theta_e_min) & (theta_e < theta_e_max)
-                & (Q2 > Q2_min) & (xB > xB_min) & (xB < xB_max))
+                & (Q2 > Q2_min))
         if src_from_args:
             src = (base & (theta_pq < theta_pq_max)
                    & (lead_over_q > lead_over_q_min)
                    & (lead_over_q < lead_over_q_max)
-                   & (pmiss > pmiss_lo) & (pmiss < pmiss_hi))
+                   & (pmiss > pmiss_lo) & (pmiss < pmiss_hi)
+                   & (xB > xB_min) & (xB < xB_max))
         else:
             src = (base & (theta_pq < SRC_THETA_PQ_MAX)
                    & (lead_over_q > SRC_LEAD_OVER_Q_MIN)
@@ -274,7 +332,10 @@ def main():
     p.add_argument('--xB-max',      type=float, default=1.2)
     p.add_argument('--kF',          type=float, default=kF)
     p.add_argument('--vmin', type=float, default=None,
-                   help='default: vmax/1e4')
+                   help='default: vmax * vmin-frac')
+    p.add_argument('--vmin-frac', type=float, default=1e-4,
+                   help='vmin as a fraction of each panel vmax '
+                        '(e.g. 1e-8 for a deep high-res color floor)')
     p.add_argument('--vmax', type=float, default=None,
                    help='default: largest normalized bin over both panels')
     p.add_argument('--mode', choices=('eq2', 'ge2'), default='ge2',
@@ -376,8 +437,8 @@ def main():
     # normalized, so a shared scale would be misleading).
     vmax_3 = args.vmax if args.vmax is not None else _hist_max(t12_3, t23_3, w_3)
     vmax_2 = args.vmax if args.vmax is not None else _hist_max(t12_2, t23_2, w_2)
-    vmin_3 = args.vmin if args.vmin is not None else vmax_3 * 1e-4
-    vmin_2 = args.vmin if args.vmin is not None else vmax_2 * 1e-4
+    vmin_3 = args.vmin if args.vmin is not None else vmax_3 * args.vmin_frac
+    vmin_2 = args.vmin if args.vmin is not None else vmax_2 * args.vmin_frac
 
     fig, axes = plt.subplots(1, 2, sharey=True,
                              figsize=figure_size(cols=2, ratio=0.50))

@@ -1,0 +1,27 @@
+  pwia Lead Rocket    AV18 (u=1)         <xB> = 0.707   frac(xB>1) =  22.4 %   sum(w)/att = 6.491e-10
+  pwia Lead Rocket    CD-Bonn (u=4)      <xB> = 0.723   frac(xB>1) =  23.1 %   sum(w)/att = 3.626e-10
+  pwia Lead Rocket    pD AV18 (u=6)      <xB> = 0.715   frac(xB>1) =  23.0 %   sum(w)/att = 4.741e-10
+  pwia Lead Rocket    pD CD-Bonn (u=9)   <xB> = 0.731   frac(xB>1) =  23.6 %   sum(w)/att = 2.968e-10
+  pwia Lead Rocket    AV8 old            <xB> = 0.725   frac(xB>1) =  23.4 %   sum(w)/att = 2.556e-13
+  pwia Recoil Rocket  AV18 (u=1)         <xB> = 0.464   frac(xB>1) =   2.9 %   sum(w)/att = 1.529e-10
+  pwia Recoil Rocket  CD-Bonn (u=4)      <xB> = 0.480   frac(xB>1) =   3.4 %   sum(w)/att = 7.784e-11
+  pwia Recoil Rocket  pD AV18 (u=6)      <xB> = 0.486   frac(xB>1) =   3.2 %   sum(w)/att = 1.054e-10
+  pwia Recoil Rocket  pD CD-Bonn (u=9)   <xB> = 0.504   frac(xB>1) =   3.4 %   sum(w)/att = 5.731e-11
+  pwia Recoil Rocket  AV8 old            <xB> = 0.482   frac(xB>1) =   3.2 %   sum(w)/att = 6.185e-14
+  pwia Star           AV18 (u=1)         <xB> = 0.613   frac(xB>1) =  11.5 %   sum(w)/att = 1.996e-09
+  pwia Star           CD-Bonn (u=4)      <xB> = 0.656   frac(xB>1) =  13.1 %   sum(w)/att = 1.536e-09
+  pwia Star           pD AV18 (u=6)      <xB> = 0.627   frac(xB>1) =  11.6 %   sum(w)/att = 1.527e-09
+  pwia Star           pD CD-Bonn (u=9)   <xB> = 0.667   frac(xB>1) =  13.5 %   sum(w)/att = 1.337e-09
+  pwia Star           AV8 old            <xB> = 0.624   frac(xB>1) =  11.9 %   sum(w)/att = 5.761e-13
+  fsi  Lead Rocket    AV18 (u=1)         <xB> = 0.704   frac(xB>1) =  22.5 %   sum(w)/att = 6.626e-10
+  fsi  Lead Rocket    CD-Bonn (u=4)      <xB> = 0.726   frac(xB>1) =  22.9 %   sum(w)/att = 3.672e-10
+  fsi  Lead Rocket    pD AV18 (u=6)      <xB> = 0.708   frac(xB>1) =  22.0 %   sum(w)/att = 4.613e-10
+  fsi  Lead Rocket    pD CD-Bonn (u=9)   <xB> = 0.724   frac(xB>1) =  22.9 %   sum(w)/att = 2.986e-10
+  fsi  Recoil Rocket  AV18 (u=1)         <xB> = 0.471   frac(xB>1) =   3.1 %   sum(w)/att = 1.579e-10
+  fsi  Recoil Rocket  CD-Bonn (u=4)      <xB> = 0.491   frac(xB>1) =   3.8 %   sum(w)/att = 7.746e-11
+  fsi  Recoil Rocket  pD AV18 (u=6)      <xB> = 0.475   frac(xB>1) =   3.0 %   sum(w)/att = 1.005e-10
+  fsi  Recoil Rocket  pD CD-Bonn (u=9)   <xB> = 0.528   frac(xB>1) =   4.3 %   sum(w)/att = 5.841e-11
+  fsi  Star           AV18 (u=1)         <xB> = 0.615   frac(xB>1) =  11.8 %   sum(w)/att = 2.02e-09
+  fsi  Star           CD-Bonn (u=4)      <xB> = 0.652   frac(xB>1) =  13.5 %   sum(w)/att = 1.525e-09
+  fsi  Star           pD AV18 (u=6)      <xB> = 0.630   frac(xB>1) =  11.9 %   sum(w)/att = 1.492e-09
+  fsi  Star           pD CD-Bonn (u=9)   <xB> = 0.670   frac(xB>1) =  14.2 %   sum(w)/att = 1.352e-09

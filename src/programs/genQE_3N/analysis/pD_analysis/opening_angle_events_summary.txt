@@ -1,0 +1,8 @@
+PWIA AV18         <theta> odd=struck  82.66  odd=recoil  84.06   |  raw  6984300 ev   N_eff     11906
+PWIA CD-Bonn      <theta> odd=struck  83.56  odd=recoil  84.16   |  raw  6984000 ev   N_eff      5697
+PWIA pD AV18      <theta> odd=struck  76.90  odd=recoil  78.35   |  raw  6982972 ev   N_eff     14534
+PWIA pD CD-Bonn   <theta> odd=struck  79.98  odd=recoil  80.78   |  raw  6980960 ev   N_eff      8709
+FSI  AV18         <theta> odd=struck  87.77  odd=recoil  97.70   |  raw  1087902 ev   N_eff      1874
+FSI  CD-Bonn      <theta> odd=struck  86.13  odd=recoil  97.67   |  raw  1089177 ev   N_eff      1032
+FSI  pD AV18      <theta> odd=struck  84.72  odd=recoil  93.24   |  raw  1087584 ev   N_eff      2470
+FSI  pD CD-Bonn   <theta> odd=struck  87.82  odd=recoil  95.77   |  raw  1088540 ev   N_eff      1640

@@ -1,0 +1,38 @@
+=== yields: sum(weight) per generation attempt (cross-section scale) ===
+sample                     events     attempts        sum w  sum w / attempt  ratio to AV18
+pwia AV18 (u=1)          10000000    257404883       2.1266      8.26161e-09         1.0000
+pwia CD-Bonn (u=4)       10000000    257434118       1.8357      7.13079e-09         0.8631
+pwia pD AV18 (u=6)       10000000    257732979       1.6276      6.31515e-09         0.7644
+pwia pD CD-Bonn (u=9)    10000000    257685610       1.4513      5.63195e-09         0.6817
+pwia AV8 old code        10000000    257363827   0.00071587      2.78153e-12         0.0003
+
+fsi AV18 (u=1)            2000000     51442798      0.43254      8.40815e-09         1.0000
+fsi CD-Bonn (u=4)         2000000     51516894      0.36505      7.08603e-09         0.8428
+fsi pD AV18 (u=6)         2000000     51581405      0.31521      6.11087e-09         0.7268
+fsi pD CD-Bonn (u=9)      2000000     51519450      0.29006      5.63002e-09         0.6696
+fsi AV8 old code          2000000     51455815   0.00013823      2.68636e-12         0.0003
+
+=== weighted means / tail fractions ===
+-- PWIA
+sample                          <p1>       <pmiss>      <p_b>tab      <p_a>tab    <th_ab>tab     f(p1>0.4)
+AV18 (u=1)                    0.4396        0.4396        0.3507        0.4584       89.9570        0.4589
+CD-Bonn (u=4)                 0.3754        0.3754        0.2999        0.3910       89.8754        0.3125
+pD AV18 (u=6)                 0.4166        0.4166        0.3142        0.4693       90.3941        0.4197
+pD CD-Bonn (u=9)              0.3703        0.3703        0.2844        0.4065       90.2451        0.3223
+AV8 old code                  0.4210        0.4210        0.3486        0.4208       90.1120        0.4027
+
+-- FSI
+sample                          <p1>       <pmiss>      <p_b>tab      <p_a>tab    <th_ab>tab     f(p1>0.4)
+AV18 (u=1)                    0.4367        0.4367        0.3484        0.4555       90.3326        0.4452
+CD-Bonn (u=4)                 0.3764        0.3764        0.3010        0.3898       89.3906        0.3170
+pD AV18 (u=6)                 0.4183        0.4183        0.3160        0.4707       89.8822        0.4236
+pD CD-Bonn (u=9)              0.3709        0.3709        0.2850        0.4066       90.3435        0.3241
+AV8 old code                  0.4250        0.4250        0.3477        0.4251       89.7769        0.4079
+
+=== post-FSI final-state multiplicity (weighted) ===
+sample                   <n protons>0.35>   <n nucleons>0.35>  <n particles>
+AV18 (u=1)                         1.6294              2.7860         6.7242
+CD-Bonn (u=4)                      1.4409              2.4847         6.8049
+pD AV18 (u=6)                      1.5407              2.7519         6.7506
+pD CD-Bonn (u=9)                   1.4713              2.5495         6.8806
+AV8 old code                          nan                 nan            nan

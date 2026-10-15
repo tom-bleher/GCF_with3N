@@ -1,81 +1,89 @@
-theta12-theta23 heatmaps with the NEW recommended SRC cuts
+theta12-theta23 heatmaps — JACOBIAN-FIX RERUN (2026-07-14)
 ============================================================
-12C, 6 GeV, kF = 220 MeV/c, GENIE hN FSI, 20M generated events per sample.
-Selection: exactly 2 measured nucleons with k > kF (eq2); p3 reconstructed
-as -(pmiss + p_recoil). 72 x 72 bins (2.5 deg). Independent color scale per
-panel. All numbers in the *_summary.txt next to each plot.
+12C, 6 GeV, GENIE hN FSI, kF = 220 MeV/c, sigmaCM = sqrt(3/5)kF (3N) /
+sqrt(2/5)kF (2N) / 0 (MF). Selection: exactly 2 measured nucleons with
+k > kF (eq2); p3 reconstructed as -(pmiss + p_recoil). 150 x 150 bins,
+color floor 1e-6 of each panel max. Independent color scale per panel.
 
-Cuts common to ALL four folders (chosen to maximize 3N/2N in region L while
-keeping the detector cuts in place and not too restrictive):
-  8 < theta_e < 45 deg, Q2 > 1 GeV^2
-  theta(p_lead, q) < 12 deg          (was 8; detector cut, loosened slightly)
-  0.60 < |p_lead|/|q| < 0.95         (was > 0.75; UPPER bound added -- this is
-                                      the key change: it removes the 2N
-                                      quasi-elastic-like peak at p/q ~ 1)
-  0.6 < xB < 1.2                     (lower bound added)
+BASE CUTS (everywhere): 8 < theta_e < 45 deg, Q2 > 1 GeV^2, eq2 tag
+(+ theta_pq < 12 in the nocuts plots). NO xB CUT IN BASE. xB windows
+appear ONLY as explicitly chosen cuts: 0.6<xB<1.2 in the newcuts sets,
+0.8<xB<1.2 in frontiercuts, and xB<1.2 inside the OLD SRC cut set.
+MF heatmaps and no-FSI region plots use the xB-free base (rebuilt).
+Numbers in the *_summary.txt files.
 
-The two pmiss variants:
-  *_pmiss_0.25-0.90 : 0.25 < pmiss < 0.90 GeV/c   (current cut)
-  *_pmiss_gt0.55    : pmiss > 0.55 GeV/c          (no upper bound)
+CODE CONFIGURATION (all samples generated 2026-07-14 with it):
+- 3N generator jacobian fix (QEGenerator_3N, user edit of Jul 12/13).
+- No post-cascade Pauli/kF veto anywhere (GENIE-internal blocking only).
+- Fate-code absorption (validated) with ejecta promotion: an absorbed leg's
+  saved momentum is its leading nucleon ejecta (experiment measures the
+  final state); the absorbed flag is bookkeeping only.
+- FSI transport: shared depleting remnant (single GENIE record), with
+  RANDOMIZED transport order (second fix of 2026-07-14): GENIE transports
+  the record in insertion order while sharing the depleting remnant, so a
+  fixed lead-first order gave the lead too much FSI and the last recoil too
+  little (validated: pre-fix rescatter fractions lead 0.5125, N2 0.4327,
+  N3 0.4234; post-fix 0.5006 / 0.4304 / 0.4308 — N2/N3 symmetric). The
+  order is now shuffled per event and results demuxed by parentRole.
+  MF (single nucleon) and PWIA (no FSI) are unaffected by this fix.
 
-FSI modes:
-  sharedFSI_* : default mode -- both/all outgoing nucleons transported through
-                one shared, depleting remnant in a single GENIE record.
-  indepFSI_*  : independent mode (-I / fsi_indep=1) -- each nucleon transported
-                through its own GENIE record with an undepleted A-2 / A-3
-                remnant (the pre-Jul-2 behaviour).
+SAMPLES (all regenerated 2026-07-14 with the fixed code):
+- 3N shared FSI: 40M, generated with -q 1:1e9 (Q2 > 1 GeV^2 enforced at
+  generation, before FSI). Valid for all plots here (they all cut Q2 > 1);
+  do NOT reuse for Q2 < 1 studies. Pass fractions in summaries are
+  relative to this restricted sample.
+- 2N shared FSI: 60M (tree includes generation-failure placeholders with
+  weight = 0; analyses mask weight > 0).
+- MF global / local FG: 40M each.
+- 3N PWIA (no FSI): 20M; 3N PWIA no-CM: 20M.
+NOTE: the Jul-13 files with the same names were a different (RNTuple)
+production; they are preserved as *_rntuple_jul13.root and NOT used here.
 
-Samples:
-  shared: 3N_FSI_hN_20M_12C_kF220_6GeV.root, events_2N_hN_6GeV_kF220_20M.root
-  indep : 3N_FSIindep_hN_20M_12C_kF220_6GeV.root,
-          events_2N_hNindep_6GeV_kF220_20M.root
+RESULTS (final, order-randomized samples; *_highres.pdf variants use
+300 x 300 bins with a 1e-8 color floor)
+  sharedFSI_pmiss_0.25-0.90 (theta_pq<12, 0.6<p/q<0.95, 0.6<xB<1.2,
+    0.25<pmiss<0.90):        (L/R)_3N = 1.156   (L/R)_2N = 0.244
+  standard_plots/:
+    nocuts (theta_e 8-45, Q2>1, eq2, theta_pq<12; NO xB cut):
+                             (L/R)_3N = 1.151   (L/R)_2N = 0.218
+    OLD-SRC-cuts (thpq<8, p/q>0.75, 0.25<pmiss<0.9, xB<1.2):
+                             (L/R)_3N = 1.154   (L/R)_2N = 0.346
+    MF fake-3N (pp): global L/R base 0.055 / srccuts 0.041
+                     local  L/R base 0.050 / srccuts 0.056
+    3N no-FSI TRUE-angle region plots:
+      with CM:  L 4.70% R 4.80% BR 4.23% star 11.03%  (L/R = 0.98)
+      no CM:    L 8.13% R 8.33% BR 7.04% star 22.02%  (L/R = 0.98)
 
-FINAL CONFIGURATION (2026-07-11, all six samples regenerated with it):
-(a) NO post-cascade Pauli/kF veto anywhere — Pauli blocking handled only
-    inside GENIE's cascade (blocked collisions rerolled).
-(b) Absorption via GENIE fate codes (abs/cmp kills the ORIGINAL nucleon;
-    validated against both GENIE fate headers), with EJECTA PROMOTION:
-    the absorbed leg's saved momentum is its leading nucleon ejecta
-    (experiment-faithful: the detector measures the final state); the
-    absorbed flag is bookkeeping only, and nothing is zeroed unless no
-    nucleon ejecta exists. Events are never killed by absorption.
+PHYSICS NOTE: the jacobian fix removed the strong 3N left-skew seen in all
+earlier rounds. The no-FSI opening-angle distribution WITH CM smearing is
+now symmetric (L/R = 0.98; it was 0.46 pre-fix), and the 3N+FSI L/R is
+~1.06 at these cuts (vs 1.7-7.5 in the pre-fix rounds). The huge-weight
+region-L events of earlier samples came from the 1/(p1*p2*p3)-type
+divergence the fix addresses. 2N is essentially unchanged (~0.2-0.3).
+Consequence: at the current cuts the 3N/2N region-L contrast is now
+f_L 0.087 vs 0.028 (ratio ~3) and L/R 1.06 vs 0.22 -- much weaker than
+pre-fix. Cut re-optimization on these samples is recommended if region-L
+discrimination is the goal.
 
-Headline numbers (see *_summary.txt for full detail):
-                          (L/R)_3N  (L/R)_2N   f_L(3N)  f_L(2N)
-  shared, 0.25<pmiss<0.90    1.68      0.22      0.125    0.029   [high-stats]
-  shared, pmiss>0.55         3.28      0.24      0.056    0.018   [20M/20M]
-  indep,  0.25<pmiss<0.90    1.56      0.28      0.122    0.033   [20M/20M]
-  indep,  pmiss>0.55         7.51      0.32      0.086    0.021   [20M/20M]
+INDEPENDENT-FSI SET (2026-07-15): indepFSI_* folders mirror the sharedFSI
+plots with identical cuts, but each nucleon is transported in its own GENIE
+record through an undepleted A-2/A-3 remnant (-I / fsi_indep=1). The
+transport-order randomization is a no-op in this mode (no shared remnant).
+Samples: 3N_FSIindep_hN_40M_12C_kF220_6GeV_Q2gt1.root (40M),
+events_2N_hNindep_6GeV_kF220_60M.root (60M), same code base otherwise.
+  shared vs indep, (L/R)_3N / (L/R)_2N:
+    pmiss 0.25-0.90:  shared 1.156/0.244   indep 1.101/0.221
+    frontiercuts:     shared 2.524/0.070   indep 2.057/0.097
+    pmiss>0.55:       shared 2.649/0.942   indep 3.354/0.643
+    nocuts:           shared 1.151/0.218   indep 1.087/0.212
+    srccuts_OLD:      shared 1.154/0.346   indep 1.185/0.327
 
-HIGH-STATS UPDATE (2026-07-11 evening): the sharedFSI_pmiss_0.25-0.90
-folder and the standard_plots side-by-sides now use 3N = 40M (20M
-unrestricted + 20M generated with -q 1:1e9, i.e. Q2>1-restricted; merging
-is valid because every plot cuts Q2>1, where the two subsamples are
-identically distributed) and 2N = 60M. MF heatmaps use 40M per FG mode.
-Note the 3N summaries' base/SRC "pass fractions" are diluted by the
-restricted subsample and are not comparable to the 20M-sample values.
-(Honest accounting: the -q generation window only buys ~1.2x per run --
-unweighted, ~85% of an unrestricted run already passes Q2>1; the real
-gain here is the plain 2x/3x/2x statistics increase.)
+AB_oldcode/: 5M reference with the OLD committed code (per-nucleon FSI,
+kill-on-absorption, 220-MeV veto, kF=0.25, sigCM=0.15, pre-fix jacobian):
+nocuts (L/R)_3N=9.71 / (L/R)_2N=0.018; old SRC cuts 5.25 / 0.032 —
+reproduces the historical ~10 / ~1:100 (which therefore also carried the
+jacobian artifact).
 
-standard_plots/ (high-stats samples):
-  nocuts (theta_e 8-45, Q2>1, eq2, theta_pq<12; NO xB cut):
-                             (L/R)_3N=0.753, (L/R)_2N=0.215
-  OLD-SRC-cuts side-by-side: (L/R)_3N=1.234, (L/R)_2N=0.323
-  MF fake-3N heatmaps (pp):  global L/R base 0.052 / srccuts 0.038,
-                             local  L/R base 0.051 / srccuts 0.034
-  3N no-FSI region plots (PWIA, 20M; unaffected by FSI changes).
-
-AB_oldcode/: 5M-event reference with the OLD committed code (per-nucleon
-FSI, kill-on-absorption, 220-MeV veto, kF=0.25, sigCM=0.15):
-  nocuts:       (L/R)_3N=9.71, (L/R)_2N=0.018   <- reproduces the
-  old SRC cuts: (L/R)_3N=5.25, (L/R)_2N=0.032      remembered ~10 / ~1:100
-
-CAVEATS: (i) 3N region integrals under pmiss>0.55 are dominated by few
-large-weight events -> sizable statistical uncertainty on those L/R.
-(ii) The cut values (theta_pq<12, 0.6<p/q<0.95, 0.6<xB<1.2, pmiss>0.55)
-were optimized on earlier-configuration samples; a re-scan on these final
-samples is advisable before locking cuts.
-
-In the summaries: "SRC-cut pass fraction" uses the cut values listed above
-(--src-stats-from-args), not the old built-in SRC constants.
+Removed as stale (pre-fix physics): indepFSI folders and
+sharedFSI_pmiss_gt0.55 — rebuildable on request (needs a 3N indep and/or
+2N indep regeneration with the fixed code).

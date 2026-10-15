@@ -1,7 +1,0 @@
-# cuts: mode=eq2, kF=0.22, 8.0<theta_e<45.0, Q2>1.0, 0.0<xB<1000000000.0, theta_pq<12.0, 0.0<lead/q<1000000000.0, 0.0<pmiss<1000000000.0
-[3N] f_L=0.0757  f_R=0.1005  L/R=0.753
-[3N] base-cut pass fraction (weighted): 0.1630 (6681625/39999998 events)
-[3N] SRC-cut  pass fraction (weighted): 0.01163 (1143654/39999998 events)
-[2N] f_L=0.0244  f_R=0.1132  L/R=0.215
-[2N] base-cut pass fraction (weighted): 0.3912 (12449209/45489189 events)
-[2N] SRC-cut  pass fraction (weighted): 0.06021 (4744134/45489189 events)

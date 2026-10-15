@@ -1,11 +1,11 @@
 # MF+FSI fake-3N region fractions (weighted)
-# cuts: 8.0<scattering<45.0, Q2>1.0, xB<1.2, SRC(thpq<8,pN/q>0.75,0.25<pmiss<0.9,xB<1.2)
-# n_events=76971  center_radius=17.289 deg
-L        0.007932
-R        0.207290
-BR       0.011424
-center   0.155175
-L/R      0.038263
+# cuts: 8.0<scattering<45.0, Q2>1.0, xB<1000000000.0, SRC(thpq<8,pN/q>0.75,0.25<pmiss<0.9,xB<1.2)
+# n_events=78360  center_radius=17.289 deg
+L        0.009851
+R        0.239083
+BR       0.011773
+center   0.170352
+L/R      0.041203
 # pass fractions vs all 40000000 generated events (weighted)
-base     4.608992e-02
-src      3.914666e-04
+base     5.328974e-02
+src      3.774396e-04

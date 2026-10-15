@@ -1,0 +1,10 @@
+# input: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/wf_test/pwia_av8.root
+# TRUE 3-nucleon angles (p1 = pLead - q); no detector tag, no reconstruction
+# cuts: 8.0<theta_e<45.0, Q2>1.0, xB<1.2
+L (top-left): 4.91% of plotted weight
+R (top-right): 5.10% of plotted weight
+BR (bottom-right): 4.45% of plotted weight
+Star (120,120), r=17.3 deg: 12.32% of plotted weight
+L/R = 0.963
+base-cut pass fraction (weighted): 0.9418 (8508668/10000000 events)
+SRC-cut  pass fraction (weighted): 0.19664 (2139648/10000000 events)

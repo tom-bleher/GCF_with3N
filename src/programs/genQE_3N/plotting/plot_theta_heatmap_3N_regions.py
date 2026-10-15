@@ -70,6 +70,7 @@ def main():
     p.add_argument('--Q2-min',      type=float, default=1.0)
     p.add_argument('--xB-max',      type=float, default=1.2)
     p.add_argument('--vmin', type=float, default=None)
+    p.add_argument('--vmin-frac', type=float, default=1e-4)
     p.add_argument('--vmax', type=float, default=None)
     args = p.parse_args()
 
@@ -83,10 +84,19 @@ def main():
 
     print(f'Reading 3N: {in_path}')
     with uproot.open(in_path) as f:
-        arr = f['genT'].arrays(['weight', 'pe', 'pLead', 'p2', 'p3'],
-                               library='np')
+        tree = f['genT']
+        # Branch names: the current generator writes p1_gen/p2_gen/p3_gen,
+        # older trees wrote pLead/p2/p3 (and pLead_pre/p2_pre/p3_pre pre-FSI).
+        have = set(tree.keys())
+        if 'p1_gen' in have:
+            gen = ('p1_gen', 'p2_gen', 'p3_gen')
+        elif 'pLead' in have:
+            gen = ('pLead', 'p2', 'p3')
+        else:
+            gen = ('pLead_pre', 'p2_pre', 'p3_pre')
+        arr = tree.arrays(['weight', 'pe', *gen], library='np')
     w = arr['weight']
-    pe = arr['pe']; pL = arr['pLead']; p2 = arr['p2']; p3 = arr['p3']
+    pe = arr['pe']; pL = arr[gen[0]]; p2 = arr[gen[1]]; p3 = arr[gen[2]]
 
     qx = -pe[:, 0]; qy = -pe[:, 1]; qz = args.ebeam - pe[:, 2]
     q_mag = np.sqrt(qx**2 + qy**2 + qz**2)
@@ -160,7 +170,7 @@ def main():
     h_plot = np.where(h_norm > 0, h_norm, np.nan)
     pos = h_norm[h_norm > 0]
     vmax = args.vmax if args.vmax is not None else (pos.max() if pos.size else 1e-2)
-    vmin = args.vmin if args.vmin is not None else vmax * 1e-4
+    vmin = args.vmin if args.vmin is not None else vmax * args.vmin_frac
 
     fig, ax = plt.subplots(figsize=figure_size(cols=1, ratio=0.92))
     im = ax.pcolormesh(xe, ye, h_plot.T, cmap=CMAP,

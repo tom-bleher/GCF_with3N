@@ -1,0 +1,17 @@
+PWIA AV18        odd = struck $p$   <theta> = 148.91 deg
+PWIA AV18        odd = recoil $p$   <theta> = 148.41 deg
+PWIA CD-Bonn     odd = struck $p$   <theta> = 145.66 deg
+PWIA CD-Bonn     odd = recoil $p$   <theta> = 145.27 deg
+PWIA pD AV18     odd = struck $p$   <theta> = 147.22 deg
+PWIA pD AV18     odd = recoil $p$   <theta> = 146.72 deg
+PWIA pD CD-Bonn  odd = struck $p$   <theta> = 145.67 deg
+PWIA pD CD-Bonn  odd = recoil $p$   <theta> = 145.36 deg
+FSI  AV18        odd = struck $p$   <theta> = 138.63 deg
+FSI  AV18        odd = recoil $p$   <theta> = 130.51 deg
+FSI  CD-Bonn     odd = struck $p$   <theta> = 137.19 deg
+FSI  CD-Bonn     odd = recoil $p$   <theta> = 127.26 deg
+FSI  pD AV18     odd = struck $p$   <theta> = 137.29 deg
+FSI  pD AV18     odd = recoil $p$   <theta> = 129.83 deg
+FSI  pD CD-Bonn  odd = struck $p$   <theta> = 134.93 deg
+FSI  pD CD-Bonn  odd = recoil $p$   <theta> = 128.34 deg
+PWIA AV18 no-CM control (unbinned): <theta> = 180.0000 deg, min 180.0000, max 180.0000  -- exactly 180 by momentum conservation

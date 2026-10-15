@@ -1,7 +1,14 @@
 # cuts: mode=eq2, kF=0.25, 8.0<theta_e<45.0, Q2>1.0, 0.0<xB<1.2, theta_pq<8.0, 0.75<lead/q<1000000000.0, 0.25<pmiss<0.9
-[3N] f_L=0.3056  f_R=0.0582  L/R=5.251
-[3N] base-cut pass fraction (weighted): 0.0023 (157770/5000000 events)
-[3N] SRC-cut  pass fraction (weighted): 0.00022 (26733/5000000 events)
-[2N] f_L=0.0033  f_R=0.1039  L/R=0.032
-[2N] base-cut pass fraction (weighted): 0.4133 (688540/2901805 events)
-[2N] SRC-cut  pass fraction (weighted): 0.07436 (254248/2901805 events)
+[3N] f_L=0.1394  f_R=0.0913  L/R=1.527
+[3N] base-cut pass fraction (weighted): 0.0033 (1262531/40000000 events)
+[3N] SRC-cut  pass fraction (weighted): 0.00059 (212948/40000000 events)
+[2N] f_L=0.0026  f_R=0.1060  L/R=0.025
+[2N] base-cut pass fraction (weighted): 0.4124 (2592498/10925001 events)
+[2N] SRC-cut  pass fraction (weighted): 0.07504 (959465/10925001 events)
+# STATISTICS WARNING (40M/20M rerun, 2026-07-21): the old-code weights carry the
+# divergent 1/(p1 p2 p3)-type jacobian, so region sums are dominated by a few
+# huge-weight events. 3N region L: n=25457 raw events but neff=21 (top-1 event
+# = 11% of the weight); region R: n=29905, neff=6 (top-1 = 27%). The 3N L/R is
+# therefore NOT stable between samples: 5M run gave 5.25, this 40M run 1.53.
+# 2N is well-behaved (L/R 0.032 -> 0.025). Any old-code 3N L/R should be quoted
+# as order-of-magnitude only.

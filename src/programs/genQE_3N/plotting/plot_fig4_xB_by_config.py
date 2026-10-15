@@ -50,6 +50,9 @@ def main():
     p.add_argument('--Q2-min', type=float, default=1.0)
     p.add_argument('--weight-clip-pct', type=float, default=99.9)
     p.add_argument('--dpi', type=int, default=400)
+    p.add_argument('--logy', action='store_true',
+                   help='log y axis (the high-xB tail is ~1e-3 of the peak and '
+                        'is invisible on a linear scale)')
     args = p.parse_args()
 
     apply_style()
@@ -113,7 +116,10 @@ def main():
         ax.plot(centers, counts, color=color, lw=1.4, label=label)
 
     ax.set_xlim(args.xB_min, args.xB_max)
-    ax.set_ylim(bottom=0)
+    if args.logy:
+        ax.set_yscale('log')
+    else:
+        ax.set_ylim(bottom=0)
     ax.set_xlabel(r'$x_B$')
     ax.set_ylabel(r'Total weight')
     ax.legend(loc='upper right', frameon=False, handlelength=1.6)

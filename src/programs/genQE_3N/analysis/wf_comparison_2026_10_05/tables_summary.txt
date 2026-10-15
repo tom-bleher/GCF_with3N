@@ -1,0 +1,26 @@
+=== table integrals  I = int rho k_cm^2 k_rel^2 sin(th) dth dk_cm dk_rel ===
+  AV18 (u=1)           I =       71.456   I/I(AV18) =   1.0000   max rho = 1.323e+05
+  AV18+UIX (u=2)       I =       71.463   I/I(AV18) =   1.0001   max rho = 9.405e+04
+  CD-Bonn (u=4)        I =       71.465   I/I(AV18) =   1.0001   max rho = 1.128e+05
+  pD AV18 (u=6)        I =       37.973   I/I(AV18) =   0.5314   max rho = 7.419e+04
+  pD AV18+UIX (u=7)    I =       38.135   I/I(AV18) =   0.5337   max rho = 5.14e+04
+  pD CD-Bonn (u=9)     I =        37.12   I/I(AV18) =   0.5195   max rho = 6.218e+04
+  AV8 (old)            I =     0.026511   I/I(AV18) =   0.0004   max rho = 47.41
+  (the old AV8 table's convention is unknown -> its ratio is meaningless)
+
+=== pD-only fraction of the full table (same potential) ===
+  pD AV18 (u=6)        / AV18 (u=1)           = 0.5314
+  pD AV18+UIX (u=7)    / AV18+UIX (u=2)       = 0.5336
+  pD CD-Bonn (u=9)     / CD-Bonn (u=4)        = 0.5194
+
+=== k_rel marginal: m(k_rel) = k_rel^2 * int rho k_cm^2 sin(th) dk_cm dth ===
+    (Jacobi convention: table k_cm = p_a = p1 - P_cm/3, k_rel = p_b = (p2-p3)/2,
+     theta = angle(p_a,p_b); the measure above is the Jacobi phase space in get_rho())
+    thresholds: 1.115 fm^-1 = 0.22 GeV/c (the kF used in the runs), 1.27 fm^-1 = 0.25 GeV/c
+  AV18 (u=1)           frac(p_b>0.22GeV) =  4.672 %   frac(p_b>0.25GeV) =  3.779 %   <p_b> = 0.523 fm^-1   <theta_ab> =  90.0 deg
+  AV18+UIX (u=2)       frac(p_b>0.22GeV) =  5.465 %   frac(p_b>0.25GeV) =  4.412 %   <p_b> = 0.552 fm^-1   <theta_ab> =  90.0 deg
+  CD-Bonn (u=4)        frac(p_b>0.22GeV) =  3.053 %   frac(p_b>0.25GeV) =  2.192 %   <p_b> = 0.504 fm^-1   <theta_ab> =  90.0 deg
+  pD AV18 (u=6)        frac(p_b>0.22GeV) =  6.404 %   frac(p_b>0.25GeV) =  5.253 %   <p_b> = 0.529 fm^-1   <theta_ab> =  90.0 deg
+  pD AV18+UIX (u=7)    frac(p_b>0.22GeV) =  7.330 %   frac(p_b>0.25GeV) =  5.987 %   <p_b> = 0.561 fm^-1   <theta_ab> =  90.0 deg
+  pD CD-Bonn (u=9)     frac(p_b>0.22GeV) =  3.936 %   frac(p_b>0.25GeV) =  2.944 %   <p_b> = 0.503 fm^-1   <theta_ab> =  90.0 deg
+  AV8 (old)            frac(p_b>0.22GeV) =  3.244 %   frac(p_b>0.25GeV) =  2.597 %   <p_b> = 0.503 fm^-1   <theta_ab> =  90.0 deg

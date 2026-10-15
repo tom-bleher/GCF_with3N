@@ -1,0 +1,42 @@
+prel    PWIA AV18        odd = struck $p$   mean =   0.3731   weight outside plotted range =  0.01 %
+prel    PWIA AV18        odd = recoil $p$   mean =   0.3824   weight outside plotted range =  0.05 %
+prel    PWIA CD-Bonn     odd = struck $p$   mean =   0.3221   weight outside plotted range =  0.00 %
+prel    PWIA CD-Bonn     odd = recoil $p$   mean =   0.3263   weight outside plotted range =  0.02 %
+prel    PWIA pD AV18     odd = struck $p$   mean =   0.3680   weight outside plotted range =  0.00 %
+prel    PWIA pD AV18     odd = recoil $p$   mean =   0.3765   weight outside plotted range =  0.04 %
+prel    PWIA pD CD-Bonn  odd = struck $p$   mean =   0.3243   weight outside plotted range =  0.00 %
+prel    PWIA pD CD-Bonn  odd = recoil $p$   mean =   0.3300   weight outside plotted range =  0.02 %
+prel    FSI  AV18        odd = struck $p$   mean =   0.4284   weight outside plotted range =  0.99 %
+prel    FSI  AV18        odd = recoil $p$   mean =   0.5448   weight outside plotted range =  5.45 %
+prel    FSI  CD-Bonn     odd = struck $p$   mean =   0.3950   weight outside plotted range =  0.61 %
+prel    FSI  CD-Bonn     odd = recoil $p$   mean =   0.5118   weight outside plotted range =  4.41 %
+prel    FSI  pD AV18     odd = struck $p$   mean =   0.4258   weight outside plotted range =  0.87 %
+prel    FSI  pD AV18     odd = recoil $p$   mean =   0.5335   weight outside plotted range =  5.30 %
+prel    FSI  pD CD-Bonn  odd = struck $p$   mean =   0.3917   weight outside plotted range =  0.61 %
+prel    FSI  pD CD-Bonn  odd = recoil $p$   mean =   0.4865   weight outside plotted range =  4.25 %
+prel    wavefunction (gen support) mean = AV18 0.4518, CD-Bonn 0.3817, pD AV18 0.4348, pD CD-Bonn 0.3673
+ang_pn  PWIA AV18        odd = struck $p$   mean = 119.3612   weight outside plotted range = -0.00 %
+ang_pn  PWIA AV18        odd = recoil $p$   mean = 121.1216   weight outside plotted range =  0.00 %
+ang_pn  PWIA CD-Bonn     odd = struck $p$   mean = 119.5291   weight outside plotted range =  0.00 %
+ang_pn  PWIA CD-Bonn     odd = recoil $p$   mean = 120.0974   weight outside plotted range =  0.00 %
+ang_pn  PWIA pD AV18     odd = struck $p$   mean = 121.2967   weight outside plotted range = -0.00 %
+ang_pn  PWIA pD AV18     odd = recoil $p$   mean = 122.9069   weight outside plotted range =  0.00 %
+ang_pn  PWIA pD CD-Bonn  odd = struck $p$   mean = 120.5081   weight outside plotted range =  0.00 %
+ang_pn  PWIA pD CD-Bonn  odd = recoil $p$   mean = 121.3244   weight outside plotted range =  0.00 %
+ang_pn  FSI  AV18        odd = struck $p$   mean = 104.4371   weight outside plotted range =  0.00 %
+ang_pn  FSI  AV18        odd = recoil $p$   mean = 118.0555   weight outside plotted range =  0.00 %
+ang_pn  FSI  CD-Bonn     odd = struck $p$   mean = 102.6089   weight outside plotted range =  0.00 %
+ang_pn  FSI  CD-Bonn     odd = recoil $p$   mean = 118.7569   weight outside plotted range = -0.00 %
+ang_pn  FSI  pD AV18     odd = struck $p$   mean = 107.2029   weight outside plotted range =  0.00 %
+ang_pn  FSI  pD AV18     odd = recoil $p$   mean = 118.0399   weight outside plotted range = -0.00 %
+ang_pn  FSI  pD CD-Bonn  odd = struck $p$   mean = 105.2156   weight outside plotted range = -0.00 %
+ang_pn  FSI  pD CD-Bonn  odd = recoil $p$   mean = 115.6431   weight outside plotted range =  0.00 %
+ang_pn  wavefunction (gen support) mean = AV18 122.8878, CD-Bonn 122.7357, pD AV18 125.0924, pD CD-Bonn 123.9712
+Mmiss_pd PWIA AV18        <M_miss - M(9Be)> =  0.1607 GeV   frac < 50 MeV = 0.1666   weight above 1.5 GeV =  0.00 %
+Mmiss_pd PWIA CD-Bonn     <M_miss - M(9Be)> =  0.1209 GeV   frac < 50 MeV = 0.1982   weight above 1.5 GeV =  0.00 %
+Mmiss_pd PWIA pD AV18     <M_miss - M(9Be)> =  0.1575 GeV   frac < 50 MeV = 0.1585   weight above 1.5 GeV =  0.00 %
+Mmiss_pd PWIA pD CD-Bonn  <M_miss - M(9Be)> =  0.1224 GeV   frac < 50 MeV = 0.1732   weight above 1.5 GeV =  0.00 %
+Mmiss_pd FSI  AV18        <M_miss - M(9Be)> =  0.3668 GeV   frac < 50 MeV = 0.0899   weight above 1.5 GeV =  3.35 %
+Mmiss_pd FSI  CD-Bonn     <M_miss - M(9Be)> =  0.3298 GeV   frac < 50 MeV = 0.1033   weight above 1.5 GeV =  3.01 %
+Mmiss_pd FSI  pD AV18     <M_miss - M(9Be)> =  0.3629 GeV   frac < 50 MeV = 0.0824   weight above 1.5 GeV =  3.39 %
+Mmiss_pd FSI  pD CD-Bonn  <M_miss - M(9Be)> =  0.3088 GeV   frac < 50 MeV = 0.0946   weight above 1.5 GeV =  3.20 %
