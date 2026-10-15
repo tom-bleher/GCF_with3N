@@ -145,7 +145,9 @@ bool init(int argc, char ** argv)
 	Usage();
 	return false;
       default:
-	abort();
+	// getopt already printed "invalid option"
+	Usage();
+	return false;
 	
       }
 
