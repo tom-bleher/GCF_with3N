@@ -19,16 +19,20 @@ struct FSIParticle {
   int pdg;
   TLorentzVector p4;
   // Fate of the INPUT nucleon this particle descends from, as stamped by
-  // Intranuke (INukeHadroFates2018.h); -1 = that nucleon never interacted.
-  // Note Intranuke stamps the fate on the incident particle, not on the
-  // stable final state, so this must be read from the ancestor -- reading it
-  // off the final-state particle always yields -1.
+  // Intranuke (INukeHadroFates2018.h). Note Intranuke stamps the fate on the
+  // incident particle, not on the stable final state, so this must be read
+  // from the ancestor -- reading it off the final-state particle always
+  // yields -1. A nucleon that left the nucleus without interacting has fate
+  // 1 (kIHNFtNoInteraction / kIHAFtNoInteraction) and exactly its input
+  // momentum; -1 means the cascade did not run at all.
   int rescatterCode;
-  // Mother-chain depth from the transported input nucleon: 0 means this
-  // particle IS that nucleon, unchanged by the cascade; >0 means it is a
-  // cascade product. This is the reliable "was it made by FSI?" flag --
-  // parentRole cannot answer it, because a knocked-out medium nucleon
-  // inherits the role of whichever incident nucleon knocked it out.
+  // Mother-chain depth from the transported input nucleon. Intranuke
+  // re-emits even a non-interacting nucleon as a daughter, so this is >= 1
+  // for every cascade output; 0 only when the cascade did not run. To tell
+  // cascade products from nucleons that left unchanged use rescatterCode
+  // (== 1 for the latter), not generation. parentRole cannot answer it
+  // either: a knocked-out medium nucleon inherits the role of whichever
+  // incident nucleon knocked it out.
   int generation;
   int parentRole;     // caller tag of the input nucleon this particle
                       // descends from (provenance diagnostic; -1 if unknown)
