@@ -125,7 +125,7 @@ int main(int argc, char **argv) {
     // Initialize generator and cross section
     myRand = new TRandom3(0);
     ffModel ffMod = kelly;
-    csMethod csMeth = cc2;
+    csMethod csMeth = cc1;
     myCS = new eNCrossSection(csMeth, ffMod);
     myGen = new QEGenerator_3N(Ebeam, myCS, 1, myRand);
 

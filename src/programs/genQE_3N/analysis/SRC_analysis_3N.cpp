@@ -40,7 +40,7 @@ int main(int argc, char **argv) {
 
     myRand = new TRandom3(0);
     ffModel ffMod = kelly;
-    csMethod csMeth = cc2;
+    csMethod csMeth = cc1;
     myCS = new eNCrossSection(csMeth, ffMod);
     eNCrossSection *myCS_onshell = new eNCrossSection(onshell, ffMod);
     eNCrossSection *myCS_cc1 = new eNCrossSection(cc1, ffMod);

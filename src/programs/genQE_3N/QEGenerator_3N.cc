@@ -375,8 +375,17 @@ double QEGenerator_3N::get_rho(double N2_type, double N3_type, double theta_ab, 
   //two Jacobi sets has |det| = 1).
   //
   //The table stores the raw density |phi(pa',pb',theta')|^2 per unit
-  //d^3pa d^3pb (nonzero at pa=pb=0; integrates to ~2 against the full
-  //measure). Since the generator samples pa, pb, theta_ab uniformly, the
+  //d^3pa d^3pb (a Cartesian density: nonzero at pa=pb=0). Verified
+  //normalisation of the Faddeev tables (array/he3_3Ndensity_*.dnst), with
+  //momenta in GeV/c:
+  //    8 pi^2 * Int rho(theta,ka,kb) ka^2 kb^2 sin(theta) dka dkb dtheta = 1/3
+  //(measured 0.33308). The 1/3 is the isospin assignment: the table fixes
+  //which nucleon is the neutron (mt1=mt2=+1 pp pair, mt3=-1), and the three
+  //equivalent choices in 3He sum to 1. The 8 pi^2 = 4pi * 2pi comes from the
+  //two solid angles at fixed relative angle theta_ab.
+  //(The old AV8_1D.dnst table is the same density up to 2 pi (hbar c)^6 --
+  //fm^-1 units with one un-integrated azimuth -- giving 2 pi / 3 there.)
+  //Since the generator samples pa, pb, theta_ab uniformly, the
   //weight needs the phase-space measure of the SAMPLED variables:
   //d^3pa d^3pb = pa^2 pb^2 sin(theta_ab) dpa dpb dtheta_ab dOmega_a dphi_b.
   //Constant unit factors (hbar*c powers) are absorbed into the contact C.

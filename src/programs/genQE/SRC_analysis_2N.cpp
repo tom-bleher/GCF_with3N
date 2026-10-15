@@ -109,7 +109,7 @@ int main(int argc, char **argv) {
 
     myRand = new TRandom3(0);
     ffModel ffMod = kelly;
-    csMethod csMeth = cc2;
+    csMethod csMeth = cc1;
     myCS = new eNCrossSection(csMeth, ffMod);
     
     // Deuteron
