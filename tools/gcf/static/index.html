@@ -59,6 +59,7 @@ input[type=number], input[type=text], select {
 input:focus, select:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px var(--focus); }
 .pair { display: flex; gap: 6px; }
 .pair input, .pair select { min-width: 0; }
+.pair select { flex: 0 0 auto; width: auto; }
 .check { display: flex; align-items: center; gap: 6px; padding-top: 22px; }
 details.adv { margin-top: 10px; }
 details.adv > summary { cursor: pointer; color: var(--muted); font-size: 13px; user-select: none; }
@@ -332,7 +333,7 @@ function updateVisibility() {
   const preset = document.getElementById(fieldId("generate", "target", "preset"));
   if (preset) {
     const cur = preset.value;
-    preset.replaceChildren(el("option", { value: "" }, "preset…"), ...(TARGETS[m] || []).map(t => el("option", { value: `${t.A}:${t.Z}` }, t.name)));
+    preset.replaceChildren(el("option", { value: "" }, "nucleus…"), ...(TARGETS[m] || []).map(t => el("option", { value: `${t.A}:${t.Z}` }, t.name)));
     preset.value = cur;
   }
   for (const c of CHANNELS) {
