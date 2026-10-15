@@ -136,6 +136,10 @@ class App:
         if not d.is_dir():
             raise FileNotFoundError(name)
         out = self.run_summary(d)
+        try:
+            out["jobs"] = json.loads((d / "status.json").read_text()).get("jobs", [])
+        except (OSError, json.JSONDecodeError):
+            out["jobs"] = []
         cfg = d / "config.toml"
         if not cfg.exists():
             cfg = d / "submitted.toml"

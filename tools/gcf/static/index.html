@@ -195,6 +195,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
   <div class="stack">
     <section class="card">
       <h2>Runs <span class="muted" id="runs-dir" style="font-size:12px"></span></h2>
+      <input type="search" id="runs-filter" class="hidden" placeholder="Filter runs by name or setup…" aria-label="Filter runs" style="margin-bottom:8px">
       <div id="runs"><p class="muted">Loading…</p></div>
     </section>
     <section class="card" id="details">
@@ -289,6 +290,7 @@ function makeField(section, o) {
       const sel = el("select", { id: fieldId(section, o.key, "preset"), "aria-label": "Target preset",
         onchange: () => { const v = sel.value; if (!v) return; const [A, Z] = v.split(":"); inputs[0].value = A; inputs[1].value = Z; changed(); } });
       row.prepend(sel);
+      inputs.forEach(i => i.addEventListener("input", syncPreset));
     }
     parts = [el("label", { for: inputs[0].id }, o.label, unit, tip(o)), row];
   } else if (o.choices) {
@@ -356,6 +358,12 @@ function defaultName() {
   return `${m}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
+function syncPreset() {
+  const preset = document.getElementById(fieldId("generate", "target", "preset"));
+  if (!preset) return;
+  const A = document.getElementById(fieldId("generate", "target", "A")).value, Z = document.getElementById(fieldId("generate", "target", "Z")).value;
+  preset.value = [...preset.options].some(o => o.value === `${A}:${Z}`) ? `${A}:${Z}` : "";
+}
 function updateVisibility() {
   const st = stages(), m = model(), fm = fsiModel();
   document.getElementById("fs-generate").classList.toggle("hidden", !st.includes("generate"));
@@ -372,7 +380,7 @@ function updateVisibility() {
   if (preset) {
     const cur = preset.value;
     preset.replaceChildren(el("option", { value: "" }, "nucleus…"), ...(TARGETS[m] || []).map(t => el("option", { value: `${t.A}:${t.Z}` }, t.name)));
-    preset.value = cur;
+    preset.value = cur; syncPreset();
   }
   for (const c of CHANNELS) {
     const lab = document.querySelector(`.chan label[data-channel="${c.name}"]`), cb = lab.querySelector("input");
@@ -592,19 +600,30 @@ function progressCell(stages, runName, live) {
 }
 function badge(state) { return el("span", { class: `badge s-${state}` }, state); }
 
-async function refreshRuns() {
-  let data;
-  try { data = await api("api/runs"); } catch (e) { return; }
+let runsCache = [], RUNS_DIR = "";
+function renderRuns() {
   const box = document.getElementById("runs");
+  const q = document.getElementById("runs-filter").value.trim().toLowerCase();
+  const runs = runsCache.filter(r => !q || (r.name + " " + (r.setup || "")).toLowerCase().includes(q));
   box.replaceChildren();
-  if (!data.runs.length) { box.append(el("p", { class: "muted" }, "No runs yet. Fill in the form and press Start run.")); return; }
-  const rows = data.runs.map(r => el("tr", { class: "run" + (r.name === selected ? " selected" : ""), onclick: () => showDetails(r.name),
+  if (!runsCache.length) { box.append(el("p", { class: "muted" }, "No runs yet. Fill in the form and press Start run.")); return; }
+  if (!runs.length) { box.append(el("p", { class: "muted" }, "No run matches the filter.")); return; }
+  const rows = runs.map(r => el("tr", { class: "run" + (r.name === selected ? " selected" : ""), onclick: () => showDetails(r.name),
       title: r.setup || "" },
     el("td", {}, el("div", {}, r.name), el("div", { class: "setup" }, r.setup || ""),
       el("div", { class: "setup" }, r.started ? `${fmtTime(r.started)} · ${fmtDuration((r.finished || Date.now() / 1000) - r.started)}` : "")),
     el("td", {}, badge(r.state)), el("td", {}, progressCell(r.stages))));
   box.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Run"), el("th", {}, "State"),
     el("th", {}, "Progress"))), el("tbody", {}, rows)));
+}
+async function refreshRuns() {
+  let data;
+  try { data = await api("api/runs"); } catch (e) { return; }
+  runsCache = data.runs;
+  document.getElementById("runs-filter").classList.toggle("hidden", runsCache.length < 6);
+  const running = runsCache.filter(r => ["running", "merging", "starting"].includes(r.state)).length;
+  document.title = running ? `GCF pipeline · ${running} running` : "GCF pipeline";
+  renderRuns();
 }
 
 function showDetails(name) {
@@ -638,12 +657,28 @@ async function refreshDetails(first) {
   body.append(el("div", { class: "summary" }, badge(d.state), " ", el("b", {}, d.setup || ""),
     d.started ? ` · started ${fmtTime(d.started)} · ${running ? "running for" : "took"} ${fmtDuration(elapsed)}` : ""));
   body.append(progressCell(d.stages, name, running));
+  if (running && d.jobs && d.jobs.length > 1) {
+    const states = { running: 0, done: 0, failed: 0, pending: 0, cancelled: 0 };
+    const slowest = [];
+    d.jobs.forEach((steps, i) => {
+      const cur = steps.find(st => st.state === "running") || steps[steps.length - 1];
+      states[cur.state] = (states[cur.state] || 0) + 1;
+      if (cur.state === "running") slowest.push({ i, pct: cur.total ? cur.done / cur.total : 0, stage: cur.stage });
+    });
+    slowest.sort((a, b) => a.pct - b.pct);
+    const txt = `${d.jobs.length} jobs: ${states.running} running, ${states.done} finished` +
+      (states.failed ? `, ${states.failed} failed` : "") +
+      (slowest.length ? ` · slowest job #${slowest[0].i} at ${(100 * slowest[0].pct).toFixed(0)}% of ${slowest[0].stage}` : "");
+    body.append(el("div", { class: "setup", style: "margin-top:4px" }, txt));
+  }
   if (d.error) body.append(el("pre", { class: "msg err" }, d.error));
 
   const actions = el("div", { class: "actions" });
   if (running) actions.append(el("button", { type: "button", class: "danger", onclick: () => cancel(name) }, "Cancel run"));
   if (d.config_data) actions.append(el("button", { type: "button", onclick: () => useAsTemplate(d) }, "Use as template"));
   actions.append(el("a", { href: tokenUrl(`api/runs/${encodeURIComponent(name)}/config.toml`) + "&download=1" }, el("button", { type: "button" }, "Download config")));
+  actions.append(el("button", { type: "button", title: "Copy the terminal command that repeats this run (use --force to overwrite it)",
+    onclick: () => navigator.clipboard.writeText(`./gcf run ${RUNS_DIR}/${name}/config.toml`).then(() => toast("Command copied")) }, "Copy run command"));
   if (!running) actions.append(el("button", { type: "button", class: "danger", onclick: () => deleteRun(name) }, "Delete"));
   body.append(actions);
 
@@ -744,6 +779,7 @@ async function init() {
   try { info = await api("api/schema"); }
   catch (e) { document.getElementById("runs").replaceChildren(el("p", { class: "msg err" }, e.message)); return; }
   SCHEMA = info.schema; CHANNELS = SCHEMA._channels || []; TARGETS = SCHEMA._targets || {};
+  RUNS_DIR = info.runs_dir;
   document.getElementById("runs-dir").textContent = "in " + info.runs_dir;
   document.getElementById("docs-link").href = tokenUrl("api/docs");
   if (!info.binaries) {
@@ -762,6 +798,7 @@ async function init() {
   document.getElementById("btn-reset").onclick = resetForm;
   document.getElementById("f-go").onclick = () => listDir(document.getElementById("f-path").value);
   document.getElementById("f-close").onclick = () => document.getElementById("files").close();
+  document.getElementById("runs-filter").addEventListener("input", renderRuns);
   refreshRuns();
   setInterval(refreshRuns, 3000);
   try { const last = localStorage.getItem("gcf-gui-selected"); if (last) showDetails(last); } catch (e) {}
