@@ -85,7 +85,46 @@ class App:
         return {"name": d.name, "state": state, "error": st.get("error"),
                 "started": st.get("started"), "finished": st.get("finished"),
                 "stages": st.get("stages", {}), "outputs": outputs,
-                "mtime": d.stat().st_mtime}
+                "setup": self.setup_summary(d), "mtime": d.stat().st_mtime}
+
+    def setup_summary(self, d):
+        """One line saying what a run is, from its config: '3N · 12C · 6 GeV · 40k · hN'."""
+        cfg = d / "config.toml"
+        if not cfg.exists():
+            cfg = d / "submitted.toml"
+        try:
+            c = tomllib.loads(cfg.read_text())
+        except (OSError, tomllib.TOMLDecodeError):
+            return ""
+        parts = []
+        g, f, r = c.get("generate"), c.get("fsi"), c.get("run", {})
+        if g:
+            parts.append(g.get("model", "?"))
+            if "target" in g:
+                a, z = g["target"]
+                names = {(2, 1): "2H", (3, 1): "3H", (3, 2): "3He", (4, 2): "4He", (6, 3): "6Li", (12, 6): "12C",
+                         (14, 7): "14N", (16, 8): "16O", (27, 13): "27Al", (40, 18): "40Ar", (40, 20): "40Ca",
+                         (56, 26): "56Fe", (208, 82): "208Pb"}
+                parts.append(names.get((a, z), f"A={a} Z={z}"))
+            if "beam" in g:
+                parts.append(f"{g['beam']:g} GeV")
+            if "events" in g:
+                n = g["events"]
+                parts.append((f"{n / 1e6:g}M" if n >= 1e6 else f"{n / 1e3:g}k" if n >= 1e3 else str(n)) + " events")
+            if g.get("wave_function") and g.get("wave_function") != "AV18":
+                parts.append(g["wave_function"])
+        if f:
+            fs = f.get("model", "hN") + " FSI"
+            if f.get("off"):
+                fs += " (off: " + ", ".join(x.split(".")[-1] if False else x for x in f["off"]) + ")"
+            if not g and f.get("input"):
+                parts.append(Path(f["input"]).name)
+            parts.append(fs)
+        elif "fsi" not in r.get("stages", []):
+            parts.append("PWIA only")
+        if r.get("jobs", 1) > 1:
+            parts.append(f"{r['jobs']} jobs")
+        return " · ".join(parts)
 
     def list_runs(self):
         runs = [self.run_summary(d) for d in self.runs_dir.iterdir()
