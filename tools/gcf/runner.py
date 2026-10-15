@@ -30,6 +30,23 @@ class RunError(Exception):
     pass
 
 
+def proc_start(pid):
+    """Start time (clock ticks since boot) of a process, from /proc; None if
+    it does not exist. Together with the pid it identifies a process: a
+    reused pid gets a different start time."""
+    try:
+        with open(f"/proc/{pid}/stat") as f:
+            fields = f.read().rsplit(")", 1)[1].split()
+        return int(fields[19])        # field 22 of /proc/<pid>/stat
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def proc_is(pid, start):
+    """True if `pid` is still the process that had start time `start`."""
+    return pid is not None and start is not None and proc_start(pid) == start
+
+
 def binary(name):
     path = BIN_DIR / name
     if not os.access(path, os.X_OK):
@@ -148,8 +165,11 @@ def check_setup(cfg):
 
 
 def count_entries(path):
-    out = subprocess.run([binary("gcf_fsi"), "--input", str(path), "--count"],
-                         capture_output=True, text=True, env=environment())
+    try:
+        out = subprocess.run([binary("gcf_fsi"), "--input", str(path), "--count"],
+                             capture_output=True, text=True, env=environment(), timeout=60)
+    except subprocess.TimeoutExpired:
+        raise RunError(f"reading {path} took more than 60 s") from None
     for line in out.stdout.splitlines():
         if line.startswith("Entries:"):
             return int(line.split()[1])
@@ -172,6 +192,8 @@ class Step:
         self.done = 0
         self.state = "pending"       # pending, running, done, failed, cancelled
         self.returncode = None
+        self.pid = None              # of the stage process while it runs ...
+        self.pid_start = None        # ... and its start time, to identify it
 
 
 class Plan:
@@ -259,7 +281,7 @@ class Runner:
     def __init__(self, plan, quiet=False):
         self.plan = plan
         self.quiet = quiet
-        self.lock = threading.Lock()
+        self.lock = threading.RLock()   # the SIGTERM handler may re-enter
         self.procs = set()
         self.cancelled = False
         self.state = "running"
@@ -282,11 +304,13 @@ class Runner:
                     st["finished"] += s.state == "done"
             return {
                 "name": self.plan.name, "state": self.state, "error": self.error,
-                "pid": os.getpid(), "started": self.started, "finished": self.finished,
+                "pid": os.getpid(), "pid_start": proc_start(os.getpid()),
+                "started": self.started, "finished": self.finished,
                 "stages": stages,
                 "outputs": {k: str(v) for k, v in self.plan.outputs.items()},
                 "jobs": [[{"stage": s.stage, "state": s.state, "done": s.done, "total": s.total,
-                           "log": str(s.log)} for s in steps] for steps in self.plan.jobs],
+                           "log": str(s.log), "pid": s.pid, "pid_start": s.pid_start}
+                          for s in steps] for steps in self.plan.jobs],
             }
 
     def write_status(self):
@@ -324,6 +348,7 @@ class Runner:
                                     start_new_session=True)
             with self.lock:
                 self.procs.add(proc)
+                step.pid, step.pid_start = proc.pid, proc_start(proc.pid)
             for line in proc.stdout:
                 log.write(line)
                 if line.startswith("Progress:"):
@@ -334,6 +359,7 @@ class Runner:
             proc.wait()
             with self.lock:
                 self.procs.discard(proc)
+                step.pid = step.pid_start = None
         step.returncode = proc.returncode
         with self.lock:
             if self.cancelled:

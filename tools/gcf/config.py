@@ -5,6 +5,7 @@ listed in schema.py. Validation fills in defaults, so a saved (resolved)
 config records every setting a run used.
 """
 
+import os
 import tomllib
 from pathlib import Path
 
@@ -81,12 +82,13 @@ def validate(raw, base_dir="."):
     if not run["stages"]:
         raise ConfigError("[run] stages is empty")
     run["stages"] = [s for s in ["generate", "fsi"] if s in run["stages"]]
-    if run["jobs"] < 1:
-        raise ConfigError("[run] jobs must be >= 1")
+    max_jobs = max(1, os.cpu_count() or 1)
+    if not 1 <= run["jobs"] <= max_jobs:
+        raise ConfigError(f"[run] jobs must be between 1 and {max_jobs} (the CPUs of this machine)")
     if run["seed"] < 0:
         raise ConfigError("[run] seed must be >= 0")
-    if not run["name"] or "/" in run["name"]:
-        raise ConfigError("[run] name must be a non-empty file name")
+    if not run["name"] or "/" in run["name"] or not run["name"].isprintable():
+        raise ConfigError("[run] name must be a non-empty file name without control characters")
     out = Path(run["output_dir"]).expanduser()
     run["output_dir"] = str(out if out.is_absolute() else (Path(base_dir) / out).resolve())
 
@@ -141,7 +143,9 @@ def _toml_value(v):
     if isinstance(v, (int, float)):
         return repr(v)
     if isinstance(v, str):
-        return '"' + v.replace("\\", "\\\\").replace('"', '\\"') + '"'
+        out = v.replace("\\", "\\\\").replace('"', '\\"')
+        out = "".join(c if c.isprintable() or c == " " else "\\u%04X" % ord(c) for c in out)
+        return '"' + out + '"'
     if isinstance(v, list):
         return "[" + ", ".join(_toml_value(x) for x in v) + "]"
     raise TypeError(f"cannot write {v!r} to TOML")

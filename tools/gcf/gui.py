@@ -30,17 +30,12 @@ from pathlib import Path
 from . import cli, config, runner, schema
 
 STATIC = Path(__file__).resolve().parent / "static"
-NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.+-]{0,99}$")
+NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.+-]{0,99}\Z")
+PLACEHOLDER_STATE = "failed"
 
 
-def pid_alive(pid):
-    try:
-        os.kill(pid, 0)
-        return True
-    except (ProcessLookupError, TypeError):
-        return False
-    except PermissionError:
-        return True
+def valid_name(name):
+    return bool(name) and NAME_RE.fullmatch(name) is not None
 
 
 class App:
@@ -50,12 +45,19 @@ class App:
         self.token = secrets.token_urlsafe(18)
         self.lock = threading.Lock()
         self.children = {}            # run name -> Popen of `gcf run`
+        self.plot_lock = threading.Lock()   # matplotlib is not thread-safe
 
     # -- runs ----------------------------------------------------------------
     def run_dir(self, name):
-        if not NAME_RE.match(name or ""):
+        if not valid_name(name):
             raise ValueError(f"invalid run name {name!r}")
         return self.runs_dir / name
+
+    @staticmethod
+    def live_steps(st):
+        """Stage processes of a run that are still the recorded processes."""
+        return [s for steps in st.get("jobs", []) for s in steps
+                if s.get("pid") and runner.proc_is(s["pid"], s.get("pid_start"))]
 
     def run_summary(self, d):
         st = {}
@@ -68,14 +70,25 @@ class App:
         state = st.get("state", "starting" if (d / "submitted.toml").exists() else "unknown")
         with self.lock:
             child = self.children.get(d.name)
-        if child is not None:
-            child.poll()               # reap it once it has exited
-        if state in ("running", "merging") and not pid_alive(st.get("pid")):
-            state = "stopped"          # the run's process is gone (killed, machine reboot)
-        if state == "starting" and child is not None and child.poll() is not None:
+            if child is not None and child.poll() is not None:
+                del self.children[d.name]   # reap and forget finished supervisors
+                child = None
+        # The supervisor is only "running" if its pid is still the recorded
+        # process (pid + start time); a reused pid after a crash or reboot is
+        # not ours and must never be signalled.
+        supervisor_alive = runner.proc_is(st.get("pid"), st.get("pid_start"))
+        orphans = []
+        if state in ("running", "merging") and not supervisor_alive:
+            state = "stopped"          # the supervisor is gone (killed, machine reboot)
+            orphans = self.live_steps(st)
+        if state == "starting" and child is None:
+            # No supervisor we know of and no status.json: `gcf run` died
+            # before writing one (bad config, missing hadd, ...).
             state = "failed"
-            st["error"] = (d / "gcf.log").read_text(errors="replace")[-2000:] \
-                if (d / "gcf.log").exists() else "gcf run exited"
+            st["error"] = (d / "gcf.log").read_text(errors="replace")[-2000:].strip() \
+                if (d / "gcf.log").exists() else "gcf run exited before starting"
+            if not st["error"]:
+                st["error"] = "gcf run exited before starting"
         outputs = {}
         for stage, path in st.get("outputs", {}).items():
             p = Path(path)
@@ -85,6 +98,7 @@ class App:
         return {"name": d.name, "state": state, "error": st.get("error"),
                 "started": st.get("started"), "finished": st.get("finished"),
                 "stages": st.get("stages", {}), "outputs": outputs,
+                "orphans": len(orphans),
                 "setup": self.setup_summary(d), "mtime": d.stat().st_mtime}
 
     def setup_summary(self, d):
@@ -126,9 +140,18 @@ class App:
             parts.append(f"{r['jobs']} jobs")
         return " · ".join(parts)
 
+    def is_run(self, d):
+        return d.is_dir() and valid_name(d.name) and \
+            ((d / "status.json").exists() or (d / "submitted.toml").exists())
+
     def list_runs(self):
-        runs = [self.run_summary(d) for d in self.runs_dir.iterdir()
-                if d.is_dir() and ((d / "status.json").exists() or (d / "submitted.toml").exists())]
+        runs = []
+        for d in self.runs_dir.iterdir():
+            try:
+                if self.is_run(d):
+                    runs.append(self.run_summary(d))
+            except OSError:
+                continue           # vanished between listing and reading
         return sorted(runs, key=lambda r: r["mtime"], reverse=True)
 
     def run_details(self, name):
@@ -163,15 +186,23 @@ class App:
         out["logs"] = logs
         return out
 
+    @staticmethod
+    def with_runs_dir(raw, runs_dir):
+        """A copy of a request config with [run] output_dir forced to runs_dir."""
+        if not isinstance(raw, dict) or any(not isinstance(v, dict) for v in raw.values()):
+            raise ValueError("the config must be an object of tables ([run], [generate], [fsi])")
+        raw = dict(raw)
+        raw["run"] = dict(raw.get("run", {}), output_dir=str(runs_dir))
+        return raw
+
     def check(self, raw):
         """Validate a config and run the stages' setup checks; returns the
         resolved TOML and a list of problems."""
-        raw = dict(raw)
-        raw["run"] = dict(raw.get("run", {}), output_dir=str(self.runs_dir))
+        raw = self.with_runs_dir(raw, self.runs_dir)
         cfg = config.validate(raw, base_dir=self.runs_dir)
         problems = []
         name = cfg["run"]["name"]
-        if not NAME_RE.match(name):
+        if not valid_name(name):
             problems.append(f"invalid run name {name!r}: letters, digits, . _ + - only")
         elif (self.runs_dir / name).exists():
             problems.append(f"a run named {name!r} already exists; choose another name")
@@ -181,24 +212,21 @@ class App:
 
     def delete_run(self, name):
         d = self.run_dir(name)
-        if not d.is_dir():
+        if not self.is_run(d):
             raise FileNotFoundError(name)
         st = self.run_summary(d)
-        if st["state"] in ("running", "merging", "starting"):
+        if st["state"] in ("running", "merging", "starting") or st["orphans"]:
             raise ValueError("the run is still running; cancel it first")
         shutil.rmtree(d)
         with self.lock:
             self.children.pop(name, None)
 
     def start_run(self, raw):
-        raw = dict(raw)
-        run = dict(raw.get("run", {}))
-        name = run.get("name", "")
+        raw = self.with_runs_dir(raw, self.runs_dir)
+        name = raw["run"].get("name", "")
         d = self.run_dir(name)
         if d.exists():
             raise ValueError(f"a run named {name!r} already exists; choose another name")
-        run["output_dir"] = str(self.runs_dir)
-        raw["run"] = run
         cfg = config.validate(raw, base_dir=self.runs_dir)   # report errors now
         problems = runner.check_setup(cfg)
         if problems:
@@ -217,11 +245,24 @@ class App:
 
     def cancel_run(self, name):
         d = self.run_dir(name)
-        st = json.loads((d / "status.json").read_text())
-        pid = st.get("pid")
-        if st.get("state") not in ("running", "merging") or not pid_alive(pid):
+        try:
+            st = json.loads((d / "status.json").read_text())
+        except (OSError, json.JSONDecodeError):
+            raise ValueError("the run is not running") from None
+        if st.get("state") in ("running", "merging") and \
+                runner.proc_is(st.get("pid"), st.get("pid_start")):
+            os.kill(st["pid"], signal.SIGTERM)      # the supervisor cancels its jobs
+            return
+        # Supervisor gone but stage processes still ours: stop them directly
+        # (each runs in its own session, so kill the whole group).
+        orphans = self.live_steps(st)
+        if not orphans:
             raise ValueError("the run is not running")
-        os.kill(pid, signal.SIGTERM)
+        for s in orphans:
+            try:
+                os.killpg(s["pid"], signal.SIGTERM)
+            except (ProcessLookupError, PermissionError):
+                pass
 
     def quicklook(self, name, stage):
         from . import quicklook
@@ -230,12 +271,12 @@ class App:
         path = st.get("outputs", {}).get(stage)
         if not path or not Path(path).is_file():
             raise ValueError(f"no {stage} output yet")
-        out = quicklook.make(path)
+        with self.plot_lock:
+            out = quicklook.make(path)
         return out.name
 
     def preview(self, raw):
-        raw = dict(raw)
-        raw["run"] = dict(raw.get("run", {}), output_dir=str(self.runs_dir))
+        raw = self.with_runs_dir(raw, self.runs_dir)
         cfg = config.validate(raw, base_dir=self.runs_dir)
         return config.dumps(cfg, comment="Run with:  gcf run <this file>")
 
@@ -269,7 +310,20 @@ def make_handler(app):
         # -- helpers ---------------------------------------------------------
         def authorized(self, query):
             token = self.headers.get("X-GCF-Token") or query.get("token", [""])[0]
+            if not token:
+                cookie = self.headers.get("Cookie", "")
+                for part in cookie.split(";"):
+                    k, _, v = part.strip().partition("=")
+                    if k == "gcf_token":
+                        token = v
+            if not token.isascii():
+                return False
             return secrets.compare_digest(token, app.token)
+
+        def end_headers(self):
+            self.send_header("Referrer-Policy", "no-referrer")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            super().end_headers()
 
         def send_json(self, obj, status=HTTPStatus.OK):
             body = json.dumps(obj).encode()
@@ -283,7 +337,7 @@ def make_handler(app):
         def send_error_json(self, msg, status=HTTPStatus.BAD_REQUEST):
             self.send_json({"error": msg}, status)
 
-        def send_file(self, path, download=False):
+        def send_file(self, path, download=False, cookie=None):
             data = Path(path).read_bytes()
             if path.suffix in (".toml", ".log", ".md"):
                 ctype = "text/plain"
@@ -297,6 +351,8 @@ def make_handler(app):
             self.send_header("Cache-Control", "no-store")
             if download:
                 self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
+            if cookie:
+                self.send_header("Set-Cookie", cookie)
             self.end_headers()
             self.wfile.write(data)
 
@@ -304,7 +360,10 @@ def make_handler(app):
             n = int(self.headers.get("Content-Length", 0))
             if n > 1_000_000:
                 raise ValueError("request too large")
-            return json.loads(self.rfile.read(n) or b"{}")
+            body = json.loads(self.rfile.read(n) or b"{}")
+            if not isinstance(body, dict):
+                raise ValueError("the request body must be a JSON object")
+            return body
 
         # -- routes ----------------------------------------------------------
         def do_GET(self):
@@ -322,7 +381,10 @@ def make_handler(app):
             parts = [urllib.parse.unquote(p) for p in url.path.strip("/").split("/") if p]
             try:
                 if not parts:
-                    return self.send_file(STATIC / "index.html")
+                    # The page keeps using the token from its URL; the cookie
+                    # lets a bookmark without the token keep working.
+                    return self.send_file(STATIC / "index.html",
+                                          cookie=f"gcf_token={app.token}; HttpOnly; SameSite=Strict; Path=/")
                 if parts == ["api", "schema"]:
                     return self.send_json({"schema": schema.to_json(), "examples": cli.EXAMPLES,
                                            "runs_dir": str(app.runs_dir),
@@ -348,6 +410,9 @@ def make_handler(app):
                 self.send_error_json(f"not found: {e}", HTTPStatus.NOT_FOUND)
             except (ValueError, OSError) as e:
                 self.send_error_json(str(e))
+            except Exception as e:   # noqa: BLE001 - never drop the connection
+                print(f"gcf gui: internal error on {self.path}: {e!r}", file=sys.stderr)
+                self.send_error_json("internal error (see the gcf gui terminal)", HTTPStatus.INTERNAL_SERVER_ERROR)
 
         def do_POST(self):
             url = urllib.parse.urlparse(self.path)
@@ -379,6 +444,9 @@ def make_handler(app):
                 self.send_error_json(f"not found: {e}", HTTPStatus.NOT_FOUND)
             except (OSError, json.JSONDecodeError) as e:
                 self.send_error_json(str(e))
+            except Exception as e:   # noqa: BLE001
+                print(f"gcf gui: internal error on {self.path}: {e!r}", file=sys.stderr)
+                self.send_error_json("internal error (see the gcf gui terminal)", HTTPStatus.INTERNAL_SERVER_ERROR)
 
     return Handler
 
@@ -398,7 +466,8 @@ def serve(host, port, runs_dir):
           f"    ssh -N -L {port}:localhost:{port} {user}@{machine}\n"
           f"(VS Code Remote-SSH forwards the port for you), then browse to\n"
           f"    {url}\n"
-          f"\nCtrl-C stops the interface; runs already started keep going.", flush=True)
+          f"\nThe token is the password: don't redirect this output to a file others can read.\n"
+          f"Ctrl-C stops the interface; runs already started keep going.", flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:

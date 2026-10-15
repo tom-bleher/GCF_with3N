@@ -674,11 +674,13 @@ async function refreshDetails(first) {
   if (d.error) body.append(el("pre", { class: "msg err" }, d.error));
 
   const actions = el("div", { class: "actions" });
-  if (running) actions.append(el("button", { type: "button", class: "danger", onclick: () => cancel(name) }, "Cancel run"));
+  if (running || d.orphans) actions.append(el("button", { type: "button", class: "danger", onclick: () => cancel(name) },
+    d.orphans ? `Stop ${d.orphans} leftover job process${d.orphans > 1 ? "es" : ""}` : "Cancel run"));
+  if (d.state === "stopped" && !d.orphans) body.append(el("p", { class: "setup" }, "The run's supervisor process is gone (killed, or the machine restarted); its outputs may be incomplete."));
   if (d.config_data) actions.append(el("button", { type: "button", onclick: () => useAsTemplate(d) }, "Use as template"));
   actions.append(el("a", { href: tokenUrl(`api/runs/${encodeURIComponent(name)}/config.toml`) + "&download=1" }, el("button", { type: "button" }, "Download config")));
   actions.append(el("button", { type: "button", title: "Copy the terminal command that repeats this run (use --force to overwrite it)",
-    onclick: () => navigator.clipboard.writeText(`./gcf run ${RUNS_DIR}/${name}/config.toml`).then(() => toast("Command copied")) }, "Copy run command"));
+    onclick: () => navigator.clipboard.writeText(`./gcf run '${RUNS_DIR}/${name}/config.toml'`).then(() => toast("Command copied")) }, "Copy run command"));
   if (!running) actions.append(el("button", { type: "button", class: "danger", onclick: () => deleteRun(name) }, "Delete"));
   body.append(actions);
 
@@ -694,7 +696,8 @@ async function refreshDetails(first) {
         el("div", { class: "path" }, o.path)));
       if (!o.plot && o.exists && d.state === "done" && !autoPlotted[name + stage]) {
         autoPlotted[name + stage] = true;
-        api(`api/runs/${encodeURIComponent(name)}/quicklook`, { stage }).then(() => { lastPlot[name + stage] = Date.now(); refreshDetails(); }).catch(() => {});
+        api(`api/runs/${encodeURIComponent(name)}/quicklook`, { stage }).then(() => { lastPlot[name + stage] = Date.now(); refreshDetails(); })
+          .catch(e => { delete autoPlotted[name + stage]; toast("Plots: " + e.message); });
       }
       if (o.plot) {
         const file = o.path.split("/").pop().replace(/\.root$/, ".png"), key = name + stage;
