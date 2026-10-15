@@ -3,6 +3,13 @@
 #include "helpers.hh"
 #include <iostream>
 #include <cmath>
+#include <cstdlib>
+
+// Normally set by CMake to the absolute path of genQE_3N/array; the fallback
+// keeps the old behaviour (relative to the working directory).
+#ifndef GCF_3N_ARRAY_DIR
+#define GCF_3N_ARRAY_DIR "array"
+#endif
 
 #include "TH2D.h"
 #include "TCanvas.h"
@@ -482,23 +489,35 @@ void QEGenerator_3N::fill_array(){
   // tables entirely -- their normalization/variable convention was unknown
   // and untrusted, whereas these are self-verified against the independent
   // 3He normalization unorm_n=1/3 (see check_3N_density_normalization.py).
-  if(u==1){uType="array/he3_3Ndensity_AV18.dnst";}
-  else if(u==2){uType="array/he3_3Ndensity_AV18UIX.dnst";}
-  else if(u==3){uType="array/he3_3Ndensity_AV18TM.dnst";}
-  else if(u==4){uType="array/he3_3Ndensity_CDBonn.dnst";}
-  else if(u==5){uType="array/he3_3Ndensity_CDBonnTM.dnst";}
+  //
+  // Tables live in genQE_3N/array. CMake bakes that absolute path in as
+  // GCF_3N_ARRAY_DIR so the binaries work from any working directory; the
+  // GCF_3N_ARRAY_DIR environment variable overrides it at run time.
+  const char * arrayDirEnv = getenv("GCF_3N_ARRAY_DIR");
+  const std::string arrayDir = arrayDirEnv ? arrayDirEnv : GCF_3N_ARRAY_DIR;
+  if(u==1){uType="he3_3Ndensity_AV18.dnst";}
+  else if(u==2){uType="he3_3Ndensity_AV18UIX.dnst";}
+  else if(u==3){uType="he3_3Ndensity_AV18TM.dnst";}
+  else if(u==4){uType="he3_3Ndensity_CDBonn.dnst";}
+  else if(u==5){uType="he3_3Ndensity_CDBonnTM.dnst";}
   // u=6..10: pD-only (deuteron channels 15-18 of the Faddeev wave function,
   // see Data/He3togo/wf_he3_pD.f / gen_3N_density_grid_pD.f in the research
   // repo) counterparts of u=1..5 above, same grid/units/Jacobian -- get_rho()
   // needs no changes to use these, only which table fill_array() loads.
-  else if(u==6){uType="array/he3_3Ndensity_pD_AV18.dnst";}
-  else if(u==7){uType="array/he3_3Ndensity_pD_AV18UIX.dnst";}
-  else if(u==8){uType="array/he3_3Ndensity_pD_AV18TM.dnst";}
-  else if(u==9){uType="array/he3_3Ndensity_pD_CDBonn.dnst";}
-  else if(u==10){uType="array/he3_3Ndensity_pD_CDBonnTM.dnst";}
+  else if(u==6){uType="he3_3Ndensity_pD_AV18.dnst";}
+  else if(u==7){uType="he3_3Ndensity_pD_AV18UIX.dnst";}
+  else if(u==8){uType="he3_3Ndensity_pD_AV18TM.dnst";}
+  else if(u==9){uType="he3_3Ndensity_pD_CDBonn.dnst";}
+  else if(u==10){uType="he3_3Ndensity_pD_CDBonnTM.dnst";}
+  else{
+    cerr<<"Invalid 3N interaction # u="<<u<<" (valid: 1-10).\n"
+	<<"Aborting...\n\n\n";
+    exit(-2);
+  }
+  uType = arrayDir + "/" + uType;
   std::ifstream densityFile(uType);
   if(!densityFile.is_open()){
-    cout<<"3 nucleon distribution file failed to load.\n"
+    cout<<"3 nucleon distribution file failed to load: "<<uType<<"\n"
 	<<"Aborting...\n\n\n";
     exit(-2);
   }
