@@ -22,7 +22,7 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 24px 0; }
 </head>
 <body>
 <main>
-  <p class="back"><a id="back" href="#">← Back to GCF_with3N</a></p>
+  <p class="back"><a id="back" href="#">← Back to GCF_with3N</a> &nbsp;·&nbsp; <a id="nav-pipeline" href="#">Running the pipeline</a> &nbsp;·&nbsp; <a id="nav-physics" href="#">What the generator computes</a></p>
   <div id="doc"><p>Loading…</p></div>
 </main>
 <script>
@@ -31,13 +31,19 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 24px 0; }
 // tables, fenced code, blockquotes, rules, and inline code/bold/italic/links.
 const TOKEN = new URLSearchParams(location.search).get("token") || "";
 document.getElementById("back").href = "/?token=" + encodeURIComponent(TOKEN);
+const DOC = new URLSearchParams(location.search).get("doc") === "PHYSICS" ? "PHYSICS" : "PIPELINE";
+document.getElementById("nav-pipeline").href = "/docs?token=" + encodeURIComponent(TOKEN);
+document.getElementById("nav-physics").href = "/docs?doc=PHYSICS&token=" + encodeURIComponent(TOKEN);
+document.getElementById(DOC === "PHYSICS" ? "nav-physics" : "nav-pipeline").style.fontWeight = "600";
 const esc = s => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 const slug = s => s.toLowerCase().replace(/<[^>]*>/g, "").replace(/[^\w\s-]/g, "").trim().replace(/\s+/g, "-");
 function inline(s) {
   const codes = [];
   s = esc(s).replace(/`([^`]+)`/g, (m, c) => { codes.push(c); return `\u0000${codes.length - 1}\u0000`; });
   s = s.replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>").replace(/(^|[\s(])\*([^*\s][^*]*)\*/g, "$1<i>$2</i>")
-       .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) => `<a href="${u.startsWith("#") || /^https?:/.test(u) ? u : "#"}">${t}</a>`);
+       .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (m, t, u) => { const d = /^(PIPELINE|PHYSICS)\.md(#.*)?$/.exec(u);
+         const href = d ? `/docs?doc=${d[1]}&token=${encodeURIComponent(TOKEN)}${d[2] || ""}` : (u.startsWith("#") || /^https?:/.test(u) ? u : "#");
+         return `<a href="${href}">${t}</a>`; });
   return s.replace(/\u0000(\d+)\u0000/g, (m, i) => `<code>${codes[i]}</code>`);
 }
 function render(md) {
@@ -72,7 +78,7 @@ function render(md) {
   }
   flush(); return out.join("\n");
 }
-fetch("api/docs", { headers: { "X-GCF-Token": TOKEN } }).then(r => r.ok ? r.text() : Promise.reject(new Error(r.statusText)))
+fetch("api/docs?name=" + DOC, { headers: { "X-GCF-Token": TOKEN } }).then(r => r.ok ? r.text() : Promise.reject(new Error(r.statusText)))
   .then(md => { document.getElementById("doc").innerHTML = render(md); if (location.hash) { const t = document.querySelector(location.hash); if (t) t.scrollIntoView(); } })
   .catch(e => { document.getElementById("doc").textContent = "Could not load the documentation: " + e.message; });
 </script>

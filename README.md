@@ -16,7 +16,8 @@ stages, from config files, the command line or a web interface:
 ```
 
 The FSI stage also accepts events from other generators, and lets you switch
-individual cascade channels (absorption, charge exchange, ...) off. Event format, options
+individual cascade channels (absorption, charge exchange, ...) off. What the
+generators compute, assumptions and expressions: [docs/PHYSICS.md](docs/PHYSICS.md). Event format, options
 and validation: [docs/PIPELINE.md](docs/PIPELINE.md).
 
 ## Compile

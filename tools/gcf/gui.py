@@ -410,7 +410,10 @@ def make_handler(app):
                 if parts == ["docs"]:
                     return self.send_file(STATIC / "docs.html")
                 if parts == ["api", "docs"]:
-                    return self.send_file(runner.REPO / "docs" / "PIPELINE.md")
+                    name = query.get("name", ["PIPELINE"])[0]
+                    if name not in ("PIPELINE", "PHYSICS"):
+                        raise FileNotFoundError(name)
+                    return self.send_file(runner.REPO / "docs" / f"{name}.md")
                 self.send_error_json("not found", HTTPStatus.NOT_FOUND)
             except FileNotFoundError as e:
                 self.send_error_json(f"not found: {e}", HTTPStatus.NOT_FOUND)
