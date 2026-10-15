@@ -386,8 +386,19 @@ double Spline::Evaluate(double x) const
     if(!is0p && !is0n) {
       // both knots (on the left and right are non-zero) - just interpolate
       LOG("Spline", pDEBUG) << "Point is between non-zero knots";
-      if (fInterpolatorType == "TSpline3")
-        y = fInterpolator->Eval(x);
+      if (fInterpolatorType == "TSpline3") {
+        // Same as fInterpolator->Eval(x), i.e. ROOT's TSpline3::Eval:
+        // klow = FindX(x), clamped to fNp-2, then the cubic around knot
+        // klow -- but reusing the knot index found above rather than
+        // repeating the binary search.
+        int klow = iknot;
+        const int np = fInterpolator->GetNp();
+        if (klow >= np-1 && np > 1) klow = np-2;
+        double xk=0, yk=0, b=0, c=0, d=0;
+        fInterpolator->GetCoeff(klow, xk, yk, b, c, d);
+        const double dx = x - xk;
+        y = yk + dx * (b + dx * (c + dx * d));
+      }
       else if (fInterpolatorType == "TSpline5")
         y = fInterpolator5->Eval(x);
       else
