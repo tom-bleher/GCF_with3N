@@ -15,7 +15,8 @@ stages, from config files, the command line or a web interface:
 ./gcf gui                         # web interface (open it through an SSH tunnel)
 ```
 
-The FSI stage also accepts events from other generators. Event format, options
+The FSI stage also accepts events from other generators, and lets you switch
+individual cascade channels (absorption, charge exchange, ...) off. Event format, options
 and validation: [docs/PIPELINE.md](docs/PIPELINE.md).
 
 ## Compile

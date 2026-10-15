@@ -76,16 +76,53 @@ model = "3N"                  # 3N, 2N or MF
 beam = 6.0                    # GeV
 events = 1000000              # accepted events, over all jobs
 target = [12, 6]
-interaction = 1               # 3N density table (1-10)
+wave_function = "AV18"        # 3N: AV18, AV18+UIX, AV18+TM, CDBonn, CDBonn+TM, or ...-pD
 theta_e = [5.0, 40.0]         # deg
+# 2N/MF: nn = "AV18" | "N2LO" | "N2LO12" | "N3LO" | "AV4" | "NV"; MF: fermi_gas = "global" | "local"
 
 [fsi]
 model = "hN"                  # hN or hA
 transport = "shared"          # or "independent"
+off = ["pion.absorption"]     # cascade channels to switch off (see below)
 ```
 
 Every run directory holds the resolved `config.toml` (including the seed),
 per-job logs and a `status.json`; `gcf run runs/<name>/config.toml` repeats it.
+
+### Interaction channels of the cascade
+
+`gcf_fsi --channel NAME=FACTOR` scales the rate of one interaction channel
+of the cascade by FACTOR; 0 switches it off and the remaining fates are
+renormalized. In a config, `[fsi] off = [...]` lists the channels to switch
+off; `gcf fsi --off NAME` does the same on the command line. Which channels
+exist depends on the model (`gcf_fsi --list-channels`):
+
+| channel | hN | hA | |
+|---|---|---|---|
+| `nucleon.elastic` | yes | – | elastic is not a separate hA fate |
+| `nucleon.inelastic` | yes | yes | |
+| `nucleon.cex` | – | yes | |
+| `nucleon.absorption` | – | yes | |
+| `nucleon.piprod` | – | yes | |
+| `nucleon.compound` | yes | yes | compound-nucleus (pre-equilibrium) fate |
+| `pion.elastic` | yes | – | |
+| `pion.inelastic` | yes | yes | |
+| `pion.cex` | yes | yes | |
+| `pion.absorption` | yes | yes | |
+| `pion.piprod` | – | yes | |
+| `nucleon.mfp`, `pion.mfp` | yes | yes | mean-free-path scales (`nucleon_mfp_scale`, `pion_mfp_scale` in a config), not switches |
+
+These map onto GENIE's own `FSI-*-Frac*Scale` / `INUKE-*Fac` configuration
+parameters, written into a private override of `HN/HAIntranuke2018.xml` for
+the run (recorded in the file's provenance). Three of the hN factors
+(nucleon elastic and inelastic, pion inelastic) are a small local GENIE
+patch, since stock hN only has them for the pion cex/absorption/elastic
+channels. In hA at least one of the four nucleon channels must stay on.
+
+A nucleon left with no allowed fate (e.g. a slow nucleon with elastic
+scattering off) leaves the nucleus without interacting; GENIE logs that at
+ERROR level for every step, so with a channel off `gcf_fsi` quiets the two
+cascade log streams and says so.
 
 ### Without a config
 
@@ -113,11 +150,17 @@ The interface runs on the analysis machine. Open an SSH tunnel from your laptop
 port automatically) and open the printed URL. From the page you can:
 
 - choose the stages (generate + FSI, generate only, FSI on an existing file);
-- fill in the generator and FSI settings (the form shows only the options that
-  apply to the chosen model, with their help text);
+- fill in the essential settings (model, beam, events, target with presets of
+  supported nuclei, wave function, cascade model, interaction channels); the
+  rest is under "Advanced", which says how many of its options you changed;
+- see mistakes as you type (the offending field is highlighted), and run
+  "Check" to have the generator itself validate the settings (nucleus tables
+  and all) before anything starts;
 - preview or download the config, and start the run;
-- follow the runs: progress per stage, logs, output files, quick-look plots,
-  cancel.
+- follow the runs: progress with rate and time left, live logs, output files
+  with their paths, quick-look plots drawn automatically when a run finishes,
+  cancel;
+- reuse a finished run as a template for a new one, or delete it.
 
 Everything the page does goes through `gcf run`, and each run keeps its
 config, so a run set up in the browser can be repeated or scaled up from a
