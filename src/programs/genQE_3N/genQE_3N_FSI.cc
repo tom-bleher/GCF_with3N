@@ -74,7 +74,6 @@ bool init(int argc, char ** argv)
 
   double Ebeam = atof(argv[1]);
   int u = atoi(argv[2]);
-  outfile = new TFile(argv[3],"RECREATE");
   nEvents = atoi(argv[4]);
 
   ffModel ffMod = kelly;
@@ -154,7 +153,8 @@ bool init(int argc, char ** argv)
       case 'h':
         Usage(); return false;
       default:
-        abort();
+        // getopt already printed "invalid option"
+        Usage(); return false;
     }
 
   myRand = new TRandom3(0);
@@ -176,6 +176,10 @@ bool init(int argc, char ** argv)
   doFSI_flag  = enableFSI ? 1 : 0;
   fsiModelInt = (fsiModel == kHN2018) ? 0 : 1;
 
+  // Open the output only after the generator is set up: exit() from a
+  // setup error with an open TFile crashes in ROOT's teardown and buries
+  // the real error message.
+  outfile = new TFile(argv[3],"RECREATE");
   outfile->cd();
   outtree = new TTree("genTbuffer","Generator Tree");
   outtree->Branch("N1_type",  &N1_type,  "N1_type/I");
