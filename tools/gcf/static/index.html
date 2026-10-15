@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GCF pipeline</title>
+<style>
+:root {
+  --bg: #f6f7f9; --card: #ffffff; --text: #1d2330; --muted: #5d6677; --line: #d9dde5;
+  --accent: #2f6fd1; --accent-text: #ffffff; --ok: #1f8a4c; --warn: #b7791f; --bad: #c0392b;
+  --code-bg: #f0f2f5; --bar-bg: #e6e9ef;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14171c; --card: #1c2027; --text: #e3e6eb; --muted: #9aa3b2; --line: #313743;
+    --accent: #5b93ec; --accent-text: #0e1116; --ok: #46b97a; --warn: #e0a84a; --bad: #e46a5d;
+    --code-bg: #232831; --bar-bg: #2b313b;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text);
+  font: 14px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header { padding: 18px 24px 6px; }
+h1 { margin: 0; font-size: 22px; }
+h2 { margin: 0 0 12px; font-size: 16px; }
+.sub { margin: 4px 0 0; color: var(--muted); max-width: 900px; }
+main { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: 16px;
+  padding: 12px 24px 32px; align-items: start; }
+@media (max-width: 1000px) { main { grid-template-columns: 1fr; } }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 16px; }
+.stack { display: grid; gap: 16px; }
+fieldset { border: 1px solid var(--line); border-radius: 6px; margin: 12px 0 0; padding: 10px 12px 12px; }
+legend { padding: 0 6px; font-weight: 600; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 14px; }
+.field label { display: block; font-weight: 500; margin-bottom: 3px; }
+.field .unit { color: var(--muted); font-weight: 400; }
+.field .help { display: block; color: var(--muted); font-size: 12px; margin-top: 2px; }
+input[type=number], input[type=text], select {
+  width: 100%; padding: 5px 7px; border: 1px solid var(--line); border-radius: 5px;
+  background: var(--card); color: var(--text); font: inherit; }
+.pair { display: flex; gap: 6px; }
+.pair input { min-width: 0; }
+.check { display: flex; align-items: center; gap: 6px; }
+.stages { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.stages label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+button { font: inherit; padding: 6px 12px; border-radius: 5px; border: 1px solid var(--line);
+  background: var(--card); color: var(--text); cursor: pointer; }
+button:hover { border-color: var(--accent); }
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button.small { padding: 2px 8px; font-size: 12px; }
+button:disabled { opacity: .5; cursor: default; }
+pre { background: var(--code-bg); padding: 10px; border-radius: 6px; overflow: auto;
+  font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 340px; margin: 8px 0 0; }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.hidden { display: none !important; }
+.error { color: var(--bad); white-space: pre-wrap; margin-top: 10px; }
+.banner { margin: 8px 24px 0; padding: 10px 14px; border-radius: 6px; border: 1px solid var(--warn);
+  color: var(--warn); }
+.muted { color: var(--muted); font-weight: 400; }
+table { width: 100%; border-collapse: collapse; }
+th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+th { font-weight: 600; color: var(--muted); font-size: 12px; }
+tr.run { cursor: pointer; }
+tr.run:hover, tr.run.selected { background: var(--code-bg); }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px;
+  border: 1px solid currentColor; }
+.s-done { color: var(--ok); } .s-failed, .s-stopped { color: var(--bad); }
+.s-running, .s-merging, .s-starting { color: var(--accent); } .s-cancelled, .s-unknown { color: var(--muted); }
+.bar { height: 7px; background: var(--bar-bg); border-radius: 4px; overflow: hidden; min-width: 70px; }
+.bar > div { height: 100%; background: var(--accent); }
+.barlabel { font-size: 11px; color: var(--muted); }
+.kv { display: grid; grid-template-columns: max-content 1fr; gap: 4px 12px; margin: 6px 0; }
+.kv div:nth-child(odd) { color: var(--muted); }
+.path { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
+img.plot { width: 100%; border: 1px solid var(--line); border-radius: 6px; margin-top: 10px; background: #fff; }
+details { margin-top: 6px; }
+summary { cursor: pointer; }
+dialog { border: 1px solid var(--line); border-radius: 8px; background: var(--card); color: var(--text);
+  width: min(720px, 92vw); padding: 16px; }
+dialog::backdrop { background: rgba(0,0,0,.35); }
+.filelist { max-height: 50vh; overflow: auto; border: 1px solid var(--line); border-radius: 6px; margin-top: 8px; }
+.filelist div { padding: 4px 10px; cursor: pointer; display: flex; justify-content: space-between; }
+.filelist div:hover { background: var(--code-bg); }
+</style>
+</head>
+<body>
+<header>
+  <h1>GCF pipeline</h1>
+  <p class="sub">Generate Generalized Contact Formalism quasi-elastic events in PWIA, and/or add
+    final-state interactions with the GENIE intranuclear cascade. Every run is saved with its
+    full config, so it can be repeated from a terminal with <code>gcf run config.toml</code>.
+    Format and options: <code>docs/PIPELINE.md</code>.</p>
+</header>
+<div id="banner" class="banner hidden"></div>
+<main>
+  <section class="card">
+    <h2>New run</h2>
+    <div class="stages" role="radiogroup" aria-label="Stages to run">
+      <label><input type="radio" name="stages" value="generate,fsi" checked> Generate + FSI</label>
+      <label><input type="radio" name="stages" value="generate"> Generate only (PWIA)</label>
+      <label><input type="radio" name="stages" value="fsi"> FSI on an existing event file</label>
+    </div>
+    <fieldset><legend>Run</legend><div class="grid" id="grid-run"></div></fieldset>
+    <fieldset id="fs-generate"><legend>Generator (PWIA)</legend><div class="grid" id="grid-generate"></div></fieldset>
+    <fieldset id="fs-fsi"><legend>FSI (GENIE intranuclear cascade)</legend><div class="grid" id="grid-fsi"></div></fieldset>
+    <div class="actions">
+      <button type="button" id="btn-preview">Show config</button>
+      <button type="button" id="btn-download">Download config</button>
+      <button type="button" class="primary" id="btn-start">Start run</button>
+    </div>
+    <div id="form-error" class="error hidden"></div>
+    <pre id="preview" class="hidden"></pre>
+  </section>
+
+  <div class="stack">
+    <section class="card">
+      <h2>Runs <span class="muted" id="runs-dir"></span></h2>
+      <div id="runs"><p class="muted">Loading…</p></div>
+    </section>
+    <section class="card hidden" id="details">
+      <h2 id="d-title"></h2>
+      <div id="d-body"></div>
+    </section>
+  </div>
+</main>
+
+<dialog id="files">
+  <h2>Choose an event file</h2>
+  <div class="pair"><input type="text" id="f-path" aria-label="Directory"><button type="button" id="f-go">Go</button>
+    <button type="button" id="f-up">Up</button></div>
+  <div class="filelist" id="f-list"></div>
+  <div class="actions"><button type="button" id="f-close">Close</button></div>
+</dialog>
+
+<script>
+"use strict";
+const TOKEN = new URLSearchParams(location.search).get("token") || "";
+let SCHEMA = null;
+let selected = null;          // name of the run shown in the details panel
+let detailsTimer = null;
+
+async function api(path, body) {
+  const opts = { headers: { "X-GCF-Token": TOKEN } };
+  if (body !== undefined) {
+    opts.method = "POST";
+    opts.headers["Content-Type"] = "application/json";
+    opts.body = JSON.stringify(body);
+  }
+  const r = await fetch(path, opts);
+  let data = {};
+  try { data = await r.json(); } catch (e) { data = { error: r.statusText }; }
+  if (!r.ok) throw new Error(data.error || r.statusText);
+  return data;
+}
+
+function el(tag, attrs, ...children) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") e.className = v;
+    else if (k.startsWith("on")) e.addEventListener(k.slice(2), v);
+    else e.setAttribute(k, v === true ? "" : v);
+  }
+  for (const c of children.flat()) {
+    if (c === null || c === undefined || c === false) continue;
+    e.append(c instanceof Node ? c : document.createTextNode(String(c)));
+  }
+  return e;
+}
+
+function fmtBytes(n) {
+  if (n < 1024) return n + " B";
+  const u = ["kB", "MB", "GB", "TB"];
+  let i = -1;
+  do { n /= 1024; i++; } while (n >= 1024 && i < u.length - 1);
+  return n.toFixed(n < 10 ? 1 : 0) + " " + u[i];
+}
+function fmtTime(t) { return t ? new Date(t * 1000).toLocaleString() : ""; }
+function fmtDuration(s) {
+  s = Math.max(0, Math.round(s));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+  return h ? `${h}h ${m}m` : m ? `${m}m ${sec}s` : `${sec}s`;
+}
+
+// ---------------------------------------------------------------- form ----
+const SKIP = { run: ["output_dir", "stages"] };
+
+function fieldId(section, key, part) { return `f-${section}-${key}${part ? "-" + part : ""}`; }
+
+function makeField(section, o) {
+  const id = fieldId(section, o.key);
+  const label = el("label", { for: id }, o.label, o.unit ? el("span", { class: "unit" }, ` (${o.unit})`) : null);
+  let input;
+  const ph = o.default === null ? "default" : null;
+  if (o.kind === "bool") {
+    input = el("input", { type: "checkbox", id, checked: !!o.default });
+    const box = el("div", { class: "check" }, input, el("label", { for: id }, o.label));
+    return wrap(section, o, [box]);
+  } else if (o.choices) {
+    input = el("select", { id });
+    if (o.default === null) input.append(el("option", { value: "" }, "default"));
+    for (const c of o.choices) input.append(el("option", { value: String(c), selected: c === o.default }, String(c)));
+  } else if (o.kind === "range" || o.kind === "target") {
+    const names = o.kind === "range" ? ["min", "max"] : ["A", "Z"];
+    const d = o.default || [null, null];
+    const inputs = names.map((n, i) => el("input", {
+      type: "number", step: o.kind === "target" ? "1" : "any", id: fieldId(section, o.key, n),
+      placeholder: d[i] === null ? n : null, value: d[i] === null ? null : d[i], "aria-label": `${o.label} ${n}` }));
+    return wrap(section, o, [el("label", { for: inputs[0].id }, o.label,
+      o.unit ? el("span", { class: "unit" }, ` (${o.unit})`) : null), el("div", { class: "pair" }, inputs)]);
+  } else if (o.kind === "float" || o.kind === "int") {
+    input = el("input", { type: "number", step: o.kind === "int" ? "1" : "any", id,
+      value: o.default === null ? null : o.default, placeholder: ph });
+  } else {
+    input = el("input", { type: "text", id, value: o.default === null ? null : o.default, placeholder: ph });
+  }
+  const parts = [label, input];
+  if (section === "fsi" && o.key === "input") {
+    parts[1] = el("div", { class: "pair" }, input, el("button", { type: "button", onclick: openFiles }, "Browse…"));
+  }
+  return wrap(section, o, parts);
+}
+
+function wrap(section, o, parts) {
+  const help = o.help ? el("span", { class: "help" }, o.help) : null;
+  return el("div", { class: "field", "data-section": section, "data-key": o.key,
+    "data-models": (o.models || []).join(",") }, ...parts, help);
+}
+
+function buildForm() {
+  for (const section of ["run", "generate", "fsi"]) {
+    const grid = document.getElementById("grid-" + section);
+    for (const o of SCHEMA[section]) {
+      if ((SKIP[section] || []).includes(o.key)) continue;
+      grid.append(makeField(section, o));
+    }
+  }
+  document.getElementById(fieldId("run", "name")).value = defaultName();
+  document.querySelectorAll("input[name=stages]").forEach(r => r.addEventListener("change", updateVisibility));
+  document.getElementById(fieldId("generate", "model")).addEventListener("change", () => {
+    updateVisibility();
+    document.getElementById(fieldId("run", "name")).value = defaultName();
+  });
+  updateVisibility();
+}
+
+function stages() { return document.querySelector("input[name=stages]:checked").value.split(","); }
+function model() { return document.getElementById(fieldId("generate", "model")).value; }
+
+function defaultName() {
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  const m = document.getElementById(fieldId("generate", "model"));
+  return `${m ? m.value : "run"}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
+}
+
+function updateVisibility() {
+  const st = stages(), m = model();
+  document.getElementById("fs-generate").classList.toggle("hidden", !st.includes("generate"));
+  document.getElementById("fs-fsi").classList.toggle("hidden", !st.includes("fsi"));
+  const fsiOnly = !st.includes("generate");
+  document.querySelectorAll(".field").forEach(f => {
+    let show = true;
+    if (f.dataset.section === "generate") show = f.dataset.models.split(",").includes(m);
+    if (f.dataset.section === "fsi" && ["input", "target"].includes(f.dataset.key)) show = fsiOnly;
+    f.classList.toggle("hidden", !show);
+  });
+}
+
+function readNumber(id, kind, label) {
+  const v = document.getElementById(id).value.trim();
+  if (v === "") return null;
+  const x = Number(v);
+  if (!Number.isFinite(x) || (kind === "int" && !Number.isInteger(x))) throw new Error(`${label}: not a valid ${kind}`);
+  return x;
+}
+
+function collect() {
+  const st = stages();
+  const cfg = { run: { stages: st } };
+  if (st.includes("generate")) cfg.generate = {};
+  if (st.includes("fsi")) cfg.fsi = {};
+  for (const section of Object.keys(cfg)) {
+    for (const o of SCHEMA[section]) {
+      if ((SKIP[section] || []).includes(o.key)) continue;
+      const f = document.querySelector(`.field[data-section="${section}"][data-key="${o.key}"]`);
+      if (!f || f.classList.contains("hidden")) continue;
+      let v = null;
+      if (o.kind === "bool") {
+        const c = document.getElementById(fieldId(section, o.key)).checked;
+        if (c !== !!o.default) v = c;
+      } else if (o.kind === "range" || o.kind === "target") {
+        const names = o.kind === "range" ? ["min", "max"] : ["A", "Z"];
+        const kind = o.kind === "range" ? "float" : "int";
+        const vals = names.map(n => readNumber(fieldId(section, o.key, n), kind, `${o.label} ${n}`));
+        if (vals.every(x => x !== null)) v = vals;
+        else if (vals.some(x => x !== null)) throw new Error(`${o.label}: give both ${names.join(" and ")}`);
+      } else if (o.kind === "float" || o.kind === "int") {
+        v = readNumber(fieldId(section, o.key), o.kind, o.label);
+      } else {
+        const s = document.getElementById(fieldId(section, o.key)).value.trim();
+        if (s !== "") v = o.choices && typeof o.choices[0] === "number" ? Number(s) : s;
+      }
+      if (v !== null) cfg[section][o.key] = v;
+    }
+  }
+  return cfg;
+}
+
+function showFormError(msg) {
+  const e = document.getElementById("form-error");
+  e.textContent = msg || "";
+  e.classList.toggle("hidden", !msg);
+}
+
+async function preview() {
+  showFormError("");
+  try {
+    const r = await api("api/preview", collect());
+    const p = document.getElementById("preview");
+    p.textContent = r.toml;
+    p.classList.remove("hidden");
+    return r.toml;
+  } catch (e) { showFormError(e.message); return null; }
+}
+
+async function downloadConfig() {
+  const toml = await preview();
+  if (!toml) return;
+  const name = document.getElementById(fieldId("run", "name")).value || "run";
+  const a = el("a", { href: URL.createObjectURL(new Blob([toml], { type: "text/plain" })), download: name + ".toml" });
+  document.body.append(a); a.click(); a.remove();
+}
+
+async function startRun() {
+  showFormError("");
+  const btn = document.getElementById("btn-start");
+  btn.disabled = true;
+  try {
+    const r = await api("api/runs", collect());
+    document.getElementById("preview").classList.add("hidden");
+    document.getElementById(fieldId("run", "name")).value = defaultName();
+    await refreshRuns();
+    showDetails(r.name);
+  } catch (e) { showFormError(e.message); }
+  finally { btn.disabled = false; }
+}
+
+// -------------------------------------------------------------- runs ----
+function progressCell(stages) {
+  const box = el("div");
+  for (const [name, s] of Object.entries(stages || {})) {
+    const pct = s.total ? Math.min(100, 100 * s.done / s.total) : 0;
+    box.append(el("div", { class: "barlabel" }, `${name} ${pct.toFixed(0)}%`),
+      el("div", { class: "bar", role: "progressbar", "aria-valuenow": pct.toFixed(0), "aria-label": name },
+        el("div", { style: `width:${pct}%` })));
+  }
+  return box;
+}
+
+function badge(state) { return el("span", { class: `badge s-${state}` }, state); }
+
+async function refreshRuns() {
+  let data;
+  try { data = await api("api/runs"); } catch (e) { return; }
+  const box = document.getElementById("runs");
+  box.replaceChildren();
+  if (!data.runs.length) { box.append(el("p", { class: "muted" }, "No runs yet.")); return; }
+  const rows = data.runs.map(r => el("tr", { class: "run" + (r.name === selected ? " selected" : ""),
+      onclick: () => showDetails(r.name) },
+    el("td", {}, r.name), el("td", {}, badge(r.state)), el("td", {}, progressCell(r.stages)),
+    el("td", { class: "muted" }, fmtTime(r.started))));
+  box.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", {}, "Name"), el("th", {}, "State"),
+    el("th", {}, "Progress"), el("th", {}, "Started"))), el("tbody", {}, rows)));
+}
+
+function showDetails(name) {
+  selected = name;
+  document.getElementById("details").classList.remove("hidden");
+  document.getElementById("d-title").textContent = name;
+  document.getElementById("d-body").replaceChildren(el("p", { class: "muted" }, "Loading…"));
+  if (detailsTimer) clearInterval(detailsTimer);
+  refreshDetails(true);
+  detailsTimer = setInterval(refreshDetails, 2500);
+  refreshRuns();
+}
+
+let lastPlot = {};
+async function refreshDetails(first) {
+  if (!selected) return;
+  const name = selected;
+  let d;
+  try { d = await api("api/runs/" + encodeURIComponent(name)); }
+  catch (e) { document.getElementById("d-body").replaceChildren(el("p", { class: "error" }, e.message)); return; }
+  if (name !== selected) return;
+  const body = el("div");
+  const running = ["running", "merging", "starting"].includes(d.state);
+  const elapsed = d.started ? ((d.finished || Date.now() / 1000) - d.started) : 0;
+  body.append(el("div", { class: "kv" },
+    el("div", {}, "State"), el("div", {}, badge(d.state)),
+    el("div", {}, "Started"), el("div", {}, fmtTime(d.started) || "–"),
+    el("div", {}, running ? "Running for" : "Took"), el("div", {}, d.started ? fmtDuration(elapsed) : "–")));
+  body.append(progressCell(d.stages));
+  if (d.error) body.append(el("pre", { class: "error" }, d.error));
+  const actions = el("div", { class: "actions" });
+  if (running) actions.append(el("button", { type: "button", onclick: () => cancel(name) }, "Cancel run"));
+  actions.append(el("a", { href: `api/runs/${encodeURIComponent(name)}/config.toml?token=${encodeURIComponent(TOKEN)}&download=1` },
+    el("button", { type: "button" }, "Download config")));
+  body.append(actions);
+
+  const outs = Object.entries(d.outputs || {});
+  if (outs.length) {
+    body.append(el("h2", { style: "margin-top:14px" }, "Outputs"));
+    for (const [stage, o] of outs) {
+      const plotBtn = el("button", { type: "button", class: "small", disabled: !o.exists,
+        onclick: () => quicklook(name, stage) }, o.plot ? "Redraw plots" : "Quick-look plots");
+      body.append(el("div", { style: "margin:6px 0" },
+        el("div", {}, el("b", {}, stage === "generate" ? "PWIA events" : "With FSI"), " ",
+          el("span", { class: "muted" }, o.exists ? fmtBytes(o.size) : "(not written yet)"), " ", plotBtn),
+        el("div", { class: "path" }, o.path)));
+      if (o.plot) {
+        const file = o.path.split("/").pop().replace(/\.root$/, ".png");
+        const key = name + stage;
+        if (!lastPlot[key]) lastPlot[key] = Date.now();
+        body.append(el("img", { class: "plot", alt: `Control plots of the ${stage} output`,
+          src: `api/runs/${encodeURIComponent(name)}/${encodeURIComponent(file)}?token=${encodeURIComponent(TOKEN)}&t=${lastPlot[key]}` }));
+      }
+    }
+  }
+  if (d.config) body.append(el("details", {}, el("summary", {}, "Config"), el("pre", {}, d.config)));
+  if (d.logs && d.logs.length) {
+    const logs = el("details", { open: d.state === "failed" }, el("summary", {}, `Logs (${d.logs.length})`));
+    for (const l of d.logs) logs.append(el("div", { class: "muted", style: "margin-top:8px" }, l.name), el("pre", {}, l.tail));
+    body.append(logs);
+  }
+  // keep open <details> open across refreshes
+  const old = document.getElementById("d-body");
+  const wasOpen = [...old.querySelectorAll("details")].map(x => x.open);
+  old.replaceChildren(...body.childNodes);
+  if (!first) old.querySelectorAll("details").forEach((x, i) => { if (wasOpen[i]) x.open = true; });
+  if (!running && !first) { clearInterval(detailsTimer); detailsTimer = null; }
+}
+
+async function cancel(name) {
+  if (!confirm(`Cancel run ${name}?`)) return;
+  try { await api(`api/runs/${encodeURIComponent(name)}/cancel`, {}); } catch (e) { alert(e.message); }
+  refreshDetails();
+}
+
+async function quicklook(name, stage) {
+  const body = document.getElementById("d-body");
+  body.prepend(el("p", { class: "muted", id: "ql-msg" }, "Drawing plots…"));
+  try {
+    await api(`api/runs/${encodeURIComponent(name)}/quicklook`, { stage });
+    lastPlot[name + stage] = Date.now();
+  } catch (e) { alert(e.message); }
+  await refreshDetails();
+}
+
+// ------------------------------------------------------- file browser ----
+async function listDir(path) {
+  const list = document.getElementById("f-list");
+  try {
+    const d = await api("api/files?path=" + encodeURIComponent(path || ""));
+    document.getElementById("f-path").value = d.path;
+    list.replaceChildren(
+      ...d.dirs.map(n => el("div", { onclick: () => listDir(d.path + "/" + n) }, el("span", {}, "📁 " + n))),
+      ...d.files.map(f => el("div", { onclick: () => pick(d.path + "/" + f.name) },
+        el("span", {}, f.name), el("span", { class: "muted" }, fmtBytes(f.size)))));
+    if (!d.dirs.length && !d.files.length) list.append(el("div", { class: "muted" }, "No .root files or folders here."));
+    document.getElementById("f-up").onclick = () => listDir(d.parent);
+  } catch (e) { list.replaceChildren(el("div", { class: "error" }, e.message)); }
+}
+function openFiles() {
+  const cur = document.getElementById(fieldId("fsi", "input")).value;
+  document.getElementById("files").showModal();
+  listDir(cur);
+}
+function pick(path) {
+  document.getElementById(fieldId("fsi", "input")).value = path;
+  document.getElementById("files").close();
+}
+
+// ---------------------------------------------------------------- init ----
+async function init() {
+  if (!TOKEN) {
+    document.body.replaceChildren(el("p", { style: "padding:24px" },
+      "Open the full URL printed by gcf gui (it ends in ?token=…)."));
+    return;
+  }
+  let info;
+  try { info = await api("api/schema"); }
+  catch (e) { document.getElementById("runs").replaceChildren(el("p", { class: "error" }, e.message)); return; }
+  SCHEMA = info.schema;
+  document.getElementById("runs-dir").textContent = "in " + info.runs_dir;
+  if (!info.binaries) {
+    const b = document.getElementById("banner");
+    b.textContent = "The stage programs (gcf_generate, gcf_fsi) are not built yet: run ./install.sh in the repository first.";
+    b.classList.remove("hidden");
+  }
+  buildForm();
+  document.getElementById("btn-preview").onclick = preview;
+  document.getElementById("btn-download").onclick = downloadConfig;
+  document.getElementById("btn-start").onclick = startRun;
+  document.getElementById("f-go").onclick = () => listDir(document.getElementById("f-path").value);
+  document.getElementById("f-close").onclick = () => document.getElementById("files").close();
+  refreshRuns();
+  setInterval(refreshRuns, 3000);
+}
+init();
+</script>
+</body>
+</html>
