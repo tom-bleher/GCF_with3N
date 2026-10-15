@@ -38,6 +38,8 @@ using namespace genie;
 using namespace genie::constants;
 
 #include <vector>
+#include <map>
+#include <limits>
 #include <string>
 #include <fstream>
 #include <sstream>
@@ -253,6 +255,30 @@ double INukeNucleonCorr :: getAvgCorrection(double rho, double A, double ke)
 //  static double cache[NRows][NColumns] = {{-1}};
   static bool ReadFile = false;
   if( ReadFile == true ) {
+   // The interpolated value depends only on (A, Row, Column), but building
+   // and deleting a TGraph for it on every call (once per nucleon step) was
+   // a major INTRANUKE cost. Memoize it per (A, Row, Column); the cached
+   // number is the very value TGraph::Eval returned, so results are unchanged.
+   static std::map<double, std::vector<double> > memo;
+   static double memoA = -1.;
+   static std::vector<double> * memoTab = 0;
+   double * cached = 0;
+   if (std::isfinite(A) &&
+       Row >= 0 && Row < NRows && Column >= 0 && Column < NColumns) {
+     if (memoTab == 0 || A != memoA) {
+       memoTab = &memo[A];
+       memoA = A;
+       if (memoTab->empty()) {
+         memoTab->assign(NRows*NColumns,
+                         std::numeric_limits<double>::quiet_NaN());
+       }
+     }
+     cached = &(*memoTab)[Row*NColumns + Column];
+   }
+   double returnval;
+   if (cached && !std::isnan(*cached)) {
+     returnval = *cached;
+   } else {
    int Npoints = 6;
    TGraph * Interp = new TGraph(Npoints);
    //LOG("INukeNucleonCorr",pNOTICE)
@@ -267,8 +293,10 @@ double INukeNucleonCorr :: getAvgCorrection(double rho, double A, double ke)
    //   Interpolated[e][r] = Interp->Eval(A);
 	//	LOG("INukeNucleonCorr",pNOTICE)
 	//	  << "e,r,value= " << e << "   " << r << "   " << Interpolated[e][r];
-   double returnval = Interp->Eval(A);
+   returnval = Interp->Eval(A);
    delete Interp;
+   if (cached) *cached = returnval;
+   }
    LOG("INukeNucleonCorr",pINFO)
       << "Nucleon Corr interpolated correction factor = "
       << returnval  //cache[Row][Column]
