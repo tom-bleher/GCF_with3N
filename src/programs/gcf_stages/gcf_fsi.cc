@@ -54,7 +54,10 @@ void Usage()
     "                           one (default auto: n = 1, 2, 3 for 1, 2, >=3 nucleons)\n"
     "      --keep REGEX         input branches to copy (default: all)\n"
     "      --overwrite          replace FSI branches already in the input\n"
-    "  -n, --max-events N       process only the first N events\n"
+    "  -n, --max-events N       process at most N events\n"
+    "      --first-event F      start at entry F (for splitting a file into chunks)\n"
+    "      --no-copy-objects    don't copy hAttempts etc. (all but one chunk of a split file)\n"
+    "      --count              print the number of events in the input and exit\n"
     "  -h, --help               this message\n";
 }
 
@@ -116,11 +119,12 @@ int main(int argc, char **argv)
   string input, output, treeName = gcfio::kTreeName, modelName = "hN",
          vertexPowerName = "auto", keep = ".*";
   unsigned long seed = 0;
-  long long maxEvents = 0;
+  long long maxEvents = 0, firstEvent = 0;
   int defaultA = -1, defaultZ = -1;
-  bool independent = false, overwrite = false;
+  bool independent = false, overwrite = false, copyObjects = true, countOnly = false;
 
-  enum { kIndependent = 1000, kTarget, kVertexPower, kKeep, kOverwrite };
+  enum { kIndependent = 1000, kTarget, kVertexPower, kKeep, kOverwrite, kFirst,
+         kNoCopy, kCount };
   static const option longOpts[] = {
     {"input", required_argument, nullptr, 'i'},
     {"output", required_argument, nullptr, 'o'},
@@ -134,6 +138,9 @@ int main(int argc, char **argv)
     {"vertex-power", required_argument, nullptr, kVertexPower},
     {"keep", required_argument, nullptr, kKeep},
     {"overwrite", no_argument, nullptr, kOverwrite},
+    {"first-event", required_argument, nullptr, kFirst},
+    {"no-copy-objects", no_argument, nullptr, kNoCopy},
+    {"count", no_argument, nullptr, kCount},
     {nullptr, 0, nullptr, 0}};
 
   int c;
@@ -156,6 +163,9 @@ int main(int argc, char **argv)
       case kVertexPower: vertexPowerName = optarg; break;
       case kKeep: keep = optarg; break;
       case kOverwrite: overwrite = true; break;
+      case kFirst: firstEvent = atoll(optarg); break;
+      case kNoCopy: copyObjects = false; break;
+      case kCount: countOnly = true; break;
       default: Usage(); return 1;
     }
   }
@@ -163,7 +173,8 @@ int main(int argc, char **argv)
   Runner runner;
   bool ok = true;
   auto fail = [&ok](const string &msg) { cerr << "Error: " << msg << "\n"; ok = false; };
-  if (input.empty() || output.empty()) fail("--input and --output are required");
+  if (input.empty() || (output.empty() && !countOnly)) fail("--input and --output are required");
+  if (firstEvent < 0 || maxEvents < 0) fail("--first-event and --max-events must be >= 0");
   if (!input.empty() && input == output) fail("--output must differ from --input");
   if (modelName == "hN") runner.model = kHN2018;
   else if (modelName == "hA") runner.model = kHA2018;
@@ -174,7 +185,7 @@ int main(int argc, char **argv)
   else fail("--vertex-power must be auto, 1, 2 or 3");
   regex keepRe;
   try { keepRe = regex(keep); } catch (const regex_error &) { fail("--keep is not a valid regex"); }
-  if (!getenv("GENIE")) fail("GENIE is not set; source setup_env.sh (or build/gcf_env.sh) first");
+  if (!countOnly && !getenv("GENIE")) fail("GENIE is not set; source setup_env.sh (or build/gcf_env.sh) first");
   if (!ok) { cerr << "(gcf_fsi --help for usage)\n"; return 1; }
   runner.mode = independent ? fsi::kIndependent : fsi::kSharedRemnant;
   if (runner.vertexPower == 2) fsi::SetSRCVertexRhoPower(2);
@@ -205,7 +216,10 @@ int main(int argc, char **argv)
 
   ROOT::RDataFrame df(treeName, input);
   if (nEntries < 0) nEntries = *df.Count();
-  runner.total = (maxEvents > 0 && maxEvents < nEntries) ? maxEvents : nEntries;
+  if (countOnly) { cout << "Entries: " << nEntries << "\n"; return 0; }
+  const long long begin = min(firstEvent, nEntries);
+  const long long end = (maxEvents > 0) ? min(nEntries, begin + maxEvents) : nEntries;
+  runner.total = end - begin;
   runner.progressEvery = max(1LL, runner.total / 100);
   const vector<string> inputColumns = df.GetColumnNames();
   auto has = [&df](const string &col) { return df.HasColumn(col); };
@@ -217,7 +231,7 @@ int main(int argc, char **argv)
   }
 
   ROOT::RDF::RNode node = df;
-  if (maxEvents > 0) node = node.Range(maxEvents);
+  if (begin > 0 || end < nEntries) node = node.Range(begin, end);
 
   // Normalize the inputs to fixed types (std::vector or C-array branches, any
   // numeric element type).
@@ -316,7 +330,7 @@ int main(int argc, char **argv)
     TIter next(in.GetListOfKeys());
     while (TKey *key = static_cast<TKey *>(next())) {
       const string name = key->GetName();
-      if (name == treeName || name == "gcf_fsi" || copied.count(name)) continue;
+      if (!copyObjects || name == treeName || name == "gcf_fsi" || copied.count(name)) continue;
       copied.insert(name);   // keys come highest cycle first
       if (string(key->GetClassName()) == "TTree") {
         cerr << "Note: extra tree '" << name << "' in the input is not copied\n";
