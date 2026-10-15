@@ -55,11 +55,16 @@ void Usage()
     "  -c, --cs MODEL           eN cross section: onshell, cc1 (default), cc2\n"
     "      --sigma-cm S         CM momentum width per component (GeV/c)\n"
     "      --q2 MIN:MAX         Q^2 window (GeV^2); 3N default open, 2N/MF default 1:10\n"
+    "      --check              validate the options and set the generator up\n"
+    "                           (nucleus tables, ...), then exit without generating\n"
     "  -v, --verbose            progress output\n"
     "  -h, --help               this message\n"
     "\n"
     "3N only:\n"
-    "  -u, --interaction U      3N density table, 1-10 (default 1, AV18)\n"
+    "  -u, --wave-function W    3N wave function: AV18, AV18+UIX, AV18+TM, CDBonn,\n"
+    "                           CDBonn+TM (3He Faddeev, default AV18), or the same\n"
+    "                           with -pD for the deuteron channel only (AV18-pD, ...);\n"
+    "                           the table numbers 1-10 are accepted too\n"
     "      --theta-e MIN:MAX    electron polar angle window (deg, default 5:40)\n"
     "      --kF K               internal-momentum cutoff k > kF (GeV/c, default 0.25);\n"
     "                           also sets sigma-cm = sqrt(3/5) kF unless given\n"
@@ -108,10 +113,10 @@ int main(int argc, char **argv)
   int A = 12, Z = 6, u = 1;
   bool sigCMSet = false, q2Set = false, kFSet = false, estarSet = false,
        kcutSet = false, kFfgSet = false, useCM = true, doRad = false,
-       doCoul = false, prelIS = false, verbose = false;
+       doCoul = false, prelIS = false, verbose = false, checkOnly = false;
 
   enum { kSigmaCM = 1000, kQ2, kThetaE, kKF, kNoCM, kNN, kEstar, kKcut,
-         kOnset, kPrelIS, kFermiGas, kKFfg, kRad, kCoulomb, kPhaseSpace };
+         kOnset, kPrelIS, kFermiGas, kKFfg, kRad, kCoulomb, kPhaseSpace, kCheck };
   static const option longOpts[] = {
     {"model", required_argument, nullptr, 'm'},
     {"beam", required_argument, nullptr, 'b'},
@@ -121,7 +126,8 @@ int main(int argc, char **argv)
     {"target-Z", required_argument, nullptr, 'Z'},
     {"seed", required_argument, nullptr, 'S'},
     {"cs", required_argument, nullptr, 'c'},
-    {"interaction", required_argument, nullptr, 'u'},
+    {"wave-function", required_argument, nullptr, 'u'},
+    {"interaction", required_argument, nullptr, 'u'},   // old name
     {"verbose", no_argument, nullptr, 'v'},
     {"help", no_argument, nullptr, 'h'},
     {"sigma-cm", required_argument, nullptr, kSigmaCM},
@@ -139,6 +145,7 @@ int main(int argc, char **argv)
     {"rad", no_argument, nullptr, kRad},
     {"coulomb", no_argument, nullptr, kCoulomb},
     {"phase-space", required_argument, nullptr, kPhaseSpace},
+    {"check", no_argument, nullptr, kCheck},
     {nullptr, 0, nullptr, 0}};
 
   int c;
@@ -152,7 +159,14 @@ int main(int argc, char **argv)
       case 'Z': Z = atoi(optarg); break;
       case 'S': seed = strtoul(optarg, nullptr, 10); break;
       case 'c': csName = optarg; break;
-      case 'u': u = atoi(optarg); break;
+      case 'u': {
+        static const char *names[] = {"AV18", "AV18+UIX", "AV18+TM", "CDBonn", "CDBonn+TM",
+                                      "AV18-pD", "AV18+UIX-pD", "AV18+TM-pD", "CDBonn-pD", "CDBonn+TM-pD"};
+        u = 0;
+        for (int i = 0; i < 10; ++i) if (strcmp(optarg, names[i]) == 0) u = i + 1;
+        if (u == 0) u = atoi(optarg);
+        break;
+      }
       case 'v': verbose = true; break;
       case 'h': Usage(); return 0;
       case kSigmaCM: sigCM = atof(optarg); sigCMSet = true; break;
@@ -178,6 +192,7 @@ int main(int argc, char **argv)
       case kRad: doRad = true; break;
       case kCoulomb: doCoul = true; break;
       case kPhaseSpace: phaseSpace = optarg; break;
+      case kCheck: checkOnly = true; break;
       default: Usage(); return 1;   // getopt already printed the reason
     }
   }
@@ -187,26 +202,26 @@ int main(int argc, char **argv)
   auto fail = [&ok](const string &msg) { cerr << "Error: " << msg << "\n"; ok = false; };
   if (model != "3N" && model != "2N" && model != "MF") fail("--model must be 3N, 2N or MF");
   if (beamE <= 0.) fail("--beam must be a positive energy in GeV");
-  if (nEvents <= 0) fail("--events must be positive");
-  if (output.empty()) fail("--output is required");
+  if (nEvents <= 0 && !checkOnly) fail("--events must be positive");
+  if (output.empty() && !checkOnly) fail("--output is required");
   if (A < 1 || Z < 0 || Z > A) fail("invalid target (A, Z)");
   csMethod csMeth = cc1;
   if (csName == "onshell") csMeth = onshell;
   else if (csName == "cc1" || csName == "1") csMeth = cc1;
   else if (csName == "cc2" || csName == "2") csMeth = cc2;
   else fail("--cs must be onshell, cc1 or cc2");
-  if (model == "3N" && (u < 1 || u > 10)) fail("--interaction must be 1-10");
+  if (model == "3N" && (u < 1 || u > 10)) fail("--wave-function must be one of AV18, AV18+UIX, AV18+TM, CDBonn, CDBonn+TM (or with -pD), or 1-10");
   if (kFSet && (kF <= 0. || kF > 0.5)) fail("--kF expects k_F in GeV/c, e.g. 0.22");
   if (onset != "fixed" && onset != "local") fail("--onset must be fixed or local");
   if (fermiGas != "global" && fermiGas != "local") fail("--fermi-gas must be global or local");
   if (model == "3N" && (!nnName.empty() && nnName != "AV18"))
-    fail("--nn applies to 2N/MF; the 3N interaction is chosen with --interaction");
+    fail("--nn applies to 2N/MF; the 3N wave function is chosen with --wave-function");
   if (!ok) { cerr << "(gcf_generate --help for usage)\n"; return 1; }
-  output = AbsolutePath(output);
+  if (!output.empty()) output = AbsolutePath(output);
 
   // Seed 0 draws a fresh one; print it either way so the run can be replayed.
   if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
-  cout << "Random seed: " << seed << "\n";
+  if (!checkOnly) cout << "Random seed: " << seed << "\n";
   TRandom3 rand(seed);
   eNCrossSection cs(csMeth, kelly);
 
@@ -255,6 +270,12 @@ int main(int argc, char **argv)
     gen2->SetFermiGasMode(fermiGas == "local" ? QEGeneratorFSI::kLocalFG
                                               : QEGeneratorFSI::kGlobalFG);
     if (kFfgSet) gen2->SetFermiMomentumFG(kFfg);
+  }
+
+  if (checkOnly) {
+    cout << "OK: " << model << " on A=" << A << " Z=" << Z << " at " << beamE
+         << " GeV is set up; nothing generated (--check)\n";
+    return 0;
   }
 
   // ---- Output ------------------------------------------------------------
