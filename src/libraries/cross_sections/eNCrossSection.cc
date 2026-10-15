@@ -56,10 +56,12 @@ double eNCrossSection::sigma_CC(double Ebeam,TVector3 k, TVector3 p, bool isProt
   
 }
 
-// Because DeForest uses the opposite Lorentz convention
+// Four-vector product in De Forest's (Pauli) metric, a.b = a_vec.b_vec - a0*b0:
+// his four-vectors are (p, iE) (Nucl. Phys. A 392 (1983) 232, p. 234), and the
+// cc2 responses below are his eq. (18) (cc1: eq. (17)) in that convention.
 double dot4(double x0, TVector3 x, double y0, TVector3 y)
 {
-  return ((x0*y0)-(x*y));
+  return ((x*y)-(x0*y0));
 }
 
 double eNCrossSection::sigmaccn(double Ebeam, TVector3 k, TVector3 p, bool isProton, int n)
@@ -102,8 +104,8 @@ double eNCrossSection::sigmaccn(double Ebeam, TVector3 k, TVector3 p, bool isPro
       double qbarq = dot4(omegabar,q,omega,q);
       double sumq = dot4((Ebar+E),(pM+p),omega,q);
 
-      wC = (E*Ebar
-		   + 0.5 * (pbarp + sq(mN)) * sq(F1)
+      wC = ((E*Ebar
+		   + 0.5 * (pbarp + sq(mN))) * sq(F1)
 		   - 0.5 * q.Mag2() * F1 * kF2
 		   - ((pbarq*E + pq*Ebar)*omega
 		      - Ebar * E * QSq
@@ -133,7 +135,7 @@ double eNCrossSection::sigmaccn(double Ebeam, TVector3 k, TVector3 p, bool isPro
   double sigmaMott = nbGeVSq * 4. * sq(alpha) * k.Mag2() * sq(cos(k.Theta()/2.)) / sq(QSq);
 
   double phi = q.Cross(k).Angle( q.Cross(p) );
-  return sigmaMott * ( sq(QSq)/q.Mag2() * wC +
+  return sigmaMott * ( sq(QSq/q.Mag2()) * wC +
                        (QSq/(2.*q.Mag2()) + sq(tan(k.Theta()/2.))) * wT +
                        QSq/q.Mag2() * sqrt(QSq/q.Mag2() + sq(tan(k.Theta()/2.))) * wI * cos(phi) +
                        (QSq/q.Mag2() * sq(cos(phi)) + sq(tan(k.Theta()/2.))) * wS
