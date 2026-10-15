@@ -14,6 +14,7 @@
 }
 @media (prefers-color-scheme: dark) {
   :root {
+    color-scheme: dark;
     --bg: #14171c; --card: #1c2027; --text: #e3e6eb; --muted: #9aa3b2; --line: #313743;
     --accent: #5b93ec; --accent-soft: #233149; --accent-text: #0e1116; --line: #4a5262;
     --ok: #5ccf8c; --warn: #e6b45e; --bad: #f08a7e; --bad-soft: #3a2422;
@@ -51,7 +52,7 @@ main { display: grid; grid-template-columns: minmax(420px, 600px) minmax(0, 1fr)
      measured by init() into --card-top), so the sticky action bar is always
      on screen. */
   #form-card, #details { position: sticky; top: 12px; max-height: calc(100vh - var(--card-top, 84px)); overflow-y: auto; }
-  #form-card { padding-bottom: 0; }
+  #form-card { padding-bottom: 0; overflow-x: hidden; }
   #form-card .actionbar { position: sticky; bottom: 0; background: var(--card); margin: 14px -16px 0; padding: 8px 16px 12px;
     border-top: 1px solid var(--line); z-index: 2; }
   #form-card .actions { margin-top: 0; }
