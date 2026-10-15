@@ -9,6 +9,7 @@
 #include "cross_sections/eNCrossSection.hh"
 #include <fstream>
 #include <iostream>
+#include <string>
 
 class QEGenerator_3N
 {
@@ -19,7 +20,7 @@ class QEGenerator_3N
   void generate_event(double &weight, int &N1_type, int &N2_type, int &N3_type, TLorentzVector& vk_target, TLorentzVector &vLead_target, TLorentzVector &v2_target, TLorentzVector &v3_target, TLorentzVector &vAm3_target, bool use_CM, double &Estar);
   void generate_event(double &weight, int &N1_type, int &N2_type, int &N3_type, TLorentzVector& vk_target, TLorentzVector &vLead_target, TLorentzVector &v2_target, TLorentzVector &v3_target, TLorentzVector &vAm3_target, bool use_CM, double &Estar, double &rho_out, double &delta_jacobian_out);
   void set_theta_k_maxmin(double min, double max);
-  double get_rho(double N2_Type, double N3_Type, double p_a, double p_b, double theta_ab);
+  double get_rho(double N2_Type, double N3_Type, double theta_ab, double p_a, double p_b);
   double get_rho_ptot_f1f2f3(double k_1, double k_2, double k_3);
   void create_wavefunction_heatmap();
 
@@ -65,7 +66,7 @@ class QEGenerator_3N
   TRandom3 * myRand;
 
   int u;
-  char * uType = new char;
+  std::string uType;      // path of the 3N density table loaded by fill_array()
 
   double sigCM;
   double fkMinInternal;   // GeV/c, internal-momentum lower cutoff (default 0.25)
