@@ -1,6 +1,12 @@
 cmake_minimum_required(VERSION 3.6)
 project(genQE_FSI_project)
 
+# Default to an optimized build: with no CMAKE_BUILD_TYPE, CMake compiles
+# without any optimization flags (-O0).
+if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
+    set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type" FORCE)
+endif()
+
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/../../cmake_modules")
 find_package(ROOT REQUIRED)
 
