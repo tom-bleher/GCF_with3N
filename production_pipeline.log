@@ -1,0 +1,1299 @@
+[2026-08-29 15:46:11] pipeline start; waiting for val10M_* runs to finish...
+[2026-08-29 15:47:11] validation runs finished.
+[2026-08-29 15:47:11] === 3N+FSI(indep) 100M, hN, 12C, kF=0.22, sigCM=0.15, Q2>1 ===
+==================================================================
+ Parallel 3N generation
+   total events : 100000000  (successful, weight>0)
+   workers      : 150  (each ~666666 events; first 100 get +1)
+   output       : events/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.root
+   beam / u     : 6.0 / 1
+   extra flags  : -A 12 -Z 6 -f hN -K 0.22 -s 0.15 -I -q 1:1000000
+   parts dir    : /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696
+   seeds        : auto (TRandom3(0)); launches staggered 1s to avoid collisions
+==================================================================
+  launched worker 0  pid=1198854  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part00.root
+  launched worker 1  pid=1198873  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part01.root
+  launched worker 2  pid=1198892  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part02.root
+  launched worker 3  pid=1199032  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part03.root
+  launched worker 4  pid=1199051  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part04.root
+  launched worker 5  pid=1199070  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part05.root
+  launched worker 6  pid=1199089  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part06.root
+  launched worker 7  pid=1199108  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part07.root
+  launched worker 8  pid=1199127  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part08.root
+  launched worker 9  pid=1199150  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part09.root
+  launched worker 10  pid=1199169  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part10.root
+  launched worker 11  pid=1199188  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part11.root
+  launched worker 12  pid=1199207  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part12.root
+  launched worker 13  pid=1199226  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part13.root
+  launched worker 14  pid=1199245  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part14.root
+  launched worker 15  pid=1199264  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part15.root
+  launched worker 16  pid=1199283  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part16.root
+  launched worker 17  pid=1199302  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part17.root
+  launched worker 18  pid=1199321  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part18.root
+  launched worker 19  pid=1199344  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part19.root
+  launched worker 20  pid=1199363  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part20.root
+  launched worker 21  pid=1199382  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part21.root
+  launched worker 22  pid=1199401  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part22.root
+  launched worker 23  pid=1199420  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part23.root
+  launched worker 24  pid=1199439  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part24.root
+  launched worker 25  pid=1199458  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part25.root
+  launched worker 26  pid=1199477  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part26.root
+  launched worker 27  pid=1199496  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part27.root
+  launched worker 28  pid=1199515  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part28.root
+  launched worker 29  pid=1199538  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part29.root
+  launched worker 30  pid=1199557  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part30.root
+  launched worker 31  pid=1199576  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part31.root
+  launched worker 32  pid=1199596  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part32.root
+  launched worker 33  pid=1199615  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part33.root
+  launched worker 34  pid=1199634  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part34.root
+  launched worker 35  pid=1199653  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part35.root
+  launched worker 36  pid=1199672  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part36.root
+  launched worker 37  pid=1199691  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part37.root
+  launched worker 38  pid=1199710  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part38.root
+  launched worker 39  pid=1199733  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part39.root
+  launched worker 40  pid=1199752  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part40.root
+  launched worker 41  pid=1199771  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part41.root
+  launched worker 42  pid=1199790  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part42.root
+  launched worker 43  pid=1199809  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part43.root
+  launched worker 44  pid=1199828  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part44.root
+  launched worker 45  pid=1199847  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part45.root
+  launched worker 46  pid=1199866  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part46.root
+  launched worker 47  pid=1199885  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part47.root
+  launched worker 48  pid=1199904  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part48.root
+  launched worker 49  pid=1199928  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part49.root
+  launched worker 50  pid=1199948  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part50.root
+  launched worker 51  pid=1199967  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part51.root
+  launched worker 52  pid=1199986  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part52.root
+  launched worker 53  pid=1200005  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part53.root
+  launched worker 54  pid=1200024  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part54.root
+  launched worker 55  pid=1200043  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part55.root
+  launched worker 56  pid=1200062  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part56.root
+  launched worker 57  pid=1200081  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part57.root
+  launched worker 58  pid=1200100  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part58.root
+  launched worker 59  pid=1200123  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part59.root
+  launched worker 60  pid=1200142  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part60.root
+  launched worker 61  pid=1200161  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part61.root
+  launched worker 62  pid=1200181  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part62.root
+  launched worker 63  pid=1200200  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part63.root
+  launched worker 64  pid=1200219  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part64.root
+  launched worker 65  pid=1200238  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part65.root
+  launched worker 66  pid=1200257  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part66.root
+  launched worker 67  pid=1200276  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part67.root
+  launched worker 68  pid=1200295  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part68.root
+  launched worker 69  pid=1200317  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part69.root
+  launched worker 70  pid=1200336  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part70.root
+  launched worker 71  pid=1200356  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part71.root
+  launched worker 72  pid=1200375  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part72.root
+  launched worker 73  pid=1200394  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part73.root
+  launched worker 74  pid=1200413  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part74.root
+  launched worker 75  pid=1200432  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part75.root
+  launched worker 76  pid=1200451  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part76.root
+  launched worker 77  pid=1200470  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part77.root
+  launched worker 78  pid=1200489  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part78.root
+  launched worker 79  pid=1200513  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part79.root
+  launched worker 80  pid=1200532  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part80.root
+  launched worker 81  pid=1200551  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part81.root
+  launched worker 82  pid=1200570  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part82.root
+  launched worker 83  pid=1200589  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part83.root
+  launched worker 84  pid=1200608  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part84.root
+  launched worker 85  pid=1200627  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part85.root
+  launched worker 86  pid=1200646  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part86.root
+  launched worker 87  pid=1200665  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part87.root
+  launched worker 88  pid=1200771  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part88.root
+  launched worker 89  pid=1200794  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part89.root
+  launched worker 90  pid=1200813  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part90.root
+  launched worker 91  pid=1200832  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part91.root
+  launched worker 92  pid=1200851  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part92.root
+  launched worker 93  pid=1200870  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part93.root
+  launched worker 94  pid=1200889  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part94.root
+  launched worker 95  pid=1200908  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part95.root
+  launched worker 96  pid=1200927  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part96.root
+  launched worker 97  pid=1200946  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part97.root
+  launched worker 98  pid=1200965  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part98.root
+  launched worker 99  pid=1200988  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part99.root
+  launched worker 100  pid=1201007  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part100.root
+  launched worker 101  pid=1201026  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part101.root
+  launched worker 102  pid=1201046  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part102.root
+  launched worker 103  pid=1201065  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part103.root
+  launched worker 104  pid=1201084  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part104.root
+  launched worker 105  pid=1201103  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part105.root
+  launched worker 106  pid=1201122  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part106.root
+  launched worker 107  pid=1201141  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part107.root
+  launched worker 108  pid=1201160  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part108.root
+  launched worker 109  pid=1201270  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part109.root
+  launched worker 110  pid=1201322  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part110.root
+  launched worker 111  pid=1201341  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part111.root
+  launched worker 112  pid=1201360  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part112.root
+  launched worker 113  pid=1201379  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part113.root
+  launched worker 114  pid=1201398  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part114.root
+  launched worker 115  pid=1201417  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part115.root
+  launched worker 116  pid=1201436  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part116.root
+  launched worker 117  pid=1201455  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part117.root
+  launched worker 118  pid=1201474  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part118.root
+  launched worker 119  pid=1201497  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part119.root
+  launched worker 120  pid=1201516  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part120.root
+  launched worker 121  pid=1201536  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part121.root
+  launched worker 122  pid=1201555  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part122.root
+  launched worker 123  pid=1201574  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part123.root
+  launched worker 124  pid=1201593  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part124.root
+  launched worker 125  pid=1201612  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part125.root
+  launched worker 126  pid=1201631  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part126.root
+  launched worker 127  pid=1201651  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part127.root
+  launched worker 128  pid=1201670  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part128.root
+  launched worker 129  pid=1201693  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part129.root
+  launched worker 130  pid=1201712  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part130.root
+  launched worker 131  pid=1201731  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part131.root
+  launched worker 132  pid=1201750  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part132.root
+  launched worker 133  pid=1201769  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part133.root
+  launched worker 134  pid=1201788  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part134.root
+  launched worker 135  pid=1201807  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part135.root
+  launched worker 136  pid=1201826  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part136.root
+  launched worker 137  pid=1201845  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part137.root
+  launched worker 138  pid=1201864  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part138.root
+  launched worker 139  pid=1201888  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part139.root
+  launched worker 140  pid=1201907  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part140.root
+  launched worker 141  pid=1201926  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part141.root
+  launched worker 142  pid=1201945  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part142.root
+  launched worker 143  pid=1201964  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part143.root
+  launched worker 144  pid=1201983  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part144.root
+  launched worker 145  pid=1202002  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part145.root
+  launched worker 146  pid=1202021  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part146.root
+  launched worker 147  pid=1202040  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part147.root
+  launched worker 148  pid=1202061  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part148.root
+  launched worker 149  pid=1202083  events=666666  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part149.root
+Waiting for 150 workers...
+./run_3N_parallel.sh: line 161: 1199150 Segmentation fault      (core dumped) "$BINARY" "$EBEAM" "$U" "$part" "$n" -v ${EXTRA[@]+"${EXTRA[@]}"} > "$log" 2>&1
+  worker 0 done ok
+  worker 1 done ok
+  worker 2 done ok
+  worker 3 done ok
+  worker 4 done ok
+  worker 5 done ok
+  worker 6 done ok
+  worker 7 done ok
+  worker 8 done ok
+  ERROR: worker 9 (pid 1199150) exited 139 — see /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part09.log
+  worker 10 done ok
+  worker 11 done ok
+  worker 12 done ok
+  worker 13 done ok
+  worker 14 done ok
+  worker 15 done ok
+  worker 16 done ok
+  worker 17 done ok
+  worker 18 done ok
+  worker 19 done ok
+  worker 20 done ok
+  worker 21 done ok
+  worker 22 done ok
+  worker 23 done ok
+  worker 24 done ok
+  worker 25 done ok
+  worker 26 done ok
+  worker 27 done ok
+  worker 28 done ok
+  worker 29 done ok
+  worker 30 done ok
+  worker 31 done ok
+  worker 32 done ok
+  worker 33 done ok
+  worker 34 done ok
+  worker 35 done ok
+  worker 36 done ok
+  worker 37 done ok
+  worker 38 done ok
+  worker 39 done ok
+  worker 40 done ok
+  worker 41 done ok
+  worker 42 done ok
+  worker 43 done ok
+  worker 44 done ok
+  worker 45 done ok
+  worker 46 done ok
+  worker 47 done ok
+  worker 48 done ok
+  worker 49 done ok
+  worker 50 done ok
+  worker 51 done ok
+  worker 52 done ok
+  worker 53 done ok
+  worker 54 done ok
+  worker 55 done ok
+  worker 56 done ok
+  worker 57 done ok
+  worker 58 done ok
+  worker 59 done ok
+  worker 60 done ok
+  worker 61 done ok
+  worker 62 done ok
+  worker 63 done ok
+  worker 64 done ok
+  worker 65 done ok
+  worker 66 done ok
+  worker 67 done ok
+  worker 68 done ok
+  worker 69 done ok
+  worker 70 done ok
+  worker 71 done ok
+  worker 72 done ok
+  worker 73 done ok
+  worker 74 done ok
+  worker 75 done ok
+  worker 76 done ok
+  worker 77 done ok
+  worker 78 done ok
+  worker 79 done ok
+  worker 80 done ok
+  worker 81 done ok
+  worker 82 done ok
+  worker 83 done ok
+  worker 84 done ok
+  worker 85 done ok
+  worker 86 done ok
+  worker 87 done ok
+  worker 88 done ok
+  worker 89 done ok
+  worker 90 done ok
+  worker 91 done ok
+  worker 92 done ok
+  worker 93 done ok
+  worker 94 done ok
+  worker 95 done ok
+  worker 96 done ok
+  worker 97 done ok
+  worker 98 done ok
+  worker 99 done ok
+  worker 100 done ok
+  worker 101 done ok
+  worker 102 done ok
+  worker 103 done ok
+  worker 104 done ok
+  worker 105 done ok
+  worker 106 done ok
+  worker 107 done ok
+  worker 108 done ok
+  worker 109 done ok
+  worker 110 done ok
+  worker 111 done ok
+  worker 112 done ok
+  worker 113 done ok
+  worker 114 done ok
+  worker 115 done ok
+  worker 116 done ok
+  worker 117 done ok
+  worker 118 done ok
+  worker 119 done ok
+  worker 120 done ok
+  worker 121 done ok
+  worker 122 done ok
+  worker 123 done ok
+  worker 124 done ok
+  worker 125 done ok
+  worker 126 done ok
+  worker 127 done ok
+  worker 128 done ok
+  worker 129 done ok
+  worker 130 done ok
+  worker 131 done ok
+  worker 132 done ok
+  worker 133 done ok
+  worker 134 done ok
+  worker 135 done ok
+  worker 136 done ok
+  worker 137 done ok
+  worker 138 done ok
+  worker 139 done ok
+  worker 140 done ok
+  worker 141 done ok
+  worker 142 done ok
+  worker 143 done ok
+  worker 144 done ok
+  worker 145 done ok
+  worker 146 done ok
+  worker 147 done ok
+  worker 148 done ok
+  worker 149 done ok
+Retry round 1/2 for 1 crashed worker(s): 9
+  retry-launched worker 9  pid=1207501  events=666667  -> 3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part09.root
+  worker 9 done ok
+Merging 150 files with hadd -> events/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.root
+Info in <hadd>: target file: events/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.root
+Info in <hadd>: compression setting for all output: 101
+hadd Source file 1: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part00.root
+hadd Source file 2: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part01.root
+hadd Source file 3: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part02.root
+hadd Source file 4: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part03.root
+hadd Source file 5: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part04.root
+hadd Source file 6: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part05.root
+hadd Source file 7: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part06.root
+hadd Source file 8: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part07.root
+hadd Source file 9: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part08.root
+hadd Source file 10: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part09.root
+hadd Source file 11: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part10.root
+hadd Source file 12: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part11.root
+hadd Source file 13: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part12.root
+hadd Source file 14: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part13.root
+hadd Source file 15: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part14.root
+hadd Source file 16: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part15.root
+hadd Source file 17: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part16.root
+hadd Source file 18: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part17.root
+hadd Source file 19: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part18.root
+hadd Source file 20: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part19.root
+hadd Source file 21: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part20.root
+hadd Source file 22: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part21.root
+hadd Source file 23: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part22.root
+hadd Source file 24: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part23.root
+hadd Source file 25: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part24.root
+hadd Source file 26: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part25.root
+hadd Source file 27: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part26.root
+hadd Source file 28: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part27.root
+hadd Source file 29: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part28.root
+hadd Source file 30: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part29.root
+hadd Source file 31: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part30.root
+hadd Source file 32: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part31.root
+hadd Source file 33: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part32.root
+hadd Source file 34: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part33.root
+hadd Source file 35: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part34.root
+hadd Source file 36: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part35.root
+hadd Source file 37: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part36.root
+hadd Source file 38: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part37.root
+hadd Source file 39: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part38.root
+hadd Source file 40: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part39.root
+hadd Source file 41: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part40.root
+hadd Source file 42: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part41.root
+hadd Source file 43: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part42.root
+hadd Source file 44: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part43.root
+hadd Source file 45: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part44.root
+hadd Source file 46: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part45.root
+hadd Source file 47: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part46.root
+hadd Source file 48: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part47.root
+hadd Source file 49: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part48.root
+hadd Source file 50: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part49.root
+hadd Source file 51: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part50.root
+hadd Source file 52: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part51.root
+hadd Source file 53: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part52.root
+hadd Source file 54: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part53.root
+hadd Source file 55: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part54.root
+hadd Source file 56: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part55.root
+hadd Source file 57: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part56.root
+hadd Source file 58: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part57.root
+hadd Source file 59: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part58.root
+hadd Source file 60: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part59.root
+hadd Source file 61: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part60.root
+hadd Source file 62: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part61.root
+hadd Source file 63: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part62.root
+hadd Source file 64: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part63.root
+hadd Source file 65: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part64.root
+hadd Source file 66: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part65.root
+hadd Source file 67: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part66.root
+hadd Source file 68: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part67.root
+hadd Source file 69: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part68.root
+hadd Source file 70: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part69.root
+hadd Source file 71: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part70.root
+hadd Source file 72: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part71.root
+hadd Source file 73: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part72.root
+hadd Source file 74: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part73.root
+hadd Source file 75: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part74.root
+hadd Source file 76: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part75.root
+hadd Source file 77: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part76.root
+hadd Source file 78: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part77.root
+hadd Source file 79: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part78.root
+hadd Source file 80: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part79.root
+hadd Source file 81: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part80.root
+hadd Source file 82: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part81.root
+hadd Source file 83: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part82.root
+hadd Source file 84: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part83.root
+hadd Source file 85: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part84.root
+hadd Source file 86: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part85.root
+hadd Source file 87: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part86.root
+hadd Source file 88: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part87.root
+hadd Source file 89: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part88.root
+hadd Source file 90: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part89.root
+hadd Source file 91: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part90.root
+hadd Source file 92: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part91.root
+hadd Source file 93: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part92.root
+hadd Source file 94: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part93.root
+hadd Source file 95: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part94.root
+hadd Source file 96: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part95.root
+hadd Source file 97: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part96.root
+hadd Source file 98: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part97.root
+hadd Source file 99: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part98.root
+hadd Source file 100: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part99.root
+hadd Source file 101: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part100.root
+hadd Source file 102: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part101.root
+hadd Source file 103: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part102.root
+hadd Source file 104: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part103.root
+hadd Source file 105: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part104.root
+hadd Source file 106: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part105.root
+hadd Source file 107: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part106.root
+hadd Source file 108: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part107.root
+hadd Source file 109: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part108.root
+hadd Source file 110: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part109.root
+hadd Source file 111: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part110.root
+hadd Source file 112: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part111.root
+hadd Source file 113: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part112.root
+hadd Source file 114: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part113.root
+hadd Source file 115: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part114.root
+hadd Source file 116: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part115.root
+hadd Source file 117: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part116.root
+hadd Source file 118: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part117.root
+hadd Source file 119: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part118.root
+hadd Source file 120: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part119.root
+hadd Source file 121: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part120.root
+hadd Source file 122: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part121.root
+hadd Source file 123: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part122.root
+hadd Source file 124: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part123.root
+hadd Source file 125: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part124.root
+hadd Source file 126: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part125.root
+hadd Source file 127: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part126.root
+hadd Source file 128: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part127.root
+hadd Source file 129: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part128.root
+hadd Source file 130: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part129.root
+hadd Source file 131: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part130.root
+hadd Source file 132: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part131.root
+hadd Source file 133: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part132.root
+hadd Source file 134: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part133.root
+hadd Source file 135: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part134.root
+hadd Source file 136: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part135.root
+hadd Source file 137: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part136.root
+hadd Source file 138: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part137.root
+hadd Source file 139: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part138.root
+hadd Source file 140: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part139.root
+hadd Source file 141: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part140.root
+hadd Source file 142: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part141.root
+hadd Source file 143: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part142.root
+hadd Source file 144: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part143.root
+hadd Source file 145: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part144.root
+hadd Source file 146: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part145.root
+hadd Source file 147: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part146.root
+hadd Source file 148: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part147.root
+hadd Source file 149: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part148.root
+hadd Source file 150: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/parts_3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1_1198696/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.part149.root
+hadd Target path: events/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.root:/
+------------------------------------------------------------------
+Per-worker efficiency (filled / attempts):
+Done: 666667 filled out of 17181574 attempts (efficiency 3.88013%)
+Done: 666667 filled out of 17180572 attempts (efficiency 3.88035%)
+Done: 666667 filled out of 17178807 attempts (efficiency 3.88075%)
+Done: 666667 filled out of 17129353 attempts (efficiency 3.89196%)
+Done: 666667 filled out of 17166433 attempts (efficiency 3.88355%)
+Done: 666667 filled out of 17159281 attempts (efficiency 3.88517%)
+Done: 666667 filled out of 17166834 attempts (efficiency 3.88346%)
+Done: 666667 filled out of 17152473 attempts (efficiency 3.88671%)
+Done: 666667 filled out of 17140736 attempts (efficiency 3.88937%)
+Done: 666667 filled out of 17176962 attempts (efficiency 3.88117%)
+Done: 666666 filled out of 17160389 attempts (efficiency 3.88491%)
+Done: 666666 filled out of 17179006 attempts (efficiency 3.8807%)
+Done: 666666 filled out of 17147592 attempts (efficiency 3.88781%)
+Done: 666666 filled out of 17176551 attempts (efficiency 3.88126%)
+Done: 666666 filled out of 17116617 attempts (efficiency 3.89485%)
+Done: 666666 filled out of 17144141 attempts (efficiency 3.88859%)
+Done: 666666 filled out of 17181428 attempts (efficiency 3.88015%)
+Done: 666666 filled out of 17213741 attempts (efficiency 3.87287%)
+Done: 666666 filled out of 17183594 attempts (efficiency 3.87967%)
+Done: 666666 filled out of 17180601 attempts (efficiency 3.88034%)
+Done: 666667 filled out of 17238899 attempts (efficiency 3.86722%)
+Done: 666666 filled out of 17144769 attempts (efficiency 3.88845%)
+Done: 666666 filled out of 17140121 attempts (efficiency 3.88951%)
+Done: 666666 filled out of 17180983 attempts (efficiency 3.88026%)
+Done: 666666 filled out of 17138378 attempts (efficiency 3.8899%)
+Done: 666666 filled out of 17176791 attempts (efficiency 3.8812%)
+Done: 666666 filled out of 17131556 attempts (efficiency 3.89145%)
+Done: 666666 filled out of 17158156 attempts (efficiency 3.88542%)
+Done: 666666 filled out of 17164945 attempts (efficiency 3.88388%)
+Done: 666666 filled out of 17130784 attempts (efficiency 3.89163%)
+Done: 666666 filled out of 17153593 attempts (efficiency 3.88645%)
+Done: 666667 filled out of 17151055 attempts (efficiency 3.88703%)
+Done: 666666 filled out of 17136854 attempts (efficiency 3.89025%)
+Done: 666666 filled out of 17142364 attempts (efficiency 3.889%)
+Done: 666666 filled out of 17171886 attempts (efficiency 3.88231%)
+Done: 666666 filled out of 17174955 attempts (efficiency 3.88162%)
+Done: 666666 filled out of 17154984 attempts (efficiency 3.88614%)
+Done: 666666 filled out of 17144062 attempts (efficiency 3.88861%)
+Done: 666666 filled out of 17121072 attempts (efficiency 3.89383%)
+Done: 666666 filled out of 17149362 attempts (efficiency 3.88741%)
+Done: 666666 filled out of 17162807 attempts (efficiency 3.88436%)
+Done: 666666 filled out of 17150079 attempts (efficiency 3.88725%)
+Done: 666667 filled out of 17150819 attempts (efficiency 3.88709%)
+Done: 666666 filled out of 17156264 attempts (efficiency 3.88585%)
+Done: 666666 filled out of 17175594 attempts (efficiency 3.88147%)
+Done: 666666 filled out of 17218525 attempts (efficiency 3.8718%)
+Done: 666666 filled out of 17151599 attempts (efficiency 3.8869%)
+Done: 666666 filled out of 17148884 attempts (efficiency 3.88752%)
+Done: 666666 filled out of 17179521 attempts (efficiency 3.88059%)
+Done: 666666 filled out of 17187280 attempts (efficiency 3.87883%)
+Done: 666666 filled out of 17170127 attempts (efficiency 3.88271%)
+Done: 666666 filled out of 17149362 attempts (efficiency 3.88741%)
+Done: 666666 filled out of 17164117 attempts (efficiency 3.88407%)
+Done: 666667 filled out of 17161286 attempts (efficiency 3.88471%)
+Done: 666666 filled out of 17180605 attempts (efficiency 3.88034%)
+Done: 666666 filled out of 17129441 attempts (efficiency 3.89193%)
+Done: 666666 filled out of 17150486 attempts (efficiency 3.88716%)
+Done: 666666 filled out of 17121147 attempts (efficiency 3.89382%)
+Done: 666666 filled out of 17159731 attempts (efficiency 3.88506%)
+Done: 666666 filled out of 17178578 attempts (efficiency 3.8808%)
+Done: 666666 filled out of 17165233 attempts (efficiency 3.88382%)
+Done: 666666 filled out of 17118244 attempts (efficiency 3.89448%)
+Done: 666666 filled out of 17134924 attempts (efficiency 3.89069%)
+Done: 666666 filled out of 17128669 attempts (efficiency 3.89211%)
+Done: 666667 filled out of 17144198 attempts (efficiency 3.88859%)
+Done: 666667 filled out of 17141946 attempts (efficiency 3.8891%)
+Done: 666667 filled out of 17183768 attempts (efficiency 3.87963%)
+Done: 666667 filled out of 17175894 attempts (efficiency 3.88141%)
+Done: 666667 filled out of 17164916 attempts (efficiency 3.88389%)
+Done: 666667 filled out of 17186432 attempts (efficiency 3.87903%)
+Done: 666667 filled out of 17161103 attempts (efficiency 3.88476%)
+Done: 666667 filled out of 17166749 attempts (efficiency 3.88348%)
+Done: 666667 filled out of 17181230 attempts (efficiency 3.88021%)
+Done: 666667 filled out of 17182395 attempts (efficiency 3.87994%)
+Done: 666667 filled out of 17141093 attempts (efficiency 3.88929%)
+Done: 666667 filled out of 17185364 attempts (efficiency 3.87927%)
+Done: 666667 filled out of 17143656 attempts (efficiency 3.88871%)
+Done: 666667 filled out of 17171104 attempts (efficiency 3.88249%)
+Done: 666667 filled out of 17134365 attempts (efficiency 3.89082%)
+Done: 666667 filled out of 17164045 attempts (efficiency 3.88409%)
+Done: 666667 filled out of 17141147 attempts (efficiency 3.88928%)
+Done: 666667 filled out of 17154175 attempts (efficiency 3.88633%)
+Done: 666667 filled out of 17173327 attempts (efficiency 3.88199%)
+Done: 666667 filled out of 17181519 attempts (efficiency 3.88014%)
+Done: 666667 filled out of 17172327 attempts (efficiency 3.88222%)
+Done: 666667 filled out of 17193495 attempts (efficiency 3.87744%)
+Done: 666667 filled out of 17147533 attempts (efficiency 3.88783%)
+Done: 666667 filled out of 17134104 attempts (efficiency 3.89088%)
+Done: 666667 filled out of 17219722 attempts (efficiency 3.87153%)
+Done: 666667 filled out of 17134371 attempts (efficiency 3.89082%)
+Done: 666667 filled out of 17113551 attempts (efficiency 3.89555%)
+Done: 666667 filled out of 17175215 attempts (efficiency 3.88156%)
+Done: 666667 filled out of 17154975 attempts (efficiency 3.88614%)
+Done: 666667 filled out of 17147191 attempts (efficiency 3.88791%)
+Done: 666667 filled out of 17155782 attempts (efficiency 3.88596%)
+Done: 666667 filled out of 17188973 attempts (efficiency 3.87846%)
+Done: 666667 filled out of 17157134 attempts (efficiency 3.88565%)
+Done: 666667 filled out of 17169121 attempts (efficiency 3.88294%)
+Done: 666667 filled out of 17165519 attempts (efficiency 3.88376%)
+Done: 666667 filled out of 17147844 attempts (efficiency 3.88776%)
+Done: 666667 filled out of 17163149 attempts (efficiency 3.88429%)
+Done: 666667 filled out of 17148066 attempts (efficiency 3.88771%)
+Done: 666667 filled out of 17138813 attempts (efficiency 3.88981%)
+Done: 666667 filled out of 17177680 attempts (efficiency 3.88101%)
+Done: 666667 filled out of 17155491 attempts (efficiency 3.88603%)
+Done: 666667 filled out of 17175774 attempts (efficiency 3.88144%)
+Done: 666667 filled out of 17153957 attempts (efficiency 3.88637%)
+Done: 666667 filled out of 17135277 attempts (efficiency 3.89061%)
+Done: 666667 filled out of 17167560 attempts (efficiency 3.8833%)
+Done: 666667 filled out of 17153815 attempts (efficiency 3.88641%)
+Done: 666667 filled out of 17187307 attempts (efficiency 3.87883%)
+Done: 666667 filled out of 17160919 attempts (efficiency 3.8848%)
+Done: 666667 filled out of 17147785 attempts (efficiency 3.88777%)
+Done: 666667 filled out of 17135904 attempts (efficiency 3.89047%)
+Done: 666667 filled out of 17171399 attempts (efficiency 3.88243%)
+Done: 666667 filled out of 17156521 attempts (efficiency 3.88579%)
+Done: 666667 filled out of 17180169 attempts (efficiency 3.88044%)
+Done: 666667 filled out of 17138588 attempts (efficiency 3.88986%)
+Done: 666667 filled out of 17141673 attempts (efficiency 3.88916%)
+Done: 666667 filled out of 17163785 attempts (efficiency 3.88415%)
+Done: 666667 filled out of 17133929 attempts (efficiency 3.89092%)
+Done: 666667 filled out of 17145431 attempts (efficiency 3.88831%)
+Done: 666667 filled out of 17175832 attempts (efficiency 3.88142%)
+Done: 666667 filled out of 17157502 attempts (efficiency 3.88557%)
+Done: 666667 filled out of 17144713 attempts (efficiency 3.88847%)
+Done: 666667 filled out of 17182724 attempts (efficiency 3.87987%)
+Done: 666667 filled out of 17163333 attempts (efficiency 3.88425%)
+Done: 666667 filled out of 17139797 attempts (efficiency 3.88959%)
+Done: 666667 filled out of 17173548 attempts (efficiency 3.88194%)
+Done: 666667 filled out of 17158735 attempts (efficiency 3.88529%)
+Done: 666667 filled out of 17152732 attempts (efficiency 3.88665%)
+Done: 666667 filled out of 17197616 attempts (efficiency 3.87651%)
+Done: 666667 filled out of 17187204 attempts (efficiency 3.87886%)
+Done: 666667 filled out of 17138512 attempts (efficiency 3.88988%)
+Done: 666667 filled out of 17149139 attempts (efficiency 3.88747%)
+Done: 666667 filled out of 17153845 attempts (efficiency 3.8864%)
+Done: 666667 filled out of 17130993 attempts (efficiency 3.89158%)
+Done: 666667 filled out of 17211765 attempts (efficiency 3.87332%)
+Done: 666667 filled out of 17155721 attempts (efficiency 3.88597%)
+Done: 666667 filled out of 17164189 attempts (efficiency 3.88406%)
+Done: 666667 filled out of 17148560 attempts (efficiency 3.8876%)
+Done: 666667 filled out of 17177074 attempts (efficiency 3.88114%)
+Done: 666667 filled out of 17178971 attempts (efficiency 3.88072%)
+Done: 666667 filled out of 17136767 attempts (efficiency 3.89027%)
+Done: 666667 filled out of 17175703 attempts (efficiency 3.88145%)
+Done: 666667 filled out of 17156529 attempts (efficiency 3.88579%)
+Done: 666667 filled out of 17176789 attempts (efficiency 3.88121%)
+Done: 666667 filled out of 17138475 attempts (efficiency 3.88989%)
+Done: 666667 filled out of 17177676 attempts (efficiency 3.88101%)
+Done: 666667 filled out of 17163303 attempts (efficiency 3.88426%)
+------------------------------------------------------------------
+merged genT entries: 100000000  (expected 100000000)
+Done. Output: events/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.root
+[2026-08-29 17:32:43] === convert 3N genT -> events (detection-based) ===
+Input : events/3N_FSIindep_hN_100M_12C_kF220_6GeV_Q2gt1.root  (100000000 events)
+Output: events/events_3N_100M.root  (Ebeam=6.0 GeV, kF=0.22 GeV/c)
+hAttempts: 2574071598 generation attempts
+Done.
+[2026-08-29 17:45:35] === 3N PWIA no-CM 20M (Fig 1/2/4) ===
+eNCrossSection: you have selected configuration: 2 1
+eNCrossSection: you have selected configuration: 0 1
+eNCrossSection: you have selected configuration: 1 1
+eNCrossSection: you have selected configuration: 2 1
+
+========================================
+  3N SRC Analysis — TTree output
+========================================
+  Nucleus:      4He
+  Beam energy:  6 GeV
+  Events:       20000000
+  CM motion:    OFF
+  Output:       events/3N_PWIA_noCM_20M_events.root
+========================================
+
+Starting event loop: 20000000 events requested...
+  10000 / 20000000 events (0.05%)  20000 / 20000000 events (0.1%)  30000 / 20000000 events (0.15%)  40000 / 20000000 events (0.2%)  50000 / 20000000 events (0.25%)  60000 / 20000000 events (0.3%)  70000 / 20000000 events (0.35%)  80000 / 20000000 events (0.4%)  90000 / 20000000 events (0.45%)  100000 / 20000000 events (0.5%)  110000 / 20000000 events (0.55%)  120000 / 20000000 events (0.6%)  130000 / 20000000 events (0.65%)  140000 / 20000000 events (0.7%)  150000 / 20000000 events (0.75%)  160000 / 20000000 events (0.8%)  170000 / 20000000 events (0.85%)  180000 / 20000000 events (0.9%)  190000 / 20000000 events (0.95%)  200000 / 20000000 events (1%)  210000 / 20000000 events (1.05%)  220000 / 20000000 events (1.1%)  230000 / 20000000 events (1.15%)  240000 / 20000000 events (1.2%)  250000 / 20000000 events (1.25%)  260000 / 20000000 events (1.3%)  270000 / 20000000 events (1.35%)  280000 / 20000000 events (1.4%)  290000 / 20000000 events (1.45%)  300000 / 20000000 events (1.5%)  310000 / 20000000 events (1.55%)  320000 / 20000000 events (1.6%)  330000 / 20000000 events (1.65%)  340000 / 20000000 events (1.7%)  350000 / 20000000 events (1.75%)  360000 / 20000000 events (1.8%)  370000 / 20000000 events (1.85%)  380000 / 20000000 events (1.9%)  390000 / 20000000 events (1.95%)  400000 / 20000000 events (2%)  410000 / 20000000 events (2.05%)  420000 / 20000000 events (2.1%)  430000 / 20000000 events (2.15%)  440000 / 20000000 events (2.2%)  450000 / 20000000 events (2.25%)  460000 / 20000000 events (2.3%)  470000 / 20000000 events (2.35%)  480000 / 20000000 events (2.4%)  490000 / 20000000 events (2.45%)  500000 / 20000000 events (2.5%)  510000 / 20000000 events (2.55%)  520000 / 20000000 events (2.6%)  530000 / 20000000 events (2.65%)  540000 / 20000000 events (2.7%)  550000 / 20000000 events (2.75%)  560000 / 20000000 events (2.8%)  570000 / 20000000 events (2.85%)  580000 / 20000000 events (2.9%)  590000 / 20000000 events (2.95%)  600000 / 20000000 events (3%)  610000 / 20000000 events (3.05%)  620000 / 20000000 events (3.1%)  630000 / 20000000 events (3.15%)  640000 / 20000000 events (3.2%)  650000 / 20000000 events (3.25%)  660000 / 20000000 events (3.3%)  670000 / 20000000 events (3.35%)  680000 / 20000000 events (3.4%)  690000 / 20000000 events (3.45%)  700000 / 20000000 events (3.5%)  710000 / 20000000 events (3.55%)  720000 / 20000000 events (3.6%)  730000 / 20000000 events (3.65%)  740000 / 20000000 events (3.7%)  750000 / 20000000 events (3.75%)  760000 / 20000000 events (3.8%)  770000 / 20000000 events (3.85%)  780000 / 20000000 events (3.9%)  790000 / 20000000 events (3.95%)  800000 / 20000000 events (4%)  810000 / 20000000 events (4.05%)  820000 / 20000000 events (4.1%)  830000 / 20000000 events (4.15%)  840000 / 20000000 events (4.2%)  850000 / 20000000 events (4.25%)  860000 / 20000000 events (4.3%)  870000 / 20000000 events (4.35%)  880000 / 20000000 events (4.4%)  890000 / 20000000 events (4.45%)  900000 / 20000000 events (4.5%)  910000 / 20000000 events (4.55%)  920000 / 20000000 events (4.6%)  930000 / 20000000 events (4.65%)  940000 / 20000000 events (4.7%)  950000 / 20000000 events (4.75%)  960000 / 20000000 events (4.8%)  970000 / 20000000 events (4.85%)  980000 / 20000000 events (4.9%)  990000 / 20000000 events (4.95%)  1000000 / 20000000 events (5%)  1010000 / 20000000 events (5.05%)  1020000 / 20000000 events (5.1%)  1030000 / 20000000 events (5.15%)  1040000 / 20000000 events (5.2%)  1050000 / 20000000 events (5.25%)  1060000 / 20000000 events (5.3%)  1070000 / 20000000 events (5.35%)  1080000 / 20000000 events (5.4%)  1090000 / 20000000 events (5.45%)  1100000 / 20000000 events (5.5%)  1110000 / 20000000 events (5.55%)  1120000 / 20000000 events (5.6%)  1130000 / 20000000 events (5.65%)  1140000 / 20000000 events (5.7%)  1150000 / 20000000 events (5.75%)  1160000 / 20000000 events (5.8%)  1170000 / 20000000 events (5.85%)  1180000 / 20000000 events (5.9%)  1190000 / 20000000 events (5.95%)  1200000 / 20000000 events (6%)  1210000 / 20000000 events (6.05%)  1220000 / 20000000 events (6.1%)  1230000 / 20000000 events (6.15%)  1240000 / 20000000 events (6.2%)  1250000 / 20000000 events (6.25%)  1260000 / 20000000 events (6.3%)  1270000 / 20000000 events (6.35%)  1280000 / 20000000 events (6.4%)  1290000 / 20000000 events (6.45%)  1300000 / 20000000 events (6.5%)  1310000 / 20000000 events (6.55%)  1320000 / 20000000 events (6.6%)  1330000 / 20000000 events (6.65%)  1340000 / 20000000 events (6.7%)  1350000 / 20000000 events (6.75%)  1360000 / 20000000 events (6.8%)  1370000 / 20000000 events (6.85%)  1380000 / 20000000 events (6.9%)  1390000 / 20000000 events (6.95%)  1400000 / 20000000 events (7%)  1410000 / 20000000 events (7.05%)  1420000 / 20000000 events (7.1%)  1430000 / 20000000 events (7.15%)  1440000 / 20000000 events (7.2%)  1450000 / 20000000 events (7.25%)  1460000 / 20000000 events (7.3%)  1470000 / 20000000 events (7.35%)  1480000 / 20000000 events (7.4%)  1490000 / 20000000 events (7.45%)  1500000 / 20000000 events (7.5%)  1510000 / 20000000 events (7.55%)  1520000 / 20000000 events (7.6%)  1530000 / 20000000 events (7.65%)  1540000 / 20000000 events (7.7%)  1550000 / 20000000 events (7.75%)  1560000 / 20000000 events (7.8%)  1570000 / 20000000 events (7.85%)  1580000 / 20000000 events (7.9%)  1590000 / 20000000 events (7.95%)  1600000 / 20000000 events (8%)  1610000 / 20000000 events (8.05%)  1620000 / 20000000 events (8.1%)  1630000 / 20000000 events (8.15%)  1640000 / 20000000 events (8.2%)  1650000 / 20000000 events (8.25%)  1660000 / 20000000 events (8.3%)  1670000 / 20000000 events (8.35%)  1680000 / 20000000 events (8.4%)  1690000 / 20000000 events (8.45%)  1700000 / 20000000 events (8.5%)  1710000 / 20000000 events (8.55%)  1720000 / 20000000 events (8.6%)  1730000 / 20000000 events (8.65%)  1740000 / 20000000 events (8.7%)  1750000 / 20000000 events (8.75%)  1760000 / 20000000 events (8.8%)  1770000 / 20000000 events (8.85%)  1780000 / 20000000 events (8.9%)  1790000 / 20000000 events (8.95%)  1800000 / 20000000 events (9%)  1810000 / 20000000 events (9.05%)  1820000 / 20000000 events (9.1%)  1830000 / 20000000 events (9.15%)  1840000 / 20000000 events (9.2%)  1850000 / 20000000 events (9.25%)  1860000 / 20000000 events (9.3%)  1870000 / 20000000 events (9.35%)  1880000 / 20000000 events (9.4%)  1890000 / 20000000 events (9.45%)  1900000 / 20000000 events (9.5%)  1910000 / 20000000 events (9.55%)  1920000 / 20000000 events (9.6%)  1930000 / 20000000 events (9.65%)  1940000 / 20000000 events (9.7%)  1950000 / 20000000 events (9.75%)  1960000 / 20000000 events (9.8%)  1970000 / 20000000 events (9.85%)  1980000 / 20000000 events (9.9%)  1990000 / 20000000 events (9.95%)  2000000 / 20000000 events (10%)  2010000 / 20000000 events (10.05%)  2020000 / 20000000 events (10.1%)  2030000 / 20000000 events (10.15%)  2040000 / 20000000 events (10.2%)  2050000 / 20000000 events (10.25%)  2060000 / 20000000 events (10.3%)  2070000 / 20000000 events (10.35%)  2080000 / 20000000 events (10.4%)  2090000 / 20000000 events (10.45%)  2100000 / 20000000 events (10.5%)  2110000 / 20000000 events (10.55%)  2120000 / 20000000 events (10.6%)  2130000 / 20000000 events (10.65%)  2140000 / 20000000 events (10.7%)  2150000 / 20000000 events (10.75%)  2160000 / 20000000 events (10.8%)  2170000 / 20000000 events (10.85%)  2180000 / 20000000 events (10.9%)  2190000 / 20000000 events (10.95%)  2200000 / 20000000 events (11%)  2210000 / 20000000 events (11.05%)  2220000 / 20000000 events (11.1%)  2230000 / 20000000 events (11.15%)  2240000 / 20000000 events (11.2%)  2250000 / 20000000 events (11.25%)  2260000 / 20000000 events (11.3%)  2270000 / 20000000 events (11.35%)  2280000 / 20000000 events (11.4%)  2290000 / 20000000 events (11.45%)  2300000 / 20000000 events (11.5%)  2310000 / 20000000 events (11.55%)  2320000 / 20000000 events (11.6%)  2330000 / 20000000 events (11.65%)  2340000 / 20000000 events (11.7%)  2350000 / 20000000 events (11.75%)  2360000 / 20000000 events (11.8%)  2370000 / 20000000 events (11.85%)  2380000 / 20000000 events (11.9%)  2390000 / 20000000 events (11.95%)  2400000 / 20000000 events (12%)  2410000 / 20000000 events (12.05%)  2420000 / 20000000 events (12.1%)  2430000 / 20000000 events (12.15%)  2440000 / 20000000 events (12.2%)  2450000 / 20000000 events (12.25%)  2460000 / 20000000 events (12.3%)  2470000 / 20000000 events (12.35%)  2480000 / 20000000 events (12.4%)  2490000 / 20000000 events (12.45%)  2500000 / 20000000 events (12.5%)  2510000 / 20000000 events (12.55%)  2520000 / 20000000 events (12.6%)  2530000 / 20000000 events (12.65%)  2540000 / 20000000 events (12.7%)  2550000 / 20000000 events (12.75%)  2560000 / 20000000 events (12.8%)  2570000 / 20000000 events (12.85%)  2580000 / 20000000 events (12.9%)  2590000 / 20000000 events (12.95%)  2600000 / 20000000 events (13%)  2610000 / 20000000 events (13.05%)  2620000 / 20000000 events (13.1%)  2630000 / 20000000 events (13.15%)  2640000 / 20000000 events (13.2%)  2650000 / 20000000 events (13.25%)  2660000 / 20000000 events (13.3%)  2670000 / 20000000 events (13.35%)  2680000 / 20000000 events (13.4%)  2690000 / 20000000 events (13.45%)  2700000 / 20000000 events (13.5%)  2710000 / 20000000 events (13.55%)  2720000 / 20000000 events (13.6%)  2730000 / 20000000 events (13.65%)  2740000 / 20000000 events (13.7%)  2750000 / 20000000 events (13.75%)  2760000 / 20000000 events (13.8%)  2770000 / 20000000 events (13.85%)  2780000 / 20000000 events (13.9%)  2790000 / 20000000 events (13.95%)  2800000 / 20000000 events (14%)  2810000 / 20000000 events (14.05%)  2820000 / 20000000 events (14.1%)  2830000 / 20000000 events (14.15%)  2840000 / 20000000 events (14.2%)  2850000 / 20000000 events (14.25%)  2860000 / 20000000 events (14.3%)  2870000 / 20000000 events (14.35%)  2880000 / 20000000 events (14.4%)  2890000 / 20000000 events (14.45%)  2900000 / 20000000 events (14.5%)  2910000 / 20000000 events (14.55%)  2920000 / 20000000 events (14.6%)  2930000 / 20000000 events (14.65%)  2940000 / 20000000 events (14.7%)  2950000 / 20000000 events (14.75%)  2960000 / 20000000 events (14.8%)  2970000 / 20000000 events (14.85%)  2980000 / 20000000 events (14.9%)  2990000 / 20000000 events (14.95%)  3000000 / 20000000 events (15%)  3010000 / 20000000 events (15.05%)  3020000 / 20000000 events (15.1%)  3030000 / 20000000 events (15.15%)  3040000 / 20000000 events (15.2%)  3050000 / 20000000 events (15.25%)  3060000 / 20000000 events (15.3%)  3070000 / 20000000 events (15.35%)  3080000 / 20000000 events (15.4%)  3090000 / 20000000 events (15.45%)  3100000 / 20000000 events (15.5%)  3110000 / 20000000 events (15.55%)  3120000 / 20000000 events (15.6%)  3130000 / 20000000 events (15.65%)  3140000 / 20000000 events (15.7%)  3150000 / 20000000 events (15.75%)  3160000 / 20000000 events (15.8%)  3170000 / 20000000 events (15.85%)  3180000 / 20000000 events (15.9%)  3190000 / 20000000 events (15.95%)  3200000 / 20000000 events (16%)  3210000 / 20000000 events (16.05%)  3220000 / 20000000 events (16.1%)  3230000 / 20000000 events (16.15%)  3240000 / 20000000 events (16.2%)  3250000 / 20000000 events (16.25%)  3260000 / 20000000 events (16.3%)  3270000 / 20000000 events (16.35%)  3280000 / 20000000 events (16.4%)  3290000 / 20000000 events (16.45%)  3300000 / 20000000 events (16.5%)  3310000 / 20000000 events (16.55%)  3320000 / 20000000 events (16.6%)  3330000 / 20000000 events (16.65%)  3340000 / 20000000 events (16.7%)  3350000 / 20000000 events (16.75%)  3360000 / 20000000 events (16.8%)  3370000 / 20000000 events (16.85%)  3380000 / 20000000 events (16.9%)  3390000 / 20000000 events (16.95%)  3400000 / 20000000 events (17%)  3410000 / 20000000 events (17.05%)  3420000 / 20000000 events (17.1%)  3430000 / 20000000 events (17.15%)  3440000 / 20000000 events (17.2%)  3450000 / 20000000 events (17.25%)  3460000 / 20000000 events (17.3%)  3470000 / 20000000 events (17.35%)  3480000 / 20000000 events (17.4%)  3490000 / 20000000 events (17.45%)  3500000 / 20000000 events (17.5%)  3510000 / 20000000 events (17.55%)  3520000 / 20000000 events (17.6%)  3530000 / 20000000 events (17.65%)  3540000 / 20000000 events (17.7%)  3550000 / 20000000 events (17.75%)  3560000 / 20000000 events (17.8%)  3570000 / 20000000 events (17.85%)  3580000 / 20000000 events (17.9%)  3590000 / 20000000 events (17.95%)  3600000 / 20000000 events (18%)  3610000 / 20000000 events (18.05%)  3620000 / 20000000 events (18.1%)  3630000 / 20000000 events (18.15%)  3640000 / 20000000 events (18.2%)  3650000 / 20000000 events (18.25%)  3660000 / 20000000 events (18.3%)  3670000 / 20000000 events (18.35%)  3680000 / 20000000 events (18.4%)  3690000 / 20000000 events (18.45%)  3700000 / 20000000 events (18.5%)  3710000 / 20000000 events (18.55%)  3720000 / 20000000 events (18.6%)  3730000 / 20000000 events (18.65%)  3740000 / 20000000 events (18.7%)  3750000 / 20000000 events (18.75%)  3760000 / 20000000 events (18.8%)  3770000 / 20000000 events (18.85%)  3780000 / 20000000 events (18.9%)  3790000 / 20000000 events (18.95%)  3800000 / 20000000 events (19%)  3810000 / 20000000 events (19.05%)  3820000 / 20000000 events (19.1%)  3830000 / 20000000 events (19.15%)  3840000 / 20000000 events (19.2%)  3850000 / 20000000 events (19.25%)  3860000 / 20000000 events (19.3%)  3870000 / 20000000 events (19.35%)  3880000 / 20000000 events (19.4%)  3890000 / 20000000 events (19.45%)  3900000 / 20000000 events (19.5%)  3910000 / 20000000 events (19.55%)  3920000 / 20000000 events (19.6%)  3930000 / 20000000 events (19.65%)  3940000 / 20000000 events (19.7%)  3950000 / 20000000 events (19.75%)  3960000 / 20000000 events (19.8%)  3970000 / 20000000 events (19.85%)  3980000 / 20000000 events (19.9%)  3990000 / 20000000 events (19.95%)  4000000 / 20000000 events (20%)  4010000 / 20000000 events (20.05%)  4020000 / 20000000 events (20.1%)  4030000 / 20000000 events (20.15%)  4040000 / 20000000 events (20.2%)  4050000 / 20000000 events (20.25%)  4060000 / 20000000 events (20.3%)  4070000 / 20000000 events (20.35%)  4080000 / 20000000 events (20.4%)  4090000 / 20000000 events (20.45%)  4100000 / 20000000 events (20.5%)  4110000 / 20000000 events (20.55%)  4120000 / 20000000 events (20.6%)  4130000 / 20000000 events (20.65%)  4140000 / 20000000 events (20.7%)  4150000 / 20000000 events (20.75%)  4160000 / 20000000 events (20.8%)  4170000 / 20000000 events (20.85%)  4180000 / 20000000 events (20.9%)  4190000 / 20000000 events (20.95%)  4200000 / 20000000 events (21%)  4210000 / 20000000 events (21.05%)  4220000 / 20000000 events (21.1%)  4230000 / 20000000 events (21.15%)  4240000 / 20000000 events (21.2%)  4250000 / 20000000 events (21.25%)  4260000 / 20000000 events (21.3%)  4270000 / 20000000 events (21.35%)  4280000 / 20000000 events (21.4%)  4290000 / 20000000 events (21.45%)  4300000 / 20000000 events (21.5%)  4310000 / 20000000 events (21.55%)  4320000 / 20000000 events (21.6%)  4330000 / 20000000 events (21.65%)  4340000 / 20000000 events (21.7%)  4350000 / 20000000 events (21.75%)  4360000 / 20000000 events (21.8%)  4370000 / 20000000 events (21.85%)  4380000 / 20000000 events (21.9%)  4390000 / 20000000 events (21.95%)  4400000 / 20000000 events (22%)  4410000 / 20000000 events (22.05%)  4420000 / 20000000 events (22.1%)  4430000 / 20000000 events (22.15%)  4440000 / 20000000 events (22.2%)  4450000 / 20000000 events (22.25%)  4460000 / 20000000 events (22.3%)  4470000 / 20000000 events (22.35%)  4480000 / 20000000 events (22.4%)  4490000 / 20000000 events (22.45%)  4500000 / 20000000 events (22.5%)  4510000 / 20000000 events (22.55%)  4520000 / 20000000 events (22.6%)  4530000 / 20000000 events (22.65%)  4540000 / 20000000 events (22.7%)  4550000 / 20000000 events (22.75%)  4560000 / 20000000 events (22.8%)  4570000 / 20000000 events (22.85%)  4580000 / 20000000 events (22.9%)  4590000 / 20000000 events (22.95%)  4600000 / 20000000 events (23%)  4610000 / 20000000 events (23.05%)  4620000 / 20000000 events (23.1%)  4630000 / 20000000 events (23.15%)  4640000 / 20000000 events (23.2%)  4650000 / 20000000 events (23.25%)  4660000 / 20000000 events (23.3%)  4670000 / 20000000 events (23.35%)  4680000 / 20000000 events (23.4%)  4690000 / 20000000 events (23.45%)  4700000 / 20000000 events (23.5%)  4710000 / 20000000 events (23.55%)  4720000 / 20000000 events (23.6%)  4730000 / 20000000 events (23.65%)  4740000 / 20000000 events (23.7%)  4750000 / 20000000 events (23.75%)  4760000 / 20000000 events (23.8%)  4770000 / 20000000 events (23.85%)  4780000 / 20000000 events (23.9%)  4790000 / 20000000 events (23.95%)  4800000 / 20000000 events (24%)  4810000 / 20000000 events (24.05%)  4820000 / 20000000 events (24.1%)  4830000 / 20000000 events (24.15%)  4840000 / 20000000 events (24.2%)  4850000 / 20000000 events (24.25%)  4860000 / 20000000 events (24.3%)  4870000 / 20000000 events (24.35%)  4880000 / 20000000 events (24.4%)  4890000 / 20000000 events (24.45%)  4900000 / 20000000 events (24.5%)  4910000 / 20000000 events (24.55%)  4920000 / 20000000 events (24.6%)  4930000 / 20000000 events (24.65%)  4940000 / 20000000 events (24.7%)  4950000 / 20000000 events (24.75%)  4960000 / 20000000 events (24.8%)  4970000 / 20000000 events (24.85%)  4980000 / 20000000 events (24.9%)  4990000 / 20000000 events (24.95%)  5000000 / 20000000 events (25%)  5010000 / 20000000 events (25.05%)  5020000 / 20000000 events (25.1%)  5030000 / 20000000 events (25.15%)  5040000 / 20000000 events (25.2%)  5050000 / 20000000 events (25.25%)  5060000 / 20000000 events (25.3%)  5070000 / 20000000 events (25.35%)  5080000 / 20000000 events (25.4%)  5090000 / 20000000 events (25.45%)  5100000 / 20000000 events (25.5%)  5110000 / 20000000 events (25.55%)  5120000 / 20000000 events (25.6%)  5130000 / 20000000 events (25.65%)  5140000 / 20000000 events (25.7%)  5150000 / 20000000 events (25.75%)  5160000 / 20000000 events (25.8%)  5170000 / 20000000 events (25.85%)  5180000 / 20000000 events (25.9%)  5190000 / 20000000 events (25.95%)  5200000 / 20000000 events (26%)  5210000 / 20000000 events (26.05%)  5220000 / 20000000 events (26.1%)  5230000 / 20000000 events (26.15%)  5240000 / 20000000 events (26.2%)  5250000 / 20000000 events (26.25%)  5260000 / 20000000 events (26.3%)  5270000 / 20000000 events (26.35%)  5280000 / 20000000 events (26.4%)  5290000 / 20000000 events (26.45%)  5300000 / 20000000 events (26.5%)  5310000 / 20000000 events (26.55%)  5320000 / 20000000 events (26.6%)  5330000 / 20000000 events (26.65%)  5340000 / 20000000 events (26.7%)  5350000 / 20000000 events (26.75%)  5360000 / 20000000 events (26.8%)  5370000 / 20000000 events (26.85%)  5380000 / 20000000 events (26.9%)  5390000 / 20000000 events (26.95%)  5400000 / 20000000 events (27%)  5410000 / 20000000 events (27.05%)  5420000 / 20000000 events (27.1%)  5430000 / 20000000 events (27.15%)  5440000 / 20000000 events (27.2%)  5450000 / 20000000 events (27.25%)  5460000 / 20000000 events (27.3%)  5470000 / 20000000 events (27.35%)  5480000 / 20000000 events (27.4%)  5490000 / 20000000 events (27.45%)  5500000 / 20000000 events (27.5%)  5510000 / 20000000 events (27.55%)  5520000 / 20000000 events (27.6%)  5530000 / 20000000 events (27.65%)  5540000 / 20000000 events (27.7%)  5550000 / 20000000 events (27.75%)  5560000 / 20000000 events (27.8%)  5570000 / 20000000 events (27.85%)  5580000 / 20000000 events (27.9%)  5590000 / 20000000 events (27.95%)  5600000 / 20000000 events (28%)  5610000 / 20000000 events (28.05%)  5620000 / 20000000 events (28.1%)  5630000 / 20000000 events (28.15%)  5640000 / 20000000 events (28.2%)  5650000 / 20000000 events (28.25%)  5660000 / 20000000 events (28.3%)  5670000 / 20000000 events (28.35%)  5680000 / 20000000 events (28.4%)  5690000 / 20000000 events (28.45%)  5700000 / 20000000 events (28.5%)  5710000 / 20000000 events (28.55%)  5720000 / 20000000 events (28.6%)  5730000 / 20000000 events (28.65%)  5740000 / 20000000 events (28.7%)  5750000 / 20000000 events (28.75%)  5760000 / 20000000 events (28.8%)  5770000 / 20000000 events (28.85%)  5780000 / 20000000 events (28.9%)  5790000 / 20000000 events (28.95%)  5800000 / 20000000 events (29%)  5810000 / 20000000 events (29.05%)  5820000 / 20000000 events (29.1%)  5830000 / 20000000 events (29.15%)  5840000 / 20000000 events (29.2%)  5850000 / 20000000 events (29.25%)  5860000 / 20000000 events (29.3%)  5870000 / 20000000 events (29.35%)  5880000 / 20000000 events (29.4%)  5890000 / 20000000 events (29.45%)  5900000 / 20000000 events (29.5%)  5910000 / 20000000 events (29.55%)  5920000 / 20000000 events (29.6%)  5930000 / 20000000 events (29.65%)  5940000 / 20000000 events (29.7%)  5950000 / 20000000 events (29.75%)  5960000 / 20000000 events (29.8%)  5970000 / 20000000 events (29.85%)  5980000 / 20000000 events (29.9%)  5990000 / 20000000 events (29.95%)  6000000 / 20000000 events (30%)  6010000 / 20000000 events (30.05%)  6020000 / 20000000 events (30.1%)  6030000 / 20000000 events (30.15%)  6040000 / 20000000 events (30.2%)  6050000 / 20000000 events (30.25%)  6060000 / 20000000 events (30.3%)  6070000 / 20000000 events (30.35%)  6080000 / 20000000 events (30.4%)  6090000 / 20000000 events (30.45%)  6100000 / 20000000 events (30.5%)  6110000 / 20000000 events (30.55%)  6120000 / 20000000 events (30.6%)  6130000 / 20000000 events (30.65%)  6140000 / 20000000 events (30.7%)  6150000 / 20000000 events (30.75%)  6160000 / 20000000 events (30.8%)  6170000 / 20000000 events (30.85%)  6180000 / 20000000 events (30.9%)  6190000 / 20000000 events (30.95%)  6200000 / 20000000 events (31%)  6210000 / 20000000 events (31.05%)  6220000 / 20000000 events (31.1%)  6230000 / 20000000 events (31.15%)  6240000 / 20000000 events (31.2%)  6250000 / 20000000 events (31.25%)  6260000 / 20000000 events (31.3%)  6270000 / 20000000 events (31.35%)  6280000 / 20000000 events (31.4%)  6290000 / 20000000 events (31.45%)  6300000 / 20000000 events (31.5%)  6310000 / 20000000 events (31.55%)  6320000 / 20000000 events (31.6%)  6330000 / 20000000 events (31.65%)  6340000 / 20000000 events (31.7%)  6350000 / 20000000 events (31.75%)  6360000 / 20000000 events (31.8%)  6370000 / 20000000 events (31.85%)  6380000 / 20000000 events (31.9%)  6390000 / 20000000 events (31.95%)  6400000 / 20000000 events (32%)  6410000 / 20000000 events (32.05%)  6420000 / 20000000 events (32.1%)  6430000 / 20000000 events (32.15%)  6440000 / 20000000 events (32.2%)  6450000 / 20000000 events (32.25%)  6460000 / 20000000 events (32.3%)  6470000 / 20000000 events (32.35%)  6480000 / 20000000 events (32.4%)  6490000 / 20000000 events (32.45%)  6500000 / 20000000 events (32.5%)  6510000 / 20000000 events (32.55%)  6520000 / 20000000 events (32.6%)  6530000 / 20000000 events (32.65%)  6540000 / 20000000 events (32.7%)  6550000 / 20000000 events (32.75%)  6560000 / 20000000 events (32.8%)  6570000 / 20000000 events (32.85%)  6580000 / 20000000 events (32.9%)  6590000 / 20000000 events (32.95%)  6600000 / 20000000 events (33%)  6610000 / 20000000 events (33.05%)  6620000 / 20000000 events (33.1%)  6630000 / 20000000 events (33.15%)  6640000 / 20000000 events (33.2%)  6650000 / 20000000 events (33.25%)  6660000 / 20000000 events (33.3%)  6670000 / 20000000 events (33.35%)  6680000 / 20000000 events (33.4%)  6690000 / 20000000 events (33.45%)  6700000 / 20000000 events (33.5%)  6710000 / 20000000 events (33.55%)  6720000 / 20000000 events (33.6%)  6730000 / 20000000 events (33.65%)  6740000 / 20000000 events (33.7%)  6750000 / 20000000 events (33.75%)  6760000 / 20000000 events (33.8%)  6770000 / 20000000 events (33.85%)  6780000 / 20000000 events (33.9%)  6790000 / 20000000 events (33.95%)  6800000 / 20000000 events (34%)  6810000 / 20000000 events (34.05%)  6820000 / 20000000 events (34.1%)  6830000 / 20000000 events (34.15%)  6840000 / 20000000 events (34.2%)  6850000 / 20000000 events (34.25%)  6860000 / 20000000 events (34.3%)  6870000 / 20000000 events (34.35%)  6880000 / 20000000 events (34.4%)  6890000 / 20000000 events (34.45%)  6900000 / 20000000 events (34.5%)  6910000 / 20000000 events (34.55%)  6920000 / 20000000 events (34.6%)  6930000 / 20000000 events (34.65%)  6940000 / 20000000 events (34.7%)  6950000 / 20000000 events (34.75%)  6960000 / 20000000 events (34.8%)  6970000 / 20000000 events (34.85%)  6980000 / 20000000 events (34.9%)  6990000 / 20000000 events (34.95%)  7000000 / 20000000 events (35%)  7010000 / 20000000 events (35.05%)  7020000 / 20000000 events (35.1%)  7030000 / 20000000 events (35.15%)  7040000 / 20000000 events (35.2%)  7050000 / 20000000 events (35.25%)  7060000 / 20000000 events (35.3%)  7070000 / 20000000 events (35.35%)  7080000 / 20000000 events (35.4%)  7090000 / 20000000 events (35.45%)  7100000 / 20000000 events (35.5%)  7110000 / 20000000 events (35.55%)  7120000 / 20000000 events (35.6%)  7130000 / 20000000 events (35.65%)  7140000 / 20000000 events (35.7%)  7150000 / 20000000 events (35.75%)  7160000 / 20000000 events (35.8%)  7170000 / 20000000 events (35.85%)  7180000 / 20000000 events (35.9%)  7190000 / 20000000 events (35.95%)  7200000 / 20000000 events (36%)  7210000 / 20000000 events (36.05%)  7220000 / 20000000 events (36.1%)  7230000 / 20000000 events (36.15%)  7240000 / 20000000 events (36.2%)  7250000 / 20000000 events (36.25%)  7260000 / 20000000 events (36.3%)  7270000 / 20000000 events (36.35%)  7280000 / 20000000 events (36.4%)  7290000 / 20000000 events (36.45%)  7300000 / 20000000 events (36.5%)  7310000 / 20000000 events (36.55%)  7320000 / 20000000 events (36.6%)  7330000 / 20000000 events (36.65%)  7340000 / 20000000 events (36.7%)  7350000 / 20000000 events (36.75%)  7360000 / 20000000 events (36.8%)  7370000 / 20000000 events (36.85%)  7380000 / 20000000 events (36.9%)  7390000 / 20000000 events (36.95%)  7400000 / 20000000 events (37%)  7410000 / 20000000 events (37.05%)  7420000 / 20000000 events (37.1%)  7430000 / 20000000 events (37.15%)  7440000 / 20000000 events (37.2%)  7450000 / 20000000 events (37.25%)  7460000 / 20000000 events (37.3%)  7470000 / 20000000 events (37.35%)  7480000 / 20000000 events (37.4%)  7490000 / 20000000 events (37.45%)  7500000 / 20000000 events (37.5%)  7510000 / 20000000 events (37.55%)  7520000 / 20000000 events (37.6%)  7530000 / 20000000 events (37.65%)  7540000 / 20000000 events (37.7%)  7550000 / 20000000 events (37.75%)  7560000 / 20000000 events (37.8%)  7570000 / 20000000 events (37.85%)  7580000 / 20000000 events (37.9%)  7590000 / 20000000 events (37.95%)  7600000 / 20000000 events (38%)  7610000 / 20000000 events (38.05%)  7620000 / 20000000 events (38.1%)  7630000 / 20000000 events (38.15%)  7640000 / 20000000 events (38.2%)  7650000 / 20000000 events (38.25%)  7660000 / 20000000 events (38.3%)  7670000 / 20000000 events (38.35%)  7680000 / 20000000 events (38.4%)  7690000 / 20000000 events (38.45%)  7700000 / 20000000 events (38.5%)  7710000 / 20000000 events (38.55%)  7720000 / 20000000 events (38.6%)  7730000 / 20000000 events (38.65%)  7740000 / 20000000 events (38.7%)  7750000 / 20000000 events (38.75%)  7760000 / 20000000 events (38.8%)  7770000 / 20000000 events (38.85%)  7780000 / 20000000 events (38.9%)  7790000 / 20000000 events (38.95%)  7800000 / 20000000 events (39%)  7810000 / 20000000 events (39.05%)  7820000 / 20000000 events (39.1%)  7830000 / 20000000 events (39.15%)  7840000 / 20000000 events (39.2%)  7850000 / 20000000 events (39.25%)  7860000 / 20000000 events (39.3%)  7870000 / 20000000 events (39.35%)  7880000 / 20000000 events (39.4%)  7890000 / 20000000 events (39.45%)  7900000 / 20000000 events (39.5%)  7910000 / 20000000 events (39.55%)  7920000 / 20000000 events (39.6%)  7930000 / 20000000 events (39.65%)  7940000 / 20000000 events (39.7%)  7950000 / 20000000 events (39.75%)  7960000 / 20000000 events (39.8%)  7970000 / 20000000 events (39.85%)  7980000 / 20000000 events (39.9%)  7990000 / 20000000 events (39.95%)  8000000 / 20000000 events (40%)  8010000 / 20000000 events (40.05%)  8020000 / 20000000 events (40.1%)  8030000 / 20000000 events (40.15%)  8040000 / 20000000 events (40.2%)  8050000 / 20000000 events (40.25%)  8060000 / 20000000 events (40.3%)  8070000 / 20000000 events (40.35%)  8080000 / 20000000 events (40.4%)  8090000 / 20000000 events (40.45%)  8100000 / 20000000 events (40.5%)  8110000 / 20000000 events (40.55%)  8120000 / 20000000 events (40.6%)  8130000 / 20000000 events (40.65%)  8140000 / 20000000 events (40.7%)  8150000 / 20000000 events (40.75%)  8160000 / 20000000 events (40.8%)  8170000 / 20000000 events (40.85%)  8180000 / 20000000 events (40.9%)  8190000 / 20000000 events (40.95%)  8200000 / 20000000 events (41%)  8210000 / 20000000 events (41.05%)  8220000 / 20000000 events (41.1%)  8230000 / 20000000 events (41.15%)  8240000 / 20000000 events (41.2%)  8250000 / 20000000 events (41.25%)  8260000 / 20000000 events (41.3%)  8270000 / 20000000 events (41.35%)  8280000 / 20000000 events (41.4%)  8290000 / 20000000 events (41.45%)  8300000 / 20000000 events (41.5%)  8310000 / 20000000 events (41.55%)  8320000 / 20000000 events (41.6%)  8330000 / 20000000 events (41.65%)  8340000 / 20000000 events (41.7%)  8350000 / 20000000 events (41.75%)  8360000 / 20000000 events (41.8%)  8370000 / 20000000 events (41.85%)  8380000 / 20000000 events (41.9%)  8390000 / 20000000 events (41.95%)  8400000 / 20000000 events (42%)  8410000 / 20000000 events (42.05%)  8420000 / 20000000 events (42.1%)  8430000 / 20000000 events (42.15%)  8440000 / 20000000 events (42.2%)  8450000 / 20000000 events (42.25%)  8460000 / 20000000 events (42.3%)  8470000 / 20000000 events (42.35%)  8480000 / 20000000 events (42.4%)  8490000 / 20000000 events (42.45%)  8500000 / 20000000 events (42.5%)  8510000 / 20000000 events (42.55%)  8520000 / 20000000 events (42.6%)  8530000 / 20000000 events (42.65%)  8540000 / 20000000 events (42.7%)  8550000 / 20000000 events (42.75%)  8560000 / 20000000 events (42.8%)  8570000 / 20000000 events (42.85%)  8580000 / 20000000 events (42.9%)  8590000 / 20000000 events (42.95%)  8600000 / 20000000 events (43%)  8610000 / 20000000 events (43.05%)  8620000 / 20000000 events (43.1%)  8630000 / 20000000 events (43.15%)  8640000 / 20000000 events (43.2%)  8650000 / 20000000 events (43.25%)  8660000 / 20000000 events (43.3%)  8670000 / 20000000 events (43.35%)  8680000 / 20000000 events (43.4%)  8690000 / 20000000 events (43.45%)  8700000 / 20000000 events (43.5%)  8710000 / 20000000 events (43.55%)  8720000 / 20000000 events (43.6%)  8730000 / 20000000 events (43.65%)  8740000 / 20000000 events (43.7%)  8750000 / 20000000 events (43.75%)  8760000 / 20000000 events (43.8%)  8770000 / 20000000 events (43.85%)  8780000 / 20000000 events (43.9%)  8790000 / 20000000 events (43.95%)  8800000 / 20000000 events (44%)  8810000 / 20000000 events (44.05%)  8820000 / 20000000 events (44.1%)  8830000 / 20000000 events (44.15%)  8840000 / 20000000 events (44.2%)  8850000 / 20000000 events (44.25%)  8860000 / 20000000 events (44.3%)  8870000 / 20000000 events (44.35%)  8880000 / 20000000 events (44.4%)  8890000 / 20000000 events (44.45%)  8900000 / 20000000 events (44.5%)  8910000 / 20000000 events (44.55%)  8920000 / 20000000 events (44.6%)  8930000 / 20000000 events (44.65%)  8940000 / 20000000 events (44.7%)  8950000 / 20000000 events (44.75%)  8960000 / 20000000 events (44.8%)  8970000 / 20000000 events (44.85%)  8980000 / 20000000 events (44.9%)  8990000 / 20000000 events (44.95%)  9000000 / 20000000 events (45%)  9010000 / 20000000 events (45.05%)  9020000 / 20000000 events (45.1%)  9030000 / 20000000 events (45.15%)  9040000 / 20000000 events (45.2%)  9050000 / 20000000 events (45.25%)  9060000 / 20000000 events (45.3%)  9070000 / 20000000 events (45.35%)  9080000 / 20000000 events (45.4%)  9090000 / 20000000 events (45.45%)  9100000 / 20000000 events (45.5%)  9110000 / 20000000 events (45.55%)  9120000 / 20000000 events (45.6%)  9130000 / 20000000 events (45.65%)  9140000 / 20000000 events (45.7%)  9150000 / 20000000 events (45.75%)  9160000 / 20000000 events (45.8%)  9170000 / 20000000 events (45.85%)  9180000 / 20000000 events (45.9%)  9190000 / 20000000 events (45.95%)  9200000 / 20000000 events (46%)  9210000 / 20000000 events (46.05%)  9220000 / 20000000 events (46.1%)  9230000 / 20000000 events (46.15%)  9240000 / 20000000 events (46.2%)  9250000 / 20000000 events (46.25%)  9260000 / 20000000 events (46.3%)  9270000 / 20000000 events (46.35%)  9280000 / 20000000 events (46.4%)  9290000 / 20000000 events (46.45%)  9300000 / 20000000 events (46.5%)  9310000 / 20000000 events (46.55%)  9320000 / 20000000 events (46.6%)  9330000 / 20000000 events (46.65%)  9340000 / 20000000 events (46.7%)  9350000 / 20000000 events (46.75%)  9360000 / 20000000 events (46.8%)  9370000 / 20000000 events (46.85%)  9380000 / 20000000 events (46.9%)  9390000 / 20000000 events (46.95%)  9400000 / 20000000 events (47%)  9410000 / 20000000 events (47.05%)  9420000 / 20000000 events (47.1%)  9430000 / 20000000 events (47.15%)  9440000 / 20000000 events (47.2%)  9450000 / 20000000 events (47.25%)  9460000 / 20000000 events (47.3%)  9470000 / 20000000 events (47.35%)  9480000 / 20000000 events (47.4%)  9490000 / 20000000 events (47.45%)  9500000 / 20000000 events (47.5%)  9510000 / 20000000 events (47.55%)  9520000 / 20000000 events (47.6%)  9530000 / 20000000 events (47.65%)  9540000 / 20000000 events (47.7%)  9550000 / 20000000 events (47.75%)  9560000 / 20000000 events (47.8%)  9570000 / 20000000 events (47.85%)  9580000 / 20000000 events (47.9%)  9590000 / 20000000 events (47.95%)  9600000 / 20000000 events (48%)  9610000 / 20000000 events (48.05%)  9620000 / 20000000 events (48.1%)  9630000 / 20000000 events (48.15%)  9640000 / 20000000 events (48.2%)  9650000 / 20000000 events (48.25%)  9660000 / 20000000 events (48.3%)  9670000 / 20000000 events (48.35%)  9680000 / 20000000 events (48.4%)  9690000 / 20000000 events (48.45%)  9700000 / 20000000 events (48.5%)  9710000 / 20000000 events (48.55%)  9720000 / 20000000 events (48.6%)  9730000 / 20000000 events (48.65%)  9740000 / 20000000 events (48.7%)  9750000 / 20000000 events (48.75%)  9760000 / 20000000 events (48.8%)  9770000 / 20000000 events (48.85%)  9780000 / 20000000 events (48.9%)  9790000 / 20000000 events (48.95%)  9800000 / 20000000 events (49%)  9810000 / 20000000 events (49.05%)  9820000 / 20000000 events (49.1%)  9830000 / 20000000 events (49.15%)  9840000 / 20000000 events (49.2%)  9850000 / 20000000 events (49.25%)  9860000 / 20000000 events (49.3%)  9870000 / 20000000 events (49.35%)  9880000 / 20000000 events (49.4%)  9890000 / 20000000 events (49.45%)  9900000 / 20000000 events (49.5%)  9910000 / 20000000 events (49.55%)  9920000 / 20000000 events (49.6%)  9930000 / 20000000 events (49.65%)  9940000 / 20000000 events (49.7%)  9950000 / 20000000 events (49.75%)  9960000 / 20000000 events (49.8%)  9970000 / 20000000 events (49.85%)  9980000 / 20000000 events (49.9%)  9990000 / 20000000 events (49.95%)  10000000 / 20000000 events (50%)  10010000 / 20000000 events (50.05%)  10020000 / 20000000 events (50.1%)  10030000 / 20000000 events (50.15%)  10040000 / 20000000 events (50.2%)  10050000 / 20000000 events (50.25%)  10060000 / 20000000 events (50.3%)  10070000 / 20000000 events (50.35%)  10080000 / 20000000 events (50.4%)  10090000 / 20000000 events (50.45%)  10100000 / 20000000 events (50.5%)  10110000 / 20000000 events (50.55%)  10120000 / 20000000 events (50.6%)  10130000 / 20000000 events (50.65%)  10140000 / 20000000 events (50.7%)  10150000 / 20000000 events (50.75%)  10160000 / 20000000 events (50.8%)  10170000 / 20000000 events (50.85%)  10180000 / 20000000 events (50.9%)  10190000 / 20000000 events (50.95%)  10200000 / 20000000 events (51%)  10210000 / 20000000 events (51.05%)  10220000 / 20000000 events (51.1%)  10230000 / 20000000 events (51.15%)  10240000 / 20000000 events (51.2%)  10250000 / 20000000 events (51.25%)  10260000 / 20000000 events (51.3%)  10270000 / 20000000 events (51.35%)  10280000 / 20000000 events (51.4%)  10290000 / 20000000 events (51.45%)  10300000 / 20000000 events (51.5%)  10310000 / 20000000 events (51.55%)  10320000 / 20000000 events (51.6%)  10330000 / 20000000 events (51.65%)  10340000 / 20000000 events (51.7%)  10350000 / 20000000 events (51.75%)  10360000 / 20000000 events (51.8%)  10370000 / 20000000 events (51.85%)  10380000 / 20000000 events (51.9%)  10390000 / 20000000 events (51.95%)  10400000 / 20000000 events (52%)  10410000 / 20000000 events (52.05%)  10420000 / 20000000 events (52.1%)  10430000 / 20000000 events (52.15%)  10440000 / 20000000 events (52.2%)  10450000 / 20000000 events (52.25%)  10460000 / 20000000 events (52.3%)  10470000 / 20000000 events (52.35%)  10480000 / 20000000 events (52.4%)  10490000 / 20000000 events (52.45%)  10500000 / 20000000 events (52.5%)  10510000 / 20000000 events (52.55%)  10520000 / 20000000 events (52.6%)  10530000 / 20000000 events (52.65%)  10540000 / 20000000 events (52.7%)  10550000 / 20000000 events (52.75%)  10560000 / 20000000 events (52.8%)  10570000 / 20000000 events (52.85%)  10580000 / 20000000 events (52.9%)  10590000 / 20000000 events (52.95%)  10600000 / 20000000 events (53%)  10610000 / 20000000 events (53.05%)  10620000 / 20000000 events (53.1%)  10630000 / 20000000 events (53.15%)  10640000 / 20000000 events (53.2%)  10650000 / 20000000 events (53.25%)  10660000 / 20000000 events (53.3%)  10670000 / 20000000 events (53.35%)  10680000 / 20000000 events (53.4%)  10690000 / 20000000 events (53.45%)  10700000 / 20000000 events (53.5%)  10710000 / 20000000 events (53.55%)  10720000 / 20000000 events (53.6%)  10730000 / 20000000 events (53.65%)  10740000 / 20000000 events (53.7%)  10750000 / 20000000 events (53.75%)  10760000 / 20000000 events (53.8%)  10770000 / 20000000 events (53.85%)  10780000 / 20000000 events (53.9%)  10790000 / 20000000 events (53.95%)  10800000 / 20000000 events (54%)  10810000 / 20000000 events (54.05%)  10820000 / 20000000 events (54.1%)  10830000 / 20000000 events (54.15%)  10840000 / 20000000 events (54.2%)  10850000 / 20000000 events (54.25%)  10860000 / 20000000 events (54.3%)  10870000 / 20000000 events (54.35%)  10880000 / 20000000 events (54.4%)  10890000 / 20000000 events (54.45%)  10900000 / 20000000 events (54.5%)  10910000 / 20000000 events (54.55%)  10920000 / 20000000 events (54.6%)  10930000 / 20000000 events (54.65%)  10940000 / 20000000 events (54.7%)  10950000 / 20000000 events (54.75%)  10960000 / 20000000 events (54.8%)  10970000 / 20000000 events (54.85%)  10980000 / 20000000 events (54.9%)  10990000 / 20000000 events (54.95%)  11000000 / 20000000 events (55%)  11010000 / 20000000 events (55.05%)  11020000 / 20000000 events (55.1%)  11030000 / 20000000 events (55.15%)  11040000 / 20000000 events (55.2%)  11050000 / 20000000 events (55.25%)  11060000 / 20000000 events (55.3%)  11070000 / 20000000 events (55.35%)  11080000 / 20000000 events (55.4%)  11090000 / 20000000 events (55.45%)  11100000 / 20000000 events (55.5%)  11110000 / 20000000 events (55.55%)  11120000 / 20000000 events (55.6%)  11130000 / 20000000 events (55.65%)  11140000 / 20000000 events (55.7%)  11150000 / 20000000 events (55.75%)  11160000 / 20000000 events (55.8%)  11170000 / 20000000 events (55.85%)  11180000 / 20000000 events (55.9%)  11190000 / 20000000 events (55.95%)  11200000 / 20000000 events (56%)  11210000 / 20000000 events (56.05%)  11220000 / 20000000 events (56.1%)  11230000 / 20000000 events (56.15%)  11240000 / 20000000 events (56.2%)  11250000 / 20000000 events (56.25%)  11260000 / 20000000 events (56.3%)  11270000 / 20000000 events (56.35%)  11280000 / 20000000 events (56.4%)  11290000 / 20000000 events (56.45%)  11300000 / 20000000 events (56.5%)  11310000 / 20000000 events (56.55%)  11320000 / 20000000 events (56.6%)  11330000 / 20000000 events (56.65%)  11340000 / 20000000 events (56.7%)  11350000 / 20000000 events (56.75%)  11360000 / 20000000 events (56.8%)  11370000 / 20000000 events (56.85%)  11380000 / 20000000 events (56.9%)  11390000 / 20000000 events (56.95%)  11400000 / 20000000 events (57%)  11410000 / 20000000 events (57.05%)  11420000 / 20000000 events (57.1%)  11430000 / 20000000 events (57.15%)  11440000 / 20000000 events (57.2%)  11450000 / 20000000 events (57.25%)  11460000 / 20000000 events (57.3%)  11470000 / 20000000 events (57.35%)  11480000 / 20000000 events (57.4%)  11490000 / 20000000 events (57.45%)  11500000 / 20000000 events (57.5%)  11510000 / 20000000 events (57.55%)  11520000 / 20000000 events (57.6%)  11530000 / 20000000 events (57.65%)  11540000 / 20000000 events (57.7%)  11550000 / 20000000 events (57.75%)  11560000 / 20000000 events (57.8%)  11570000 / 20000000 events (57.85%)  11580000 / 20000000 events (57.9%)  11590000 / 20000000 events (57.95%)  11600000 / 20000000 events (58%)  11610000 / 20000000 events (58.05%)  11620000 / 20000000 events (58.1%)  11630000 / 20000000 events (58.15%)  11640000 / 20000000 events (58.2%)  11650000 / 20000000 events (58.25%)  11660000 / 20000000 events (58.3%)  11670000 / 20000000 events (58.35%)  11680000 / 20000000 events (58.4%)  11690000 / 20000000 events (58.45%)  11700000 / 20000000 events (58.5%)  11710000 / 20000000 events (58.55%)  11720000 / 20000000 events (58.6%)  11730000 / 20000000 events (58.65%)  11740000 / 20000000 events (58.7%)  11750000 / 20000000 events (58.75%)  11760000 / 20000000 events (58.8%)  11770000 / 20000000 events (58.85%)  11780000 / 20000000 events (58.9%)  11790000 / 20000000 events (58.95%)  11800000 / 20000000 events (59%)  11810000 / 20000000 events (59.05%)  11820000 / 20000000 events (59.1%)  11830000 / 20000000 events (59.15%)  11840000 / 20000000 events (59.2%)  11850000 / 20000000 events (59.25%)  11860000 / 20000000 events (59.3%)  11870000 / 20000000 events (59.35%)  11880000 / 20000000 events (59.4%)  11890000 / 20000000 events (59.45%)  11900000 / 20000000 events (59.5%)  11910000 / 20000000 events (59.55%)  11920000 / 20000000 events (59.6%)  11930000 / 20000000 events (59.65%)  11940000 / 20000000 events (59.7%)  11950000 / 20000000 events (59.75%)  11960000 / 20000000 events (59.8%)  11970000 / 20000000 events (59.85%)  11980000 / 20000000 events (59.9%)  11990000 / 20000000 events (59.95%)  12000000 / 20000000 events (60%)  12010000 / 20000000 events (60.05%)  12020000 / 20000000 events (60.1%)  12030000 / 20000000 events (60.15%)  12040000 / 20000000 events (60.2%)  12050000 / 20000000 events (60.25%)  12060000 / 20000000 events (60.3%)  12070000 / 20000000 events (60.35%)  12080000 / 20000000 events (60.4%)  12090000 / 20000000 events (60.45%)  12100000 / 20000000 events (60.5%)  12110000 / 20000000 events (60.55%)  12120000 / 20000000 events (60.6%)  12130000 / 20000000 events (60.65%)  12140000 / 20000000 events (60.7%)  12150000 / 20000000 events (60.75%)  12160000 / 20000000 events (60.8%)  12170000 / 20000000 events (60.85%)  12180000 / 20000000 events (60.9%)  12190000 / 20000000 events (60.95%)  12200000 / 20000000 events (61%)  12210000 / 20000000 events (61.05%)  12220000 / 20000000 events (61.1%)  12230000 / 20000000 events (61.15%)  12240000 / 20000000 events (61.2%)  12250000 / 20000000 events (61.25%)  12260000 / 20000000 events (61.3%)  12270000 / 20000000 events (61.35%)  12280000 / 20000000 events (61.4%)  12290000 / 20000000 events (61.45%)  12300000 / 20000000 events (61.5%)  12310000 / 20000000 events (61.55%)  12320000 / 20000000 events (61.6%)  12330000 / 20000000 events (61.65%)  12340000 / 20000000 events (61.7%)  12350000 / 20000000 events (61.75%)  12360000 / 20000000 events (61.8%)  12370000 / 20000000 events (61.85%)  12380000 / 20000000 events (61.9%)  12390000 / 20000000 events (61.95%)  12400000 / 20000000 events (62%)  12410000 / 20000000 events (62.05%)  12420000 / 20000000 events (62.1%)  12430000 / 20000000 events (62.15%)  12440000 / 20000000 events (62.2%)  12450000 / 20000000 events (62.25%)  12460000 / 20000000 events (62.3%)  12470000 / 20000000 events (62.35%)  12480000 / 20000000 events (62.4%)  12490000 / 20000000 events (62.45%)  12500000 / 20000000 events (62.5%)  12510000 / 20000000 events (62.55%)  12520000 / 20000000 events (62.6%)  12530000 / 20000000 events (62.65%)  12540000 / 20000000 events (62.7%)  12550000 / 20000000 events (62.75%)  12560000 / 20000000 events (62.8%)  12570000 / 20000000 events (62.85%)  12580000 / 20000000 events (62.9%)  12590000 / 20000000 events (62.95%)  12600000 / 20000000 events (63%)  12610000 / 20000000 events (63.05%)  12620000 / 20000000 events (63.1%)  12630000 / 20000000 events (63.15%)  12640000 / 20000000 events (63.2%)  12650000 / 20000000 events (63.25%)  12660000 / 20000000 events (63.3%)  12670000 / 20000000 events (63.35%)  12680000 / 20000000 events (63.4%)  12690000 / 20000000 events (63.45%)  12700000 / 20000000 events (63.5%)  12710000 / 20000000 events (63.55%)  12720000 / 20000000 events (63.6%)  12730000 / 20000000 events (63.65%)  12740000 / 20000000 events (63.7%)  12750000 / 20000000 events (63.75%)  12760000 / 20000000 events (63.8%)  12770000 / 20000000 events (63.85%)  12780000 / 20000000 events (63.9%)  12790000 / 20000000 events (63.95%)  12800000 / 20000000 events (64%)  12810000 / 20000000 events (64.05%)  12820000 / 20000000 events (64.1%)  12830000 / 20000000 events (64.15%)  12840000 / 20000000 events (64.2%)  12850000 / 20000000 events (64.25%)  12860000 / 20000000 events (64.3%)  12870000 / 20000000 events (64.35%)  12880000 / 20000000 events (64.4%)  12890000 / 20000000 events (64.45%)  12900000 / 20000000 events (64.5%)  12910000 / 20000000 events (64.55%)  12920000 / 20000000 events (64.6%)  12930000 / 20000000 events (64.65%)  12940000 / 20000000 events (64.7%)  12950000 / 20000000 events (64.75%)  12960000 / 20000000 events (64.8%)  12970000 / 20000000 events (64.85%)  12980000 / 20000000 events (64.9%)  12990000 / 20000000 events (64.95%)  13000000 / 20000000 events (65%)  13010000 / 20000000 events (65.05%)  13020000 / 20000000 events (65.1%)  13030000 / 20000000 events (65.15%)  13040000 / 20000000 events (65.2%)  13050000 / 20000000 events (65.25%)  13060000 / 20000000 events (65.3%)  13070000 / 20000000 events (65.35%)  13080000 / 20000000 events (65.4%)  13090000 / 20000000 events (65.45%)  13100000 / 20000000 events (65.5%)  13110000 / 20000000 events (65.55%)  13120000 / 20000000 events (65.6%)  13130000 / 20000000 events (65.65%)  13140000 / 20000000 events (65.7%)  13150000 / 20000000 events (65.75%)  13160000 / 20000000 events (65.8%)  13170000 / 20000000 events (65.85%)  13180000 / 20000000 events (65.9%)  13190000 / 20000000 events (65.95%)  13200000 / 20000000 events (66%)  13210000 / 20000000 events (66.05%)  13220000 / 20000000 events (66.1%)  13230000 / 20000000 events (66.15%)  13240000 / 20000000 events (66.2%)  13250000 / 20000000 events (66.25%)  13260000 / 20000000 events (66.3%)  13270000 / 20000000 events (66.35%)  13280000 / 20000000 events (66.4%)  13290000 / 20000000 events (66.45%)  13300000 / 20000000 events (66.5%)  13310000 / 20000000 events (66.55%)  13320000 / 20000000 events (66.6%)  13330000 / 20000000 events (66.65%)  13340000 / 20000000 events (66.7%)  13350000 / 20000000 events (66.75%)  13360000 / 20000000 events (66.8%)  13370000 / 20000000 events (66.85%)  13380000 / 20000000 events (66.9%)  13390000 / 20000000 events (66.95%)  13400000 / 20000000 events (67%)  13410000 / 20000000 events (67.05%)  13420000 / 20000000 events (67.1%)  13430000 / 20000000 events (67.15%)  13440000 / 20000000 events (67.2%)  13450000 / 20000000 events (67.25%)  13460000 / 20000000 events (67.3%)  13470000 / 20000000 events (67.35%)  13480000 / 20000000 events (67.4%)  13490000 / 20000000 events (67.45%)  13500000 / 20000000 events (67.5%)  13510000 / 20000000 events (67.55%)  13520000 / 20000000 events (67.6%)  13530000 / 20000000 events (67.65%)  13540000 / 20000000 events (67.7%)  13550000 / 20000000 events (67.75%)  13560000 / 20000000 events (67.8%)  13570000 / 20000000 events (67.85%)  13580000 / 20000000 events (67.9%)  13590000 / 20000000 events (67.95%)  13600000 / 20000000 events (68%)  13610000 / 20000000 events (68.05%)  13620000 / 20000000 events (68.1%)  13630000 / 20000000 events (68.15%)  13640000 / 20000000 events (68.2%)  13650000 / 20000000 events (68.25%)  13660000 / 20000000 events (68.3%)  13670000 / 20000000 events (68.35%)  13680000 / 20000000 events (68.4%)  13690000 / 20000000 events (68.45%)  13700000 / 20000000 events (68.5%)  13710000 / 20000000 events (68.55%)  13720000 / 20000000 events (68.6%)  13730000 / 20000000 events (68.65%)  13740000 / 20000000 events (68.7%)  13750000 / 20000000 events (68.75%)  13760000 / 20000000 events (68.8%)  13770000 / 20000000 events (68.85%)  13780000 / 20000000 events (68.9%)  13790000 / 20000000 events (68.95%)  13800000 / 20000000 events (69%)  13810000 / 20000000 events (69.05%)  13820000 / 20000000 events (69.1%)  13830000 / 20000000 events (69.15%)  13840000 / 20000000 events (69.2%)  13850000 / 20000000 events (69.25%)  13860000 / 20000000 events (69.3%)  13870000 / 20000000 events (69.35%)  13880000 / 20000000 events (69.4%)  13890000 / 20000000 events (69.45%)  13900000 / 20000000 events (69.5%)  13910000 / 20000000 events (69.55%)  13920000 / 20000000 events (69.6%)  13930000 / 20000000 events (69.65%)  13940000 / 20000000 events (69.7%)  13950000 / 20000000 events (69.75%)  13960000 / 20000000 events (69.8%)  13970000 / 20000000 events (69.85%)  13980000 / 20000000 events (69.9%)  13990000 / 20000000 events (69.95%)  14000000 / 20000000 events (70%)  14010000 / 20000000 events (70.05%)  14020000 / 20000000 events (70.1%)  14030000 / 20000000 events (70.15%)  14040000 / 20000000 events (70.2%)  14050000 / 20000000 events (70.25%)  14060000 / 20000000 events (70.3%)  14070000 / 20000000 events (70.35%)  14080000 / 20000000 events (70.4%)  14090000 / 20000000 events (70.45%)  14100000 / 20000000 events (70.5%)  14110000 / 20000000 events (70.55%)  14120000 / 20000000 events (70.6%)  14130000 / 20000000 events (70.65%)  14140000 / 20000000 events (70.7%)  14150000 / 20000000 events (70.75%)  14160000 / 20000000 events (70.8%)  14170000 / 20000000 events (70.85%)  14180000 / 20000000 events (70.9%)  14190000 / 20000000 events (70.95%)  14200000 / 20000000 events (71%)  14210000 / 20000000 events (71.05%)  14220000 / 20000000 events (71.1%)  14230000 / 20000000 events (71.15%)  14240000 / 20000000 events (71.2%)  14250000 / 20000000 events (71.25%)  14260000 / 20000000 events (71.3%)  14270000 / 20000000 events (71.35%)  14280000 / 20000000 events (71.4%)  14290000 / 20000000 events (71.45%)  14300000 / 20000000 events (71.5%)  14310000 / 20000000 events (71.55%)  14320000 / 20000000 events (71.6%)  14330000 / 20000000 events (71.65%)  14340000 / 20000000 events (71.7%)  14350000 / 20000000 events (71.75%)  14360000 / 20000000 events (71.8%)  14370000 / 20000000 events (71.85%)  14380000 / 20000000 events (71.9%)  14390000 / 20000000 events (71.95%)  14400000 / 20000000 events (72%)  14410000 / 20000000 events (72.05%)  14420000 / 20000000 events (72.1%)  14430000 / 20000000 events (72.15%)  14440000 / 20000000 events (72.2%)  14450000 / 20000000 events (72.25%)  14460000 / 20000000 events (72.3%)  14470000 / 20000000 events (72.35%)  14480000 / 20000000 events (72.4%)  14490000 / 20000000 events (72.45%)  14500000 / 20000000 events (72.5%)  14510000 / 20000000 events (72.55%)  14520000 / 20000000 events (72.6%)  14530000 / 20000000 events (72.65%)  14540000 / 20000000 events (72.7%)  14550000 / 20000000 events (72.75%)  14560000 / 20000000 events (72.8%)  14570000 / 20000000 events (72.85%)  14580000 / 20000000 events (72.9%)  14590000 / 20000000 events (72.95%)  14600000 / 20000000 events (73%)  14610000 / 20000000 events (73.05%)  14620000 / 20000000 events (73.1%)  14630000 / 20000000 events (73.15%)  14640000 / 20000000 events (73.2%)  14650000 / 20000000 events (73.25%)  14660000 / 20000000 events (73.3%)  14670000 / 20000000 events (73.35%)  14680000 / 20000000 events (73.4%)  14690000 / 20000000 events (73.45%)  14700000 / 20000000 events (73.5%)  14710000 / 20000000 events (73.55%)  14720000 / 20000000 events (73.6%)  14730000 / 20000000 events (73.65%)  14740000 / 20000000 events (73.7%)  14750000 / 20000000 events (73.75%)  14760000 / 20000000 events (73.8%)  14770000 / 20000000 events (73.85%)  14780000 / 20000000 events (73.9%)  14790000 / 20000000 events (73.95%)  14800000 / 20000000 events (74%)  14810000 / 20000000 events (74.05%)  14820000 / 20000000 events (74.1%)  14830000 / 20000000 events (74.15%)  14840000 / 20000000 events (74.2%)  14850000 / 20000000 events (74.25%)  14860000 / 20000000 events (74.3%)  14870000 / 20000000 events (74.35%)  14880000 / 20000000 events (74.4%)  14890000 / 20000000 events (74.45%)  14900000 / 20000000 events (74.5%)  14910000 / 20000000 events (74.55%)  14920000 / 20000000 events (74.6%)  14930000 / 20000000 events (74.65%)  14940000 / 20000000 events (74.7%)  14950000 / 20000000 events (74.75%)  14960000 / 20000000 events (74.8%)  14970000 / 20000000 events (74.85%)  14980000 / 20000000 events (74.9%)  14990000 / 20000000 events (74.95%)  15000000 / 20000000 events (75%)  15010000 / 20000000 events (75.05%)  15020000 / 20000000 events (75.1%)  15030000 / 20000000 events (75.15%)  15040000 / 20000000 events (75.2%)  15050000 / 20000000 events (75.25%)  15060000 / 20000000 events (75.3%)  15070000 / 20000000 events (75.35%)  15080000 / 20000000 events (75.4%)  15090000 / 20000000 events (75.45%)  15100000 / 20000000 events (75.5%)  15110000 / 20000000 events (75.55%)  15120000 / 20000000 events (75.6%)  15130000 / 20000000 events (75.65%)  15140000 / 20000000 events (75.7%)  15150000 / 20000000 events (75.75%)  15160000 / 20000000 events (75.8%)  15170000 / 20000000 events (75.85%)  15180000 / 20000000 events (75.9%)  15190000 / 20000000 events (75.95%)  15200000 / 20000000 events (76%)  15210000 / 20000000 events (76.05%)  15220000 / 20000000 events (76.1%)  15230000 / 20000000 events (76.15%)  15240000 / 20000000 events (76.2%)  15250000 / 20000000 events (76.25%)  15260000 / 20000000 events (76.3%)  15270000 / 20000000 events (76.35%)  15280000 / 20000000 events (76.4%)  15290000 / 20000000 events (76.45%)  15300000 / 20000000 events (76.5%)  15310000 / 20000000 events (76.55%)  15320000 / 20000000 events (76.6%)  15330000 / 20000000 events (76.65%)  15340000 / 20000000 events (76.7%)  15350000 / 20000000 events (76.75%)  15360000 / 20000000 events (76.8%)  15370000 / 20000000 events (76.85%)  15380000 / 20000000 events (76.9%)  15390000 / 20000000 events (76.95%)  15400000 / 20000000 events (77%)  15410000 / 20000000 events (77.05%)  15420000 / 20000000 events (77.1%)  15430000 / 20000000 events (77.15%)  15440000 / 20000000 events (77.2%)  15450000 / 20000000 events (77.25%)  15460000 / 20000000 events (77.3%)  15470000 / 20000000 events (77.35%)  15480000 / 20000000 events (77.4%)  15490000 / 20000000 events (77.45%)  15500000 / 20000000 events (77.5%)  15510000 / 20000000 events (77.55%)  15520000 / 20000000 events (77.6%)  15530000 / 20000000 events (77.65%)  15540000 / 20000000 events (77.7%)  15550000 / 20000000 events (77.75%)  15560000 / 20000000 events (77.8%)  15570000 / 20000000 events (77.85%)  15580000 / 20000000 events (77.9%)  15590000 / 20000000 events (77.95%)  15600000 / 20000000 events (78%)  15610000 / 20000000 events (78.05%)  15620000 / 20000000 events (78.1%)  15630000 / 20000000 events (78.15%)  15640000 / 20000000 events (78.2%)  15650000 / 20000000 events (78.25%)  15660000 / 20000000 events (78.3%)  15670000 / 20000000 events (78.35%)  15680000 / 20000000 events (78.4%)  15690000 / 20000000 events (78.45%)  15700000 / 20000000 events (78.5%)  15710000 / 20000000 events (78.55%)  15720000 / 20000000 events (78.6%)  15730000 / 20000000 events (78.65%)  15740000 / 20000000 events (78.7%)  15750000 / 20000000 events (78.75%)  15760000 / 20000000 events (78.8%)  15770000 / 20000000 events (78.85%)  15780000 / 20000000 events (78.9%)  15790000 / 20000000 events (78.95%)  15800000 / 20000000 events (79%)  15810000 / 20000000 events (79.05%)  15820000 / 20000000 events (79.1%)  15830000 / 20000000 events (79.15%)  15840000 / 20000000 events (79.2%)  15850000 / 20000000 events (79.25%)  15860000 / 20000000 events (79.3%)  15870000 / 20000000 events (79.35%)  15880000 / 20000000 events (79.4%)  15890000 / 20000000 events (79.45%)  15900000 / 20000000 events (79.5%)  15910000 / 20000000 events (79.55%)  15920000 / 20000000 events (79.6%)  15930000 / 20000000 events (79.65%)  15940000 / 20000000 events (79.7%)  15950000 / 20000000 events (79.75%)  15960000 / 20000000 events (79.8%)  15970000 / 20000000 events (79.85%)  15980000 / 20000000 events (79.9%)  15990000 / 20000000 events (79.95%)  16000000 / 20000000 events (80%)  16010000 / 20000000 events (80.05%)  16020000 / 20000000 events (80.1%)  16030000 / 20000000 events (80.15%)  16040000 / 20000000 events (80.2%)  16050000 / 20000000 events (80.25%)  16060000 / 20000000 events (80.3%)  16070000 / 20000000 events (80.35%)  16080000 / 20000000 events (80.4%)  16090000 / 20000000 events (80.45%)  16100000 / 20000000 events (80.5%)  16110000 / 20000000 events (80.55%)  16120000 / 20000000 events (80.6%)  16130000 / 20000000 events (80.65%)  16140000 / 20000000 events (80.7%)  16150000 / 20000000 events (80.75%)  16160000 / 20000000 events (80.8%)  16170000 / 20000000 events (80.85%)  16180000 / 20000000 events (80.9%)  16190000 / 20000000 events (80.95%)  16200000 / 20000000 events (81%)  16210000 / 20000000 events (81.05%)  16220000 / 20000000 events (81.1%)  16230000 / 20000000 events (81.15%)  16240000 / 20000000 events (81.2%)  16250000 / 20000000 events (81.25%)  16260000 / 20000000 events (81.3%)  16270000 / 20000000 events (81.35%)  16280000 / 20000000 events (81.4%)  16290000 / 20000000 events (81.45%)  16300000 / 20000000 events (81.5%)  16310000 / 20000000 events (81.55%)  16320000 / 20000000 events (81.6%)  16330000 / 20000000 events (81.65%)  16340000 / 20000000 events (81.7%)  16350000 / 20000000 events (81.75%)  16360000 / 20000000 events (81.8%)  16370000 / 20000000 events (81.85%)  16380000 / 20000000 events (81.9%)  16390000 / 20000000 events (81.95%)  16400000 / 20000000 events (82%)  16410000 / 20000000 events (82.05%)  16420000 / 20000000 events (82.1%)  16430000 / 20000000 events (82.15%)  16440000 / 20000000 events (82.2%)  16450000 / 20000000 events (82.25%)  16460000 / 20000000 events (82.3%)  16470000 / 20000000 events (82.35%)  16480000 / 20000000 events (82.4%)  16490000 / 20000000 events (82.45%)  16500000 / 20000000 events (82.5%)  16510000 / 20000000 events (82.55%)  16520000 / 20000000 events (82.6%)  16530000 / 20000000 events (82.65%)  16540000 / 20000000 events (82.7%)  16550000 / 20000000 events (82.75%)  16560000 / 20000000 events (82.8%)  16570000 / 20000000 events (82.85%)  16580000 / 20000000 events (82.9%)  16590000 / 20000000 events (82.95%)  16600000 / 20000000 events (83%)  16610000 / 20000000 events (83.05%)  16620000 / 20000000 events (83.1%)  16630000 / 20000000 events (83.15%)  16640000 / 20000000 events (83.2%)  16650000 / 20000000 events (83.25%)  16660000 / 20000000 events (83.3%)  16670000 / 20000000 events (83.35%)  16680000 / 20000000 events (83.4%)  16690000 / 20000000 events (83.45%)  16700000 / 20000000 events (83.5%)  16710000 / 20000000 events (83.55%)  16720000 / 20000000 events (83.6%)  16730000 / 20000000 events (83.65%)  16740000 / 20000000 events (83.7%)  16750000 / 20000000 events (83.75%)  16760000 / 20000000 events (83.8%)  16770000 / 20000000 events (83.85%)  16780000 / 20000000 events (83.9%)  16790000 / 20000000 events (83.95%)  16800000 / 20000000 events (84%)  16810000 / 20000000 events (84.05%)  16820000 / 20000000 events (84.1%)  16830000 / 20000000 events (84.15%)  16840000 / 20000000 events (84.2%)  16850000 / 20000000 events (84.25%)  16860000 / 20000000 events (84.3%)  16870000 / 20000000 events (84.35%)  16880000 / 20000000 events (84.4%)  16890000 / 20000000 events (84.45%)  16900000 / 20000000 events (84.5%)  16910000 / 20000000 events (84.55%)  16920000 / 20000000 events (84.6%)  16930000 / 20000000 events (84.65%)  16940000 / 20000000 events (84.7%)  16950000 / 20000000 events (84.75%)  16960000 / 20000000 events (84.8%)  16970000 / 20000000 events (84.85%)  16980000 / 20000000 events (84.9%)  16990000 / 20000000 events (84.95%)  17000000 / 20000000 events (85%)  17010000 / 20000000 events (85.05%)  17020000 / 20000000 events (85.1%)  17030000 / 20000000 events (85.15%)  17040000 / 20000000 events (85.2%)  17050000 / 20000000 events (85.25%)  17060000 / 20000000 events (85.3%)  17070000 / 20000000 events (85.35%)  17080000 / 20000000 events (85.4%)  17090000 / 20000000 events (85.45%)  17100000 / 20000000 events (85.5%)  17110000 / 20000000 events (85.55%)  17120000 / 20000000 events (85.6%)  17130000 / 20000000 events (85.65%)  17140000 / 20000000 events (85.7%)  17150000 / 20000000 events (85.75%)  17160000 / 20000000 events (85.8%)  17170000 / 20000000 events (85.85%)  17180000 / 20000000 events (85.9%)  17190000 / 20000000 events (85.95%)  17200000 / 20000000 events (86%)  17210000 / 20000000 events (86.05%)  17220000 / 20000000 events (86.1%)  17230000 / 20000000 events (86.15%)  17240000 / 20000000 events (86.2%)  17250000 / 20000000 events (86.25%)  17260000 / 20000000 events (86.3%)  17270000 / 20000000 events (86.35%)  17280000 / 20000000 events (86.4%)  17290000 / 20000000 events (86.45%)  17300000 / 20000000 events (86.5%)  17310000 / 20000000 events (86.55%)  17320000 / 20000000 events (86.6%)  17330000 / 20000000 events (86.65%)  17340000 / 20000000 events (86.7%)  17350000 / 20000000 events (86.75%)  17360000 / 20000000 events (86.8%)  17370000 / 20000000 events (86.85%)  17380000 / 20000000 events (86.9%)  17390000 / 20000000 events (86.95%)  17400000 / 20000000 events (87%)  17410000 / 20000000 events (87.05%)  17420000 / 20000000 events (87.1%)  17430000 / 20000000 events (87.15%)  17440000 / 20000000 events (87.2%)  17450000 / 20000000 events (87.25%)  17460000 / 20000000 events (87.3%)  17470000 / 20000000 events (87.35%)  17480000 / 20000000 events (87.4%)  17490000 / 20000000 events (87.45%)  17500000 / 20000000 events (87.5%)  17510000 / 20000000 events (87.55%)  17520000 / 20000000 events (87.6%)  17530000 / 20000000 events (87.65%)  17540000 / 20000000 events (87.7%)  17550000 / 20000000 events (87.75%)  17560000 / 20000000 events (87.8%)  17570000 / 20000000 events (87.85%)  17580000 / 20000000 events (87.9%)  17590000 / 20000000 events (87.95%)  17600000 / 20000000 events (88%)  17610000 / 20000000 events (88.05%)  17620000 / 20000000 events (88.1%)  17630000 / 20000000 events (88.15%)  17640000 / 20000000 events (88.2%)  17650000 / 20000000 events (88.25%)  17660000 / 20000000 events (88.3%)  17670000 / 20000000 events (88.35%)  17680000 / 20000000 events (88.4%)  17690000 / 20000000 events (88.45%)  17700000 / 20000000 events (88.5%)  17710000 / 20000000 events (88.55%)  17720000 / 20000000 events (88.6%)  17730000 / 20000000 events (88.65%)  17740000 / 20000000 events (88.7%)  17750000 / 20000000 events (88.75%)  17760000 / 20000000 events (88.8%)  17770000 / 20000000 events (88.85%)  17780000 / 20000000 events (88.9%)  17790000 / 20000000 events (88.95%)  17800000 / 20000000 events (89%)  17810000 / 20000000 events (89.05%)  17820000 / 20000000 events (89.1%)  17830000 / 20000000 events (89.15%)  17840000 / 20000000 events (89.2%)  17850000 / 20000000 events (89.25%)  17860000 / 20000000 events (89.3%)  17870000 / 20000000 events (89.35%)  17880000 / 20000000 events (89.4%)  17890000 / 20000000 events (89.45%)  17900000 / 20000000 events (89.5%)  17910000 / 20000000 events (89.55%)  17920000 / 20000000 events (89.6%)  17930000 / 20000000 events (89.65%)  17940000 / 20000000 events (89.7%)  17950000 / 20000000 events (89.75%)  17960000 / 20000000 events (89.8%)  17970000 / 20000000 events (89.85%)  17980000 / 20000000 events (89.9%)  17990000 / 20000000 events (89.95%)  18000000 / 20000000 events (90%)  18010000 / 20000000 events (90.05%)  18020000 / 20000000 events (90.1%)  18030000 / 20000000 events (90.15%)  18040000 / 20000000 events (90.2%)  18050000 / 20000000 events (90.25%)  18060000 / 20000000 events (90.3%)  18070000 / 20000000 events (90.35%)  18080000 / 20000000 events (90.4%)  18090000 / 20000000 events (90.45%)  18100000 / 20000000 events (90.5%)  18110000 / 20000000 events (90.55%)  18120000 / 20000000 events (90.6%)  18130000 / 20000000 events (90.65%)  18140000 / 20000000 events (90.7%)  18150000 / 20000000 events (90.75%)  18160000 / 20000000 events (90.8%)  18170000 / 20000000 events (90.85%)  18180000 / 20000000 events (90.9%)  18190000 / 20000000 events (90.95%)  18200000 / 20000000 events (91%)  18210000 / 20000000 events (91.05%)  18220000 / 20000000 events (91.1%)  18230000 / 20000000 events (91.15%)  18240000 / 20000000 events (91.2%)  18250000 / 20000000 events (91.25%)  18260000 / 20000000 events (91.3%)  18270000 / 20000000 events (91.35%)  18280000 / 20000000 events (91.4%)  18290000 / 20000000 events (91.45%)  18300000 / 20000000 events (91.5%)  18310000 / 20000000 events (91.55%)  18320000 / 20000000 events (91.6%)  18330000 / 20000000 events (91.65%)  18340000 / 20000000 events (91.7%)  18350000 / 20000000 events (91.75%)  18360000 / 20000000 events (91.8%)  18370000 / 20000000 events (91.85%)  18380000 / 20000000 events (91.9%)  18390000 / 20000000 events (91.95%)  18400000 / 20000000 events (92%)  18410000 / 20000000 events (92.05%)  18420000 / 20000000 events (92.1%)  18430000 / 20000000 events (92.15%)  18440000 / 20000000 events (92.2%)  18450000 / 20000000 events (92.25%)  18460000 / 20000000 events (92.3%)  18470000 / 20000000 events (92.35%)  18480000 / 20000000 events (92.4%)  18490000 / 20000000 events (92.45%)  18500000 / 20000000 events (92.5%)  18510000 / 20000000 events (92.55%)  18520000 / 20000000 events (92.6%)  18530000 / 20000000 events (92.65%)  18540000 / 20000000 events (92.7%)  18550000 / 20000000 events (92.75%)  18560000 / 20000000 events (92.8%)  18570000 / 20000000 events (92.85%)  18580000 / 20000000 events (92.9%)  18590000 / 20000000 events (92.95%)  18600000 / 20000000 events (93%)  18610000 / 20000000 events (93.05%)  18620000 / 20000000 events (93.1%)  18630000 / 20000000 events (93.15%)  18640000 / 20000000 events (93.2%)  18650000 / 20000000 events (93.25%)  18660000 / 20000000 events (93.3%)  18670000 / 20000000 events (93.35%)  18680000 / 20000000 events (93.4%)  18690000 / 20000000 events (93.45%)  18700000 / 20000000 events (93.5%)  18710000 / 20000000 events (93.55%)  18720000 / 20000000 events (93.6%)  18730000 / 20000000 events (93.65%)  18740000 / 20000000 events (93.7%)  18750000 / 20000000 events (93.75%)  18760000 / 20000000 events (93.8%)  18770000 / 20000000 events (93.85%)  18780000 / 20000000 events (93.9%)  18790000 / 20000000 events (93.95%)  18800000 / 20000000 events (94%)  18810000 / 20000000 events (94.05%)  18820000 / 20000000 events (94.1%)  18830000 / 20000000 events (94.15%)  18840000 / 20000000 events (94.2%)  18850000 / 20000000 events (94.25%)  18860000 / 20000000 events (94.3%)  18870000 / 20000000 events (94.35%)  18880000 / 20000000 events (94.4%)  18890000 / 20000000 events (94.45%)  18900000 / 20000000 events (94.5%)  18910000 / 20000000 events (94.55%)  18920000 / 20000000 events (94.6%)  18930000 / 20000000 events (94.65%)  18940000 / 20000000 events (94.7%)  18950000 / 20000000 events (94.75%)  18960000 / 20000000 events (94.8%)  18970000 / 20000000 events (94.85%)  18980000 / 20000000 events (94.9%)  18990000 / 20000000 events (94.95%)  19000000 / 20000000 events (95%)  19010000 / 20000000 events (95.05%)  19020000 / 20000000 events (95.1%)  19030000 / 20000000 events (95.15%)  19040000 / 20000000 events (95.2%)  19050000 / 20000000 events (95.25%)  19060000 / 20000000 events (95.3%)  19070000 / 20000000 events (95.35%)  19080000 / 20000000 events (95.4%)  19090000 / 20000000 events (95.45%)  19100000 / 20000000 events (95.5%)  19110000 / 20000000 events (95.55%)  19120000 / 20000000 events (95.6%)  19130000 / 20000000 events (95.65%)  19140000 / 20000000 events (95.7%)  19150000 / 20000000 events (95.75%)  19160000 / 20000000 events (95.8%)  19170000 / 20000000 events (95.85%)  19180000 / 20000000 events (95.9%)  19190000 / 20000000 events (95.95%)  19200000 / 20000000 events (96%)  19210000 / 20000000 events (96.05%)  19220000 / 20000000 events (96.1%)  19230000 / 20000000 events (96.15%)  19240000 / 20000000 events (96.2%)  19250000 / 20000000 events (96.25%)  19260000 / 20000000 events (96.3%)  19270000 / 20000000 events (96.35%)  19280000 / 20000000 events (96.4%)  19290000 / 20000000 events (96.45%)  19300000 / 20000000 events (96.5%)  19310000 / 20000000 events (96.55%)  19320000 / 20000000 events (96.6%)  19330000 / 20000000 events (96.65%)  19340000 / 20000000 events (96.7%)  19350000 / 20000000 events (96.75%)  19360000 / 20000000 events (96.8%)  19370000 / 20000000 events (96.85%)  19380000 / 20000000 events (96.9%)  19390000 / 20000000 events (96.95%)  19400000 / 20000000 events (97%)  19410000 / 20000000 events (97.05%)  19420000 / 20000000 events (97.1%)  19430000 / 20000000 events (97.15%)  19440000 / 20000000 events (97.2%)  19450000 / 20000000 events (97.25%)  19460000 / 20000000 events (97.3%)  19470000 / 20000000 events (97.35%)  19480000 / 20000000 events (97.4%)  19490000 / 20000000 events (97.45%)  19500000 / 20000000 events (97.5%)  19510000 / 20000000 events (97.55%)  19520000 / 20000000 events (97.6%)  19530000 / 20000000 events (97.65%)  19540000 / 20000000 events (97.7%)  19550000 / 20000000 events (97.75%)  19560000 / 20000000 events (97.8%)  19570000 / 20000000 events (97.85%)  19580000 / 20000000 events (97.9%)  19590000 / 20000000 events (97.95%)  19600000 / 20000000 events (98%)  19610000 / 20000000 events (98.05%)  19620000 / 20000000 events (98.1%)  19630000 / 20000000 events (98.15%)  19640000 / 20000000 events (98.2%)  19650000 / 20000000 events (98.25%)  19660000 / 20000000 events (98.3%)  19670000 / 20000000 events (98.35%)  19680000 / 20000000 events (98.4%)  19690000 / 20000000 events (98.45%)  19700000 / 20000000 events (98.5%)  19710000 / 20000000 events (98.55%)  19720000 / 20000000 events (98.6%)  19730000 / 20000000 events (98.65%)  19740000 / 20000000 events (98.7%)  19750000 / 20000000 events (98.75%)  19760000 / 20000000 events (98.8%)  19770000 / 20000000 events (98.85%)  19780000 / 20000000 events (98.9%)  19790000 / 20000000 events (98.95%)  19800000 / 20000000 events (99%)  19810000 / 20000000 events (99.05%)  19820000 / 20000000 events (99.1%)  19830000 / 20000000 events (99.15%)  19840000 / 20000000 events (99.2%)  19850000 / 20000000 events (99.25%)  19860000 / 20000000 events (99.3%)  19870000 / 20000000 events (99.35%)  19880000 / 20000000 events (99.4%)  19890000 / 20000000 events (99.45%)  19900000 / 20000000 events (99.5%)  19910000 / 20000000 events (99.55%)  19920000 / 20000000 events (99.6%)  19930000 / 20000000 events (99.65%)  19940000 / 20000000 events (99.7%)  19950000 / 20000000 events (99.75%)  19960000 / 20000000 events (99.8%)  19970000 / 20000000 events (99.85%)  19980000 / 20000000 events (99.9%)  19990000 / 20000000 events (99.95%)  20000000 / 20000000 events (100%)  20000000 / 20000000 events (100%)    
+
+========================================
+  Summary
+========================================
+  Events generated (total attempts): 479202594
+  Events saved (weight > 0):         20000000
+  Generation efficiency:             4.1736%
+  Total weight:                      0.568782
+========================================
+Output written to: events/3N_PWIA_noCM_20M_events.root
+[2026-08-29 17:53:21] === 2N+FSI(indep) 100M, hN, 6 GeV, kF=0.22 ===
+==================================================================
+ Parallel SRC_analysis_2N generation
+   total events : 100000000  (successful)
+   workers      : 150  (each ~666666 events; first 100 get +1)
+   output       : events/misc/2N_hN_100M_6GeV_kF220_indep.root
+   doFSI/model  : 1 / hN  (indep=1)
+   sigmaCM / kF : 0.150 / 0.220 GeV/c
+   wf_mode/fg   : 0 / global  (vertex rho^2)
+   Ebeam        : 6.0 GeV
+   parts dir    : /home/ilayws/Ilay-Generators/src/programs/genQE_FSI/events/misc/parts_2N_hN_100M_6GeV_kF220_indep_1212994
+==================================================================
+  launched worker 0  pid=1213154  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part000.root
+  launched worker 1  pid=1213175  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part001.root
+  launched worker 2  pid=1213194  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part002.root
+  launched worker 3  pid=1213218  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part003.root
+  launched worker 4  pid=1213237  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part004.root
+  launched worker 5  pid=1213256  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part005.root
+  launched worker 6  pid=1213276  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part006.root
+  launched worker 7  pid=1213295  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part007.root
+  launched worker 8  pid=1213314  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part008.root
+  launched worker 9  pid=1213333  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part009.root
+  launched worker 10  pid=1213353  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part010.root
+  launched worker 11  pid=1213372  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part011.root
+  launched worker 12  pid=1213391  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part012.root
+  launched worker 13  pid=1213414  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part013.root
+  launched worker 14  pid=1213433  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part014.root
+  launched worker 15  pid=1213452  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part015.root
+  launched worker 16  pid=1213471  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part016.root
+  launched worker 17  pid=1213490  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part017.root
+  launched worker 18  pid=1213509  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part018.root
+  launched worker 19  pid=1213528  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part019.root
+  launched worker 20  pid=1213547  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part020.root
+  launched worker 21  pid=1213566  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part021.root
+  launched worker 22  pid=1213585  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part022.root
+  launched worker 23  pid=1213609  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part023.root
+  launched worker 24  pid=1213628  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part024.root
+  launched worker 25  pid=1213647  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part025.root
+  launched worker 26  pid=1213666  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part026.root
+  launched worker 27  pid=1213685  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part027.root
+  launched worker 28  pid=1213704  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part028.root
+  launched worker 29  pid=1213723  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part029.root
+  launched worker 30  pid=1213742  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part030.root
+  launched worker 31  pid=1213761  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part031.root
+  launched worker 32  pid=1213780  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part032.root
+  launched worker 33  pid=1213802  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part033.root
+  launched worker 34  pid=1213821  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part034.root
+  launched worker 35  pid=1213840  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part035.root
+  launched worker 36  pid=1213859  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part036.root
+  launched worker 37  pid=1213878  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part037.root
+  launched worker 38  pid=1213897  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part038.root
+  launched worker 39  pid=1213916  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part039.root
+  launched worker 40  pid=1213935  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part040.root
+  launched worker 41  pid=1213954  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part041.root
+  launched worker 42  pid=1213973  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part042.root
+  launched worker 43  pid=1213996  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part043.root
+  launched worker 44  pid=1214015  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part044.root
+  launched worker 45  pid=1214034  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part045.root
+  launched worker 46  pid=1214053  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part046.root
+  launched worker 47  pid=1214072  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part047.root
+  launched worker 48  pid=1214091  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part048.root
+  launched worker 49  pid=1214111  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part049.root
+  launched worker 50  pid=1214130  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part050.root
+  launched worker 51  pid=1214149  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part051.root
+  launched worker 52  pid=1214168  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part052.root
+  launched worker 53  pid=1214191  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part053.root
+  launched worker 54  pid=1214210  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part054.root
+  launched worker 55  pid=1214229  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part055.root
+  launched worker 56  pid=1214248  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part056.root
+  launched worker 57  pid=1214267  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part057.root
+  launched worker 58  pid=1214286  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part058.root
+  launched worker 59  pid=1214305  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part059.root
+  launched worker 60  pid=1214324  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part060.root
+  launched worker 61  pid=1214343  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part061.root
+  launched worker 62  pid=1214362  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part062.root
+  launched worker 63  pid=1214385  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part063.root
+  launched worker 64  pid=1214404  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part064.root
+  launched worker 65  pid=1214423  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part065.root
+  launched worker 66  pid=1214442  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part066.root
+  launched worker 67  pid=1214461  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part067.root
+  launched worker 68  pid=1214480  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part068.root
+  launched worker 69  pid=1214499  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part069.root
+  launched worker 70  pid=1214518  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part070.root
+  launched worker 71  pid=1214537  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part071.root
+  launched worker 72  pid=1214556  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part072.root
+  launched worker 73  pid=1214579  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part073.root
+  launched worker 74  pid=1214598  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part074.root
+  launched worker 75  pid=1214617  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part075.root
+  launched worker 76  pid=1214636  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part076.root
+  launched worker 77  pid=1214655  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part077.root
+  launched worker 78  pid=1214674  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part078.root
+  launched worker 79  pid=1214693  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part079.root
+  launched worker 80  pid=1214712  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part080.root
+  launched worker 81  pid=1214731  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part081.root
+  launched worker 82  pid=1214750  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part082.root
+  launched worker 83  pid=1214774  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part083.root
+  launched worker 84  pid=1214793  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part084.root
+  launched worker 85  pid=1214812  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part085.root
+  launched worker 86  pid=1214831  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part086.root
+  launched worker 87  pid=1214850  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part087.root
+  launched worker 88  pid=1214869  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part088.root
+  launched worker 89  pid=1214888  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part089.root
+  launched worker 90  pid=1214907  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part090.root
+  launched worker 91  pid=1214926  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part091.root
+  launched worker 92  pid=1214945  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part092.root
+  launched worker 93  pid=1214968  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part093.root
+  launched worker 94  pid=1214987  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part094.root
+  launched worker 95  pid=1215006  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part095.root
+  launched worker 96  pid=1215025  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part096.root
+  launched worker 97  pid=1215044  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part097.root
+  launched worker 98  pid=1215064  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part098.root
+  launched worker 99  pid=1215083  events=666667  -> 2N_hN_100M_6GeV_kF220_indep.part099.root
+  launched worker 100  pid=1215105  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part100.root
+  launched worker 101  pid=1215124  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part101.root
+  launched worker 102  pid=1215143  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part102.root
+  launched worker 103  pid=1215165  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part103.root
+  launched worker 104  pid=1215184  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part104.root
+  launched worker 105  pid=1215203  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part105.root
+  launched worker 106  pid=1215222  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part106.root
+  launched worker 107  pid=1215241  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part107.root
+  launched worker 108  pid=1215260  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part108.root
+  launched worker 109  pid=1215279  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part109.root
+  launched worker 110  pid=1215298  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part110.root
+  launched worker 111  pid=1215317  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part111.root
+  launched worker 112  pid=1215444  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part112.root
+  launched worker 113  pid=1215468  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part113.root
+  launched worker 114  pid=1215487  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part114.root
+  launched worker 115  pid=1215506  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part115.root
+  launched worker 116  pid=1215525  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part116.root
+  launched worker 117  pid=1215544  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part117.root
+  launched worker 118  pid=1215563  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part118.root
+  launched worker 119  pid=1215582  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part119.root
+  launched worker 120  pid=1215601  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part120.root
+  launched worker 121  pid=1215620  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part121.root
+  launched worker 122  pid=1215640  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part122.root
+  launched worker 123  pid=1215663  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part123.root
+  launched worker 124  pid=1215682  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part124.root
+  launched worker 125  pid=1215701  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part125.root
+  launched worker 126  pid=1215720  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part126.root
+  launched worker 127  pid=1215739  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part127.root
+  launched worker 128  pid=1215758  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part128.root
+  launched worker 129  pid=1215777  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part129.root
+  launched worker 130  pid=1215796  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part130.root
+  launched worker 131  pid=1215815  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part131.root
+  launched worker 132  pid=1215838  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part132.root
+  launched worker 133  pid=1215858  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part133.root
+  launched worker 134  pid=1215877  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part134.root
+  launched worker 135  pid=1215896  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part135.root
+  launched worker 136  pid=1215915  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part136.root
+  launched worker 137  pid=1215934  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part137.root
+  launched worker 138  pid=1215953  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part138.root
+  launched worker 139  pid=1215972  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part139.root
+  launched worker 140  pid=1215991  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part140.root
+  launched worker 141  pid=1216010  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part141.root
+  launched worker 142  pid=1216032  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part142.root
+  launched worker 143  pid=1216051  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part143.root
+  launched worker 144  pid=1216070  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part144.root
+  launched worker 145  pid=1216089  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part145.root
+  launched worker 146  pid=1216108  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part146.root
+  launched worker 147  pid=1216127  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part147.root
+  launched worker 148  pid=1216146  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part148.root
+  launched worker 149  pid=1216165  events=666666  -> 2N_hN_100M_6GeV_kF220_indep.part149.root
+Waiting for 150 workers...
+  worker 0 done ok
+  worker 1 done ok
+  worker 2 done ok
+  worker 3 done ok
+  worker 4 done ok
+  worker 5 done ok
+  worker 6 done ok
+  worker 7 done ok
+  worker 8 done ok
+  worker 9 done ok
+  worker 10 done ok
+  worker 11 done ok
+  worker 12 done ok
+  worker 13 done ok
+  worker 14 done ok
+  worker 15 done ok
+  worker 16 done ok
+  worker 17 done ok
+  worker 18 done ok
+  worker 19 done ok
+  worker 20 done ok
+  worker 21 done ok
+  worker 22 done ok
+  worker 23 done ok
+  worker 24 done ok
+  worker 25 done ok
+  worker 26 done ok
+  worker 27 done ok
+  worker 28 done ok
+  worker 29 done ok
+  worker 30 done ok
+  worker 31 done ok
+  worker 32 done ok
+  worker 33 done ok
+  worker 34 done ok
+  worker 35 done ok
+  worker 36 done ok
+  worker 37 done ok
+  worker 38 done ok
+  worker 39 done ok
+  worker 40 done ok
+  worker 41 done ok
+  worker 42 done ok
+  worker 43 done ok
+  worker 44 done ok
+  worker 45 done ok
+  worker 46 done ok
+  worker 47 done ok
+  worker 48 done ok
+  worker 49 done ok
+  worker 50 done ok
+  worker 51 done ok
+  worker 52 done ok
+  worker 53 done ok
+  worker 54 done ok
+  worker 55 done ok
+  worker 56 done ok
+  worker 57 done ok
+  worker 58 done ok
+  worker 59 done ok
+  worker 60 done ok
+  worker 61 done ok
+  worker 62 done ok
+  worker 63 done ok
+  worker 64 done ok
+  worker 65 done ok
+  worker 66 done ok
+  worker 67 done ok
+  worker 68 done ok
+  worker 69 done ok
+  worker 70 done ok
+  worker 71 done ok
+  worker 72 done ok
+  worker 73 done ok
+  worker 74 done ok
+  worker 75 done ok
+  worker 76 done ok
+  worker 77 done ok
+  worker 78 done ok
+  worker 79 done ok
+  worker 80 done ok
+  worker 81 done ok
+  worker 82 done ok
+  worker 83 done ok
+  worker 84 done ok
+  worker 85 done ok
+  worker 86 done ok
+  worker 87 done ok
+  worker 88 done ok
+  worker 89 done ok
+  worker 90 done ok
+  worker 91 done ok
+  worker 92 done ok
+  worker 93 done ok
+  worker 94 done ok
+  worker 95 done ok
+  worker 96 done ok
+  worker 97 done ok
+  worker 98 done ok
+  worker 99 done ok
+  worker 100 done ok
+  worker 101 done ok
+  worker 102 done ok
+  worker 103 done ok
+  worker 104 done ok
+  worker 105 done ok
+  worker 106 done ok
+  worker 107 done ok
+  worker 108 done ok
+  worker 109 done ok
+  worker 110 done ok
+  worker 111 done ok
+  worker 112 done ok
+  worker 113 done ok
+  worker 114 done ok
+  worker 115 done ok
+  worker 116 done ok
+  worker 117 done ok
+  worker 118 done ok
+  worker 119 done ok
+  worker 120 done ok
+  worker 121 done ok
+  worker 122 done ok
+  worker 123 done ok
+  worker 124 done ok
+  worker 125 done ok
+  worker 126 done ok
+  worker 127 done ok
+  worker 128 done ok
+  worker 129 done ok
+  worker 130 done ok
+  worker 131 done ok
+  worker 132 done ok
+  worker 133 done ok
+  worker 134 done ok
+  worker 135 done ok
+  worker 136 done ok
+  worker 137 done ok
+  worker 138 done ok
+  worker 139 done ok
+  worker 140 done ok
+  worker 141 done ok
+  worker 142 done ok
+  worker 143 done ok
+  worker 144 done ok
+  worker 145 done ok
+  worker 146 done ok
+  worker 147 done ok
+  worker 148 done ok
+  worker 149 done ok
+Merging 150 files with hadd -> events/misc/2N_hN_100M_6GeV_kF220_indep.root
+Merged metadata -> events/misc/2N_hN_100M_6GeV_kF220_indep.root.meta.txt
+merged 'events' entries: 100000000  (expected 100000000)
+Done. Output: events/misc/2N_hN_100M_6GeV_kF220_indep.root
+[2026-08-29 18:41:46] === MF local-FG 100M, hN, 6 GeV, kF=0.22 (Fig 7) ===
+==================================================================
+ Parallel SRC_analysis_2N generation
+   total events : 100000000  (successful)
+   workers      : 150  (each ~666666 events; first 100 get +1)
+   output       : events/misc/MF_localFG_hN_100M_6GeV_kF220.root
+   doFSI/model  : 1 / hN  (indep=0)
+   sigmaCM / kF : 0.150 / 0.220 GeV/c
+   wf_mode/fg   : 4 / local  (vertex rho^1)
+   Ebeam        : 6.0 GeV
+   parts dir    : /home/ilayws/Ilay-Generators/src/programs/genQE_FSI/events/misc/parts_MF_localFG_hN_100M_6GeV_kF220_1217497
+==================================================================
+  launched worker 0  pid=1217657  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part000.root
+  launched worker 1  pid=1217676  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part001.root
+  launched worker 2  pid=1217695  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part002.root
+  launched worker 3  pid=1217714  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part003.root
+  launched worker 4  pid=1217733  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part004.root
+  launched worker 5  pid=1217752  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part005.root
+  launched worker 6  pid=1217771  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part006.root
+  launched worker 7  pid=1217790  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part007.root
+  launched worker 8  pid=1217809  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part008.root
+  launched worker 9  pid=1217833  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part009.root
+  launched worker 10  pid=1217852  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part010.root
+  launched worker 11  pid=1217871  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part011.root
+  launched worker 12  pid=1217890  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part012.root
+  launched worker 13  pid=1217909  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part013.root
+  launched worker 14  pid=1217928  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part014.root
+  launched worker 15  pid=1217947  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part015.root
+  launched worker 16  pid=1217966  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part016.root
+  launched worker 17  pid=1217986  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part017.root
+  launched worker 18  pid=1218005  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part018.root
+  launched worker 19  pid=1218028  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part019.root
+  launched worker 20  pid=1218047  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part020.root
+  launched worker 21  pid=1218066  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part021.root
+  launched worker 22  pid=1218085  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part022.root
+  launched worker 23  pid=1218104  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part023.root
+  launched worker 24  pid=1218123  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part024.root
+  launched worker 25  pid=1218142  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part025.root
+  launched worker 26  pid=1218161  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part026.root
+  launched worker 27  pid=1218181  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part027.root
+  launched worker 28  pid=1218200  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part028.root
+  launched worker 29  pid=1218223  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part029.root
+  launched worker 30  pid=1218242  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part030.root
+  launched worker 31  pid=1218261  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part031.root
+  launched worker 32  pid=1218281  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part032.root
+  launched worker 33  pid=1218300  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part033.root
+  launched worker 34  pid=1218319  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part034.root
+  launched worker 35  pid=1218338  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part035.root
+  launched worker 36  pid=1218357  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part036.root
+  launched worker 37  pid=1218376  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part037.root
+  launched worker 38  pid=1218395  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part038.root
+  launched worker 39  pid=1218417  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part039.root
+  launched worker 40  pid=1218436  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part040.root
+  launched worker 41  pid=1218455  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part041.root
+  launched worker 42  pid=1218474  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part042.root
+  launched worker 43  pid=1218493  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part043.root
+  launched worker 44  pid=1218512  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part044.root
+  launched worker 45  pid=1218531  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part045.root
+  launched worker 46  pid=1218550  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part046.root
+  launched worker 47  pid=1218569  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part047.root
+  launched worker 48  pid=1218588  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part048.root
+  launched worker 49  pid=1218611  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part049.root
+  launched worker 50  pid=1218630  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part050.root
+  launched worker 51  pid=1218649  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part051.root
+  launched worker 52  pid=1218668  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part052.root
+  launched worker 53  pid=1218687  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part053.root
+  launched worker 54  pid=1218706  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part054.root
+  launched worker 55  pid=1218725  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part055.root
+  launched worker 56  pid=1218744  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part056.root
+  launched worker 57  pid=1218763  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part057.root
+  launched worker 58  pid=1218782  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part058.root
+  launched worker 59  pid=1218806  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part059.root
+  launched worker 60  pid=1218825  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part060.root
+  launched worker 61  pid=1218844  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part061.root
+  launched worker 62  pid=1218863  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part062.root
+  launched worker 63  pid=1218882  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part063.root
+  launched worker 64  pid=1218901  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part064.root
+  launched worker 65  pid=1218920  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part065.root
+  launched worker 66  pid=1218939  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part066.root
+  launched worker 67  pid=1218958  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part067.root
+  launched worker 68  pid=1218977  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part068.root
+  launched worker 69  pid=1219000  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part069.root
+  launched worker 70  pid=1219019  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part070.root
+  launched worker 71  pid=1219038  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part071.root
+  launched worker 72  pid=1219057  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part072.root
+  launched worker 73  pid=1219076  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part073.root
+  launched worker 74  pid=1219095  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part074.root
+  launched worker 75  pid=1219114  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part075.root
+  launched worker 76  pid=1219133  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part076.root
+  launched worker 77  pid=1219152  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part077.root
+  launched worker 78  pid=1219172  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part078.root
+  launched worker 79  pid=1219196  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part079.root
+  launched worker 80  pid=1219216  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part080.root
+  launched worker 81  pid=1219235  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part081.root
+  launched worker 82  pid=1219254  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part082.root
+  launched worker 83  pid=1219273  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part083.root
+  launched worker 84  pid=1219292  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part084.root
+  launched worker 85  pid=1219311  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part085.root
+  launched worker 86  pid=1219330  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part086.root
+  launched worker 87  pid=1219349  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part087.root
+  launched worker 88  pid=1219368  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part088.root
+  launched worker 89  pid=1219391  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part089.root
+  launched worker 90  pid=1219410  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part090.root
+  launched worker 91  pid=1219429  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part091.root
+  launched worker 92  pid=1219448  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part092.root
+  launched worker 93  pid=1219467  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part093.root
+  launched worker 94  pid=1219486  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part094.root
+  launched worker 95  pid=1219505  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part095.root
+  launched worker 96  pid=1219524  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part096.root
+  launched worker 97  pid=1219543  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part097.root
+  launched worker 98  pid=1219562  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part098.root
+  launched worker 99  pid=1219585  events=666667  -> MF_localFG_hN_100M_6GeV_kF220.part099.root
+  launched worker 100  pid=1219604  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part100.root
+  launched worker 101  pid=1219623  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part101.root
+  launched worker 102  pid=1219642  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part102.root
+  launched worker 103  pid=1219661  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part103.root
+  launched worker 104  pid=1219680  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part104.root
+  launched worker 105  pid=1219699  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part105.root
+  launched worker 106  pid=1219718  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part106.root
+  launched worker 107  pid=1219737  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part107.root
+  launched worker 108  pid=1219756  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part108.root
+  launched worker 109  pid=1219779  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part109.root
+  launched worker 110  pid=1219798  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part110.root
+  launched worker 111  pid=1219817  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part111.root
+  launched worker 112  pid=1219836  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part112.root
+  launched worker 113  pid=1219855  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part113.root
+  launched worker 114  pid=1219874  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part114.root
+  launched worker 115  pid=1219893  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part115.root
+  launched worker 116  pid=1219912  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part116.root
+  launched worker 117  pid=1219931  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part117.root
+  launched worker 118  pid=1219950  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part118.root
+  launched worker 119  pid=1219973  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part119.root
+  launched worker 120  pid=1219992  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part120.root
+  launched worker 121  pid=1220011  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part121.root
+  launched worker 122  pid=1220030  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part122.root
+  launched worker 123  pid=1220049  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part123.root
+  launched worker 124  pid=1220068  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part124.root
+  launched worker 125  pid=1220087  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part125.root
+  launched worker 126  pid=1220106  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part126.root
+  launched worker 127  pid=1220125  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part127.root
+  launched worker 128  pid=1220144  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part128.root
+  launched worker 129  pid=1220166  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part129.root
+  launched worker 130  pid=1220185  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part130.root
+  launched worker 131  pid=1220204  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part131.root
+  launched worker 132  pid=1220223  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part132.root
+  launched worker 133  pid=1220242  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part133.root
+  launched worker 134  pid=1220261  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part134.root
+  launched worker 135  pid=1220280  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part135.root
+  launched worker 136  pid=1220299  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part136.root
+  launched worker 137  pid=1220318  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part137.root
+  launched worker 138  pid=1220337  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part138.root
+  launched worker 139  pid=1220360  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part139.root
+  launched worker 140  pid=1220379  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part140.root
+  launched worker 141  pid=1220398  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part141.root
+  launched worker 142  pid=1220417  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part142.root
+  launched worker 143  pid=1220436  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part143.root
+  launched worker 144  pid=1220455  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part144.root
+  launched worker 145  pid=1220474  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part145.root
+  launched worker 146  pid=1220493  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part146.root
+  launched worker 147  pid=1220512  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part147.root
+  launched worker 148  pid=1220531  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part148.root
+  launched worker 149  pid=1220554  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part149.root
+Waiting for 150 workers...
+./run_2N_parallel.sh: line 127: 1219912 Segmentation fault      (core dumped) "$BINARY" "$n" "$DOFSI" "$MODEL" "$part" "$SIGCM" "$WFMODE" "$EBEAM" "$FGMODE" "$KF" "$FSIINDEP" "$RHOPOW" > "$log" 2>&1
+  worker 0 done ok
+  worker 1 done ok
+  worker 2 done ok
+  worker 3 done ok
+  worker 4 done ok
+  worker 5 done ok
+  worker 6 done ok
+  worker 7 done ok
+  worker 8 done ok
+  worker 9 done ok
+  worker 10 done ok
+  worker 11 done ok
+  worker 12 done ok
+  worker 13 done ok
+  worker 14 done ok
+  worker 15 done ok
+  worker 16 done ok
+  worker 17 done ok
+  worker 18 done ok
+  worker 19 done ok
+  worker 20 done ok
+  worker 21 done ok
+  worker 22 done ok
+  worker 23 done ok
+  worker 24 done ok
+  worker 25 done ok
+  worker 26 done ok
+  worker 27 done ok
+  worker 28 done ok
+  worker 29 done ok
+  worker 30 done ok
+  worker 31 done ok
+  worker 32 done ok
+  worker 33 done ok
+  worker 34 done ok
+  worker 35 done ok
+  worker 36 done ok
+  worker 37 done ok
+  worker 38 done ok
+  worker 39 done ok
+  worker 40 done ok
+  worker 41 done ok
+  worker 42 done ok
+  worker 43 done ok
+  worker 44 done ok
+  worker 45 done ok
+  worker 46 done ok
+  worker 47 done ok
+  worker 48 done ok
+  worker 49 done ok
+  worker 50 done ok
+  worker 51 done ok
+  worker 52 done ok
+  worker 53 done ok
+  worker 54 done ok
+  worker 55 done ok
+  worker 56 done ok
+  worker 57 done ok
+  worker 58 done ok
+  worker 59 done ok
+  worker 60 done ok
+  worker 61 done ok
+  worker 62 done ok
+  worker 63 done ok
+  worker 64 done ok
+  worker 65 done ok
+  worker 66 done ok
+  worker 67 done ok
+  worker 68 done ok
+  worker 69 done ok
+  worker 70 done ok
+  worker 71 done ok
+  worker 72 done ok
+  worker 73 done ok
+  worker 74 done ok
+  worker 75 done ok
+  worker 76 done ok
+  worker 77 done ok
+  worker 78 done ok
+  worker 79 done ok
+  worker 80 done ok
+  worker 81 done ok
+  worker 82 done ok
+  worker 83 done ok
+  worker 84 done ok
+  worker 85 done ok
+  worker 86 done ok
+  worker 87 done ok
+  worker 88 done ok
+  worker 89 done ok
+  worker 90 done ok
+  worker 91 done ok
+  worker 92 done ok
+  worker 93 done ok
+  worker 94 done ok
+  worker 95 done ok
+  worker 96 done ok
+  worker 97 done ok
+  worker 98 done ok
+  worker 99 done ok
+  worker 100 done ok
+  worker 101 done ok
+  worker 102 done ok
+  worker 103 done ok
+  worker 104 done ok
+  worker 105 done ok
+  worker 106 done ok
+  worker 107 done ok
+  worker 108 done ok
+  worker 109 done ok
+  worker 110 done ok
+  worker 111 done ok
+  worker 112 done ok
+  worker 113 done ok
+  worker 114 done ok
+  worker 115 done ok
+  ERROR: worker 116 (pid 1219912) exited 139 — see /home/ilayws/Ilay-Generators/src/programs/genQE_FSI/events/misc/parts_MF_localFG_hN_100M_6GeV_kF220_1217497/MF_localFG_hN_100M_6GeV_kF220.part116.log
+  worker 117 done ok
+  worker 118 done ok
+  worker 119 done ok
+  worker 120 done ok
+  worker 121 done ok
+  worker 122 done ok
+  worker 123 done ok
+  worker 124 done ok
+  worker 125 done ok
+  worker 126 done ok
+  worker 127 done ok
+  worker 128 done ok
+  worker 129 done ok
+  worker 130 done ok
+  worker 131 done ok
+  worker 132 done ok
+  worker 133 done ok
+  worker 134 done ok
+  worker 135 done ok
+  worker 136 done ok
+  worker 137 done ok
+  worker 138 done ok
+  worker 139 done ok
+  worker 140 done ok
+  worker 141 done ok
+  worker 142 done ok
+  worker 143 done ok
+  worker 144 done ok
+  worker 145 done ok
+  worker 146 done ok
+  worker 147 done ok
+  worker 148 done ok
+  worker 149 done ok
+Retry round 1/2 for 1 crashed worker(s): 116
+  retry-launched worker 116  pid=1221186  events=666666  -> MF_localFG_hN_100M_6GeV_kF220.part116.root
+  worker 116 done ok
+Merging 150 files with hadd -> events/misc/MF_localFG_hN_100M_6GeV_kF220.root
+Merged metadata -> events/misc/MF_localFG_hN_100M_6GeV_kF220.root.meta.txt
+merged 'events' entries: 100000000  (expected 100000000)
+Done. Output: events/misc/MF_localFG_hN_100M_6GeV_kF220.root
+[2026-08-29 19:23:44] ALL PRODUCTION DONE
