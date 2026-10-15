@@ -183,7 +183,10 @@ void QEGenerator_3N::generate_event(double &weight, int &N1_type, int &N2_type, 
   //1st, sample the center of mass momentum
   
  TVector3 v_cm(0,0,0);
-  if (use_CM) {v_cm.SetXYZ(myRand->Gaus(0.,sigCM),myRand->Gaus(0.,sigCM),myRand->Gaus(0.,sigCM));}
+  // For A=3 the triplet is the whole nucleus (no residual), so it has no CM
+  // motion relative to the target at rest; smearing it would leave the event
+  // with net momentum v_cm balanced by a phantom residual.
+  if (use_CM && fTargetA > 3) {v_cm.SetXYZ(myRand->Gaus(0.,sigCM),myRand->Gaus(0.,sigCM),myRand->Gaus(0.,sigCM));}
   TVector3 v_cm_component = v_cm;
   if(v_cm.Mag() != 0) v_cm_component.SetMag(v_cm_component.Mag()/3.0);
   weight*=1.;
