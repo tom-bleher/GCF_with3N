@@ -31,12 +31,13 @@ model = "3N"
 beam = 6.0
 events = 100000
 target = [12, 6]
-interaction = 1       # AV18 3He Faddeev density
+wave_function = "AV18"  # 3He Faddeev density; AV18+UIX, CDBonn, ... or AV18-pD, ...
 theta_e = [5.0, 40.0]
 
 [fsi]
-model = "hN"
+model = "hN"            # hN (full cascade) or hA (effective)
 transport = "shared"
+off = []                # e.g. ["pion.absorption", "nucleon.inelastic"]; see gcf_fsi --list-channels
 """,
     "2N": """\
 # 2N SRC pair events on 12C at 4.5 GeV, then GENIE hN FSI.
@@ -95,6 +96,10 @@ def add_schema_args(parser, opts, skip=()):
         help_text = o.help + (f" [{o.unit}]" if o.unit else "")
         if o.key == "target":
             continue                      # handled by the caller
+        if o.key == "off":
+            parser.add_argument("--off", dest="off", action="append", default=None, metavar="CHANNEL",
+                                help="switch a cascade channel off (repeatable; gcf_fsi --list-channels)")
+            continue
         if o.key == "transport":
             parser.add_argument("--independent", dest="transport", action="store_const",
                                 const="independent", default=None,

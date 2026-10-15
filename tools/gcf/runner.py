@@ -106,11 +106,45 @@ def fsi_args(fsi, inp, output, seed, first=None, count=None, copy_objects=True):
         args += ["--target", f"{fsi['target'][0]}:{fsi['target'][1]}"]
     if fsi.get("keep"):
         args += ["--keep", fsi["keep"]]
+    for c in fsi.get("off") or []:
+        args += ["--channel", f"{c}=0"]
+    if fsi.get("nucleon_mfp_scale") is not None:
+        args += ["--channel", f"nucleon.mfp={fsi['nucleon_mfp_scale']}"]
+    if fsi.get("pion_mfp_scale") is not None:
+        args += ["--channel", f"pion.mfp={fsi['pion_mfp_scale']}"]
     if first is not None:
         args += ["--first-event", str(first), "--max-events", str(count)]
     if not copy_objects:
         args.append("--no-copy-objects")
     return args
+
+
+def check_setup(cfg):
+    """Run the stages' own setup checks on a validated config, without
+    generating anything: gcf_generate --check (nucleus tables, option
+    combinations) or, for FSI-only runs, that the input file and tree can be
+    read. Returns a list of problems (empty = fine)."""
+    run, gen, fsi = cfg["run"], cfg["generate"], cfg["fsi"]
+    problems = []
+    env = environment()
+    if "generate" in run["stages"]:
+        args = generate_args(gen, 1, "/dev/null", 1)
+        args = [a for a in args if a not in ("--output", "/dev/null")] + ["--check"]
+        out = subprocess.run(args, capture_output=True, text=True, env=env, timeout=120)
+        if out.returncode != 0:
+            msg = [l for l in (out.stderr + out.stdout).splitlines()
+                   if l.strip() and not l.startswith(("eNCrossSection", "You are using"))]
+            problems.append("generator setup failed: " + (" ".join(msg[-3:]) or f"exit {out.returncode}"))
+    else:
+        try:
+            n = count_entries(fsi["input"])
+            if n == 0:
+                problems.append(f"{fsi['input']} has no events")
+        except RunError as e:
+            problems.append(str(e))
+    if "fsi" in run["stages"] and not (GENIE_DIR / "lib").is_dir():
+        problems.append("GENIE is not built (no lib/ in the vendored tree); run ./install.sh")
+    return problems
 
 
 def count_entries(path):

@@ -101,6 +101,19 @@ def validate(raw, base_dir="."):
             if o.key in given and model not in o.models:
                 raise ConfigError(f"[generate] {o.key} applies to model(s) "
                                   f"{', '.join(o.models)}, not {model}")
+    if "fsi" in run["stages"]:
+        applicable = {c[0]: (c[2] if fsi["model"] == "hN" else c[3]) for c in schema.CHANNELS}
+        for c in fsi["off"]:
+            if not applicable[c]:
+                raise ConfigError(f"[fsi] off: '{c}' is not a separate fate in the {fsi['model']} "
+                                  f"cascade (see gcf_fsi --list-channels)")
+        if fsi["model"] == "hA" and {"nucleon.inelastic", "nucleon.cex", "nucleon.absorption",
+                                     "nucleon.piprod"} <= set(fsi["off"]):
+            raise ConfigError("[fsi] off: in hA at least one of nucleon.inelastic/cex/absorption/"
+                              "piprod must stay on")
+        for key in ("nucleon_mfp_scale", "pion_mfp_scale"):
+            if fsi[key] is not None and fsi[key] <= 0:
+                raise ConfigError(f"[fsi] {key} must be positive")
     if "fsi" in run["stages"] and "generate" not in run["stages"]:
         if not fsi["input"]:
             raise ConfigError("[fsi] input is required when the generate stage is not run")
