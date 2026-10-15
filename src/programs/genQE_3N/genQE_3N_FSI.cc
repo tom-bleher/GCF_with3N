@@ -59,6 +59,7 @@ void Usage()
        << "    (k > kF on the initial-state wavefunction-frame momenta; default 0.25)\n"
        << "    AND, unless -s is given, sigCM = sqrt(3/5)*kF (3N triplet CM width\n"
        << "    from three uncorrelated mean-field nucleons).\n"
+       << "-S: Random seed (positive integer; default 0 = random, printed at start)\n"
        << "-h: Print this message and exit\n\n\n";
 }
 
@@ -91,9 +92,10 @@ bool init(int argc, char ** argv)
   double Q2max = 1.e9;
   double kF_GeV = 0.;
   bool   kF_set = false;
+  UInt_t seed = 0;
 
   int c;
-  while ((c = getopt(argc-numargs+1, &argv[numargs-1], "vc:f:A:Z:s:C:nIt:q:K:h")) != -1)
+  while ((c = getopt(argc-numargs+1, &argv[numargs-1], "vc:f:A:Z:s:C:nIt:q:K:S:h")) != -1)
     switch (c) {
       case 'v':
         verbose = true; break;
@@ -150,6 +152,8 @@ bool init(int argc, char ** argv)
           cerr << "Invalid -K value (expect kF in GeV/c, e.g. 0.220).\n"; return false;
         }
         break;
+      case 'S':
+        seed = strtoul(optarg, nullptr, 10); break;
       case 'h':
         Usage(); return false;
       default:
@@ -157,7 +161,11 @@ bool init(int argc, char ** argv)
         Usage(); return false;
     }
 
-  myRand = new TRandom3(0);
+  // Seed 0 (the default) draws a fresh seed; print it either way so any run
+  // (e.g. a crashed parallel worker) can be replayed exactly with -S.
+  if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
+  cout << "Random seed: " << seed << "\n";
+  myRand = new TRandom3(seed);
   myCS   = new eNCrossSection(csMeth, ffMod);
 
   myGen = new QEGeneratorFSI_3N(Ebeam, myCS, u, myRand, A, Z);

@@ -257,7 +257,8 @@ bool ApplyGenieFSI(int A_residual, int Z_residual,
   }
   if (n_valid == 0) return false;
 
-  genie::RandomGen::Instance()->SetSeed(rnd->Integer(0x7fffffff));
+  // 1..2^31-1: SetSeed(0) would mean "random UUID seed" and break replay.
+  genie::RandomGen::Instance()->SetSeed(1 + rnd->Integer(0x7ffffffe));
 
   static genie::HNIntranuke2018 hN2018("genie::HNIntranuke2018");
   static genie::HAIntranuke2018 hA2018("genie::HAIntranuke2018");

@@ -36,6 +36,7 @@ void Usage()
        << "-Z: Target charge number (default 6)\n"
        << "-s: CM Gaussian width sigCM in GeV/c per component (default 0.15)\n"
        << "-C: Toggle CM smearing: 1=on (default), 0=off\n"
+       << "-S: Random seed (positive integer; default 0 = random, printed at start)\n"
        << "-h: Print this message and exit\n\n\n";
 }
 
@@ -60,9 +61,10 @@ bool init(int argc, char ** argv)
   int targetZ = 6;
   double sigCM_GeV = 0.15;
   bool   sigCM_set = false;
+  UInt_t seed = 0;
 
   int c;
-  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vc:A:Z:s:C:h")) != -1)
+  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vc:A:Z:s:C:S:h")) != -1)
     switch(c)
       {
 
@@ -90,6 +92,8 @@ bool init(int argc, char ** argv)
 	sigCM_GeV = atof(optarg); sigCM_set = true; break;
       case 'C':
 	useCM = (atoi(optarg) != 0); break;
+      case 'S':
+	seed = strtoul(optarg, nullptr, 10); break;
       case 'h':
 	Usage();
 	return false;
@@ -100,7 +104,11 @@ bool init(int argc, char ** argv)
       }
 
   // Initialize objects
-  myRand = new TRandom3(0);
+  // Seed 0 (the default) draws a fresh seed; print it either way so any run
+  // (e.g. a crashed parallel worker) can be replayed exactly with -S.
+  if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
+  cout << "Random seed: " << seed << "\n";
+  myRand = new TRandom3(seed);
   myCS = new eNCrossSection(csMeth,ffMod);
   
   // Initialize generator
