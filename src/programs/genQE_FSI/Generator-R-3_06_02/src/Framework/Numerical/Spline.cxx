@@ -370,14 +370,35 @@ double Spline::Evaluate(double x) const
 
     // we can interpolate within the range of spline knots - be careful with
     // strange cubic spline behaviour when close to knots with y=0
-    bool is0p = this->ClosestKnotValueIsZero(x, "+");
-    bool is0n = this->ClosestKnotValueIsZero(x, "-");
+    //
+    // Look up the two neighbouring knots once. This is exactly what
+    // ClosestKnotValueIsZero(x,"+"/"-") and FindClosestKnot(x,..,"+"/"-")
+    // compute, but those each repeat the TSpline3::FindX() binary search
+    // and parse the option into a std::string, and Evaluate() is called
+    // many times per INTRANUKE step.
+    const int iknot = fInterpolator->FindX(x);
+    double xnknot=0, ynknot=0, xpknot=0, ypknot=0;
+    fInterpolator->GetKnot(iknot,   xnknot, ynknot);
+    fInterpolator->GetKnot(iknot+1, xpknot, ypknot);
+    bool is0p = utils::math::AreEqual(ypknot,0);
+    bool is0n = utils::math::AreEqual(ynknot,0);
 
     if(!is0p && !is0n) {
       // both knots (on the left and right are non-zero) - just interpolate
       LOG("Spline", pDEBUG) << "Point is between non-zero knots";
-      if (fInterpolatorType == "TSpline3")
-        y = fInterpolator->Eval(x);
+      if (fInterpolatorType == "TSpline3") {
+        // Same as fInterpolator->Eval(x), i.e. ROOT's TSpline3::Eval:
+        // klow = FindX(x), clamped to fNp-2, then the cubic around knot
+        // klow -- but reusing the knot index found above rather than
+        // repeating the binary search.
+        int klow = iknot;
+        const int np = fInterpolator->GetNp();
+        if (klow >= np-1 && np > 1) klow = np-2;
+        double xk=0, yk=0, b=0, c=0, d=0;
+        fInterpolator->GetCoeff(klow, xk, yk, b, c, d);
+        const double dx = x - xk;
+        y = yk + dx * (b + dx * (c + dx * d));
+      }
       else if (fInterpolatorType == "TSpline5")
         y = fInterpolator5->Eval(x);
       else
@@ -392,9 +413,6 @@ double Spline::Evaluate(double x) const
         // just 1 neighboring knot has y=0 - do a linear interpolation
         LOG("Spline", pDEBUG)
           << "Point has zero" << (is0n ? " left " : " right ") << "knot";
-        double xpknot=0, ypknot=0, xnknot=0, ynknot=0;
-        this->FindClosestKnot(x, xnknot, ynknot, "-");
-        this->FindClosestKnot(x, xpknot, ypknot, "+");
         if(is0n) y = ypknot * (x-xnknot)/(xpknot-xnknot);
         else     y = ynknot * (x-xnknot)/(xpknot-xnknot);
       }

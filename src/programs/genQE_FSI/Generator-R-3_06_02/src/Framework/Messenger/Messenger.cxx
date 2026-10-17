@@ -11,6 +11,11 @@
 #include <iostream>
 #include <vector>
 #include <iomanip>
+#include <cstdint>
+#include <cstdlib>
+#include <cstring>
+#include <string_view>
+#include <unordered_map>
 
 #include "libxml/parser.h"
 #include "libxml/xmlmemory.h"
@@ -78,11 +83,56 @@ Messenger * Messenger::Instance()
   return fInstance;
 }
 //____________________________________________________________________________
+namespace {
+  // Messenger::operator() category cache (see below)
+  bool gCategoryCacheOn = false;
+  void DisableCategoryCache(void) { gCategoryCacheOn = false; }
+}
 log4cpp::Category & Messenger::operator () (const char * stream)
 {
-  log4cpp::Category & MSG = log4cpp::Category::getInstance(stream);
+  // Every LOG() statement calls this, including the many whose priority is
+  // then filtered out. log4cpp::Category::getInstance() locks a mutex, builds
+  // a std::string and searches a std::map<std::string, Category*> each time,
+  // which made it the largest single cost of INTRANUKE cascades. Categories
+  // live until log4cpp's HierarchyMaintainer is destroyed at exit, so cache
+  // their addresses (per thread, so no locking):
+  //  - L1: direct-mapped on the stream pointer (LOG() streams are almost
+  //    always string literals), verified by comparing the name, so a reused
+  //    pointer can never return the wrong category;
+  //  - L2: hash map keyed by the name.
+  // An atexit hook that runs before the HierarchyMaintainer destructor
+  // switches the cache off, after which this falls back to the plain lookup.
+  static const bool cache_init = [] {
+    log4cpp::Category::getRoot();       // construct the maintainer first, so
+    std::atexit(DisableCategoryCache);  // this hook runs before it is destroyed
+    gCategoryCacheOn = true;
+    return true;
+  }();
+  (void) cache_init;
+  if (!gCategoryCacheOn) return log4cpp::Category::getInstance(stream);
 
-  return MSG;
+  struct Slot { const char * key; const char * name; log4cpp::Category * cat; };
+  static thread_local Slot l1[256];        // trivially destructible
+  Slot & slot = l1[(reinterpret_cast<std::uintptr_t>(stream) >> 3) & 255];
+  if (slot.key == stream && std::strcmp(slot.name, stream) == 0) {
+    return *slot.cat;
+  }
+
+  typedef std::unordered_map<std::string_view, log4cpp::Category *> Cache_t;
+  static thread_local Cache_t * l2 = 0;    // never freed: no TLS destructor
+  if (!l2) l2 = new Cache_t;
+  log4cpp::Category * cat = 0;
+  Cache_t::const_iterator it = l2->find(std::string_view(stream));
+  if (it != l2->end()) {
+    cat = it->second;
+  } else {
+    cat = &log4cpp::Category::getInstance(stream);
+    l2->emplace(std::string_view(cat->getName()), cat);
+  }
+  slot.key  = stream;
+  slot.name = cat->getName().c_str();
+  slot.cat  = cat;
+  return *cat;
 }
 //____________________________________________________________________________
 void Messenger::SetPriorityLevel(

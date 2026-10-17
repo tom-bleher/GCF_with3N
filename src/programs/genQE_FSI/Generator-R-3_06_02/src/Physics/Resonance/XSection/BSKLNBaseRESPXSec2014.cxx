@@ -340,7 +340,7 @@ double BSKLNBaseRESPXSec2014::XSec(
     GV *= TMath::Sqrt( 3 * GV3*GV3 + GV1*GV1);
 
   } else { 
-    LOG("BSKLNBaseRESPXSec2014",pDEBUG << "Using dipole parametrization for GV") ; 
+    LOG("BSKLNBaseRESPXSec2014",pDEBUG) << "Using dipole parametrization for GV" ; 
   }
 
   if(fGAMiniBooNE){
@@ -360,7 +360,7 @@ double BSKLNBaseRESPXSec2014::XSec(
     LOG("BSKLNBaseRESPXSec2014",pINFO) <<"GA= " <<GA << "  C5A= " <<CA5;
 
   } else { 
-    LOG("BSKLNBaseRESPXSec2014",pDEBUG << "Using dipole parametrization for GA") ;
+    LOG("BSKLNBaseRESPXSec2014",pDEBUG) << "Using dipole parametrization for GA" ;
   }
 
   if(is_EM) {

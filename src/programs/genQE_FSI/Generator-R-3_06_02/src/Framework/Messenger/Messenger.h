@@ -75,6 +75,19 @@ using std::string;
 #endif
 
 /*!
+  \def   GENIE_LOG_GUARD(stream, priority)
+  \brief Prefix of the LOG-type macros below: skips the whole message
+         (stream lookup, formatting and evaluation of the streamed
+         arguments) when the stream's priority threshold filters it out.
+         log4cpp would discard such a message anyway, but only after all of
+         that work, which made filtered-out debug/info messages a dominant
+         cost of e.g. the INTRANUKE cascade. The if/else form keeps
+         "if (c) LOG(..) << x; else ..." binding correctly.
+*/
+#define GENIE_LOG_GUARD(stream, priority) \
+           if (!(*Messenger::Instance())(stream).isPriorityEnabled(priority)) {;} else
+
+/*!
   \def   SLOG(stream, priority)
   \brief A macro that returns the requested log4cpp::Category
          appending a short string (using the __FUNCTION__ and __LINE__ macros)
@@ -82,6 +95,7 @@ using std::string;
 */
 
 #define SLOG(stream, priority) \
+           GENIE_LOG_GUARD(stream, priority) \
            (*Messenger::Instance())(stream) \
                << priority << "[s] <" \
                << __FUNCTION__ << " (" << __LINE__ << ")> : "
@@ -94,6 +108,7 @@ using std::string;
 */
 
 #define LOG(stream, priority) \
+           GENIE_LOG_GUARD(stream, priority) \
            (*Messenger::Instance())(stream) \
                << priority << "[n] <" \
                << __FILE__ << "::" << __FUNCTION__ << " (" << __LINE__ << ")> : "
@@ -110,41 +125,49 @@ using std::string;
 #ifndef HIDE_GENIE_MSG_LOG_MACROS
 
 #define LOG_FATAL(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::FATAL) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::FATAL << "[n] <" \
                << __FILE__ << "::" << __FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LOG_ALERT(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::ALERT) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::ALERT << "[n] <" \
                << __FILE__ << "::" << __FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LOG_CRIT(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::CRIT) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::CRIT << "[n] <" \
                << __FILE__ << "::" << __FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LOG_ERROR(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::ERROR) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::ERROR << "[n] <" \
                << __FILE__ << "::" << __FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LOG_WARN(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::WARN) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::WARN << "[n] <" \
                << __FILE__ << "::" << __FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LOG_NOTICE(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::NOTICE) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::NOTICE << "[n] <" \
                << __FILE__ << "::" << __FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LOG_INFO(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::INFO) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::INFO << "[n] <" \
                << __FILE__ << "::" << __FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LOG_DEBUG(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::DEBUG) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::DEBUG << "[n] <" \
                << __FILE__ << "::" << __FUNCTION__ << " (" << __LINE__ << ")> : "
@@ -159,46 +182,55 @@ using std::string;
 */
 
 #define LLOG(stream, priority) \
+           GENIE_LOG_GUARD(stream, priority) \
            (*Messenger::Instance())(stream) \
                << priority << "[l] <" \
                << __PRETTY_FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LLOG_FATAL(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::FATAL) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::FATAL << "[l] <" \
                << __PRETTY_FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LLOG_ALERT(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::ALERT) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::ALERT << "[l] <" \
                << __PRETTY_FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LLOG_CRIT(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::CRIT) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::CRIT << "[l] <" \
                << __PRETTY_FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LLOG_ERROR(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::ERROR) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::ERROR << "[l] <" \
                << __PRETTY_FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LLOG_WARN(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::WARN) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::WARN << "'[l] <" \
                << __PRETTY_FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LLOG_NOTICE(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::NOTICE) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::NOTICE << "[l] <" \
                << __PRETTY_FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LLOG_INFO(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::INFO) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::INFO << "[l] <" \
                << __PRETTY_FUNCTION__ << " (" << __LINE__ << ")> : "
 
 #define LLOG_DEBUG(stream) \
+           GENIE_LOG_GUARD(stream, log4cpp::Priority::DEBUG) \
           (*Messenger::Instance())(stream) \
                << log4cpp::Priority::DEBUG << "[l] <" \
                << __PRETTY_FUNCTION__ << " (" << __LINE__ << ")> : "
