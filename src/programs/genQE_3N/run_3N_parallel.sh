@@ -18,7 +18,7 @@
 #   EBEAM    beam energy in GeV                              (default 6.0)
 #   U        interaction number (positional arg 2 of binary) (default 1)
 #   extra    anything after `--` is passed verbatim to every worker, e.g.
-#            -- -A 12 -Z 6 -f hN -p 220 -s 0.15
+#            -- -A 12 -Z 6 -f hN -K 0.220 -s 0.15
 #            (with none, defaults reproduce the existing 1.5M-file settings)
 #
 # Environment overrides:
@@ -124,7 +124,7 @@ echo "   total events : $TOTAL  (successful, weight>0)"
 echo "   workers      : $JOBS  (each ~$base events; first $rem get +1)"
 echo "   output       : $OUTPUT"
 echo "   beam / u     : $EBEAM / $U"
-echo "   extra flags  : ${EXTRA[*]:-(none -> defaults A=12 Z=6 hN p=220 sigCM=0.15 CM on FSI on)}"
+echo "   extra flags  : ${EXTRA[*]:-(none -> defaults A=12 Z=6 hN kMin=0.25 sigCM=0.15 CM on FSI on)}"
 echo "   parts dir    : $PARTS_DIR"
 echo "   seeds        : auto (TRandom3(0)); launches staggered 1s to avoid collisions"
 echo "=================================================================="

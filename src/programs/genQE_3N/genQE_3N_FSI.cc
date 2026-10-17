@@ -59,6 +59,7 @@ void Usage()
        << "    (k > kF on the initial-state wavefunction-frame momenta; default 0.25)\n"
        << "    AND, unless -s is given, sigCM = sqrt(3/5)*kF (3N triplet CM width\n"
        << "    from three uncorrelated mean-field nucleons).\n"
+       << "-S: Random seed (positive integer; default 0 = random, printed at start)\n"
        << "-h: Print this message and exit\n\n\n";
 }
 
@@ -74,7 +75,6 @@ bool init(int argc, char ** argv)
 
   double Ebeam = atof(argv[1]);
   int u = atoi(argv[2]);
-  outfile = new TFile(argv[3],"RECREATE");
   nEvents = atoi(argv[4]);
 
   ffModel ffMod = kelly;
@@ -92,9 +92,10 @@ bool init(int argc, char ** argv)
   double Q2max = 1.e9;
   double kF_GeV = 0.;
   bool   kF_set = false;
+  UInt_t seed = 0;
 
   int c;
-  while ((c = getopt(argc-numargs+1, &argv[numargs-1], "vc:f:A:Z:s:C:nIt:q:K:h")) != -1)
+  while ((c = getopt(argc-numargs+1, &argv[numargs-1], "vc:f:A:Z:s:C:nIt:q:K:S:h")) != -1)
     switch (c) {
       case 'v':
         verbose = true; break;
@@ -151,13 +152,20 @@ bool init(int argc, char ** argv)
           cerr << "Invalid -K value (expect kF in GeV/c, e.g. 0.220).\n"; return false;
         }
         break;
+      case 'S':
+        seed = strtoul(optarg, nullptr, 10); break;
       case 'h':
         Usage(); return false;
       default:
-        abort();
+        // getopt already printed "invalid option"
+        Usage(); return false;
     }
 
-  myRand = new TRandom3(0);
+  // Seed 0 (the default) draws a fresh seed; print it either way so any run
+  // (e.g. a crashed parallel worker) can be replayed exactly with -S.
+  if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
+  cout << "Random seed: " << seed << "\n";
+  myRand = new TRandom3(seed);
   myCS   = new eNCrossSection(csMeth, ffMod);
 
   myGen = new QEGeneratorFSI_3N(Ebeam, myCS, u, myRand, A, Z);
@@ -176,6 +184,10 @@ bool init(int argc, char ** argv)
   doFSI_flag  = enableFSI ? 1 : 0;
   fsiModelInt = (fsiModel == kHN2018) ? 0 : 1;
 
+  // Open the output only after the generator is set up: exit() from a
+  // setup error with an open TFile crashes in ROOT's teardown and buries
+  // the real error message.
+  outfile = new TFile(argv[3],"RECREATE");
   outfile->cd();
   outtree = new TTree("genTbuffer","Generator Tree");
   outtree->Branch("N1_type",  &N1_type,  "N1_type/I");
@@ -256,6 +268,7 @@ int main(int argc, char ** argv)
 
   // Count successful (weight > 0) events. Keep generating until the target
   // number of successful events have been written to the tree.
+  const long long kMaxAttemptsWithoutSuccess = 100000000LL;
   long long attempts = 0;
   long long filled   = 0;
   while (filled < (long long)nEvents) {
@@ -265,6 +278,16 @@ int main(int argc, char ** argv)
     evnt((int)attempts);
     if (weight > 0.) filled++;
     attempts++;
+    // An impossible -t/-q/target choice has zero acceptance and would
+    // otherwise loop forever; give up once it is clear nothing gets through.
+    if (filled == 0 && attempts >= kMaxAttemptsWithoutSuccess) {
+      cerr << "No accepted events after " << attempts << " attempts: the "
+           << "requested phase space looks empty. Check the beam energy and "
+           << "-t/-q/-A/-Z settings. Aborting.\n";
+      totalAttempts = attempts;
+      fini();
+      return 2;
+    }
   }
   totalAttempts = attempts;
   if (verbose) {

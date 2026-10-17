@@ -61,7 +61,6 @@ bool init(int argc, char ** argv)
   int Z = atoi(argv[1]);
   int N = atoi(argv[2]);
   double Ebeam = atof(argv[3]);
-  outfile = new TFile(argv[4],"RECREATE");
   nEvents = atoi(argv[5]);
 
   ffModel ffMod=kelly;
@@ -110,7 +109,7 @@ bool init(int argc, char ** argv)
 	else
 	  {
 	    cerr << "Invalid cross section designation. Allowed values are onshell, cc1 and cc2. Aborting...\n";
-	    return -1;
+	    return false;
 	  }
 	break;
       case 's':
@@ -147,7 +146,9 @@ bool init(int argc, char ** argv)
 	Usage();
 	return false;
       default:
-	abort();
+	// getopt already printed "invalid option"
+	Usage();
+	return false;
 	
       }
 
@@ -179,6 +180,10 @@ bool init(int argc, char ** argv)
     myGen->set_doCoul(true);
   
   // Set up the tree
+  // Open the output only after the generator is set up: exit() from a
+  // setup error with an open TFile crashes in ROOT's teardown and buries
+  // the real error message.
+  outfile = new TFile(argv[4],"RECREATE");
   outfile->cd();
   outtree = new TTree("genTbuffer","Generator Tree");
   outtree->Branch("lead_type",&lead_type,"lead_type/I");
