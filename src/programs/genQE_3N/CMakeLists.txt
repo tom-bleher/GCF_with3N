@@ -28,6 +28,10 @@ endif()
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
 
+# Absolute location of the 3N density tables, so the binaries do not have to
+# be run from this directory (overridable at run time via $GCF_3N_ARRAY_DIR).
+add_compile_definitions(GCF_3N_ARRAY_DIR="${CMAKE_CURRENT_SOURCE_DIR}/array")
+
 # ---------------------------------------------------------------------------
 # Optional GENIE-FSI integration (matches genQE_FSI's USE_FSI block).
 # Defaults ON for standalone builds; in suite builds the user can opt in via
