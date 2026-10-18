@@ -25,7 +25,7 @@ double deltaECoul = 0;
 
 // Tree variables
 Double_t pe[3], pLead[3], pRec[3], pAm2[3], pRel[3], q[3];
-Double_t weight;
+Double_t weight, mAm2;
 Int_t lead_type, rec_type;
 
 void Usage()
@@ -195,6 +195,9 @@ bool init(int argc, char ** argv)
   outtree->Branch("pRel",pRel,"pRel[3]/D");
   outtree->Branch("q",q,"q[3]/D");
   outtree->Branch("weight",&weight,"weight/D");
+  // A-2 remnant mass including its sampled E*, so the remnant 4-momentum
+  // (pAm2, mAm2) closes energy-momentum conservation for the event.
+  outtree->Branch("mAm2",&mAm2,"mAm2/D");
   
   return true;
   
@@ -234,6 +237,7 @@ void evnt(int event)
   q[0] = vq.X();
   q[1] = vq.Y();
   q[2] = vq.Z();
+  mAm2 = vAm2.M();
   
   if (weight > 0.)
     outtree->Fill();
