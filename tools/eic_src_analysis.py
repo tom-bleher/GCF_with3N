@@ -312,83 +312,104 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     fig.savefig(outdir / "fig5_q2.pdf")
     plt.close(fig)
 
-    # Fig. 6: recoil momentum (rest frame), generated / accepted (hit) / accepted (reco), and acceptance
-    pbins = np.linspace(0.3, 1.2, 19)
-    centers = 0.5 * (pbins[1:] + pbins[:-1])
-    fig, axes = plt.subplots(2, 2 * len(data), figsize=(4.2 * 2 * len(data), 6.0), sharex=True,
-                             gridspec_kw={"height_ratios": [3, 2]}, squeeze=False)
-    col = 0
-    for lab, (d, _) in data.items():
-        for code, name in ((2212, "recoil p"), (2112, "recoil n")):
-            m = (d["rec_type"] == code) & (d["rec_p_irf"] > P_IRF_MIN)
-            x, w = d["rec_p_irf"][m], d["w_nb"][m] * scale
-            top, bot = axes[0, col], axes[1, col]
-            res = {}
-            for level, c, ls in (("hit", BLUE, "-"), ("reco", ORANGE, "--")):
-                ok = detected(d, "rec", level)[m]
-                gen, acc, eff, err = wstats(x, w, ok, pbins)
-                if level == "hit":
-                    top.stairs(gen, pbins, color=INK, lw=1.5, label="generated")
-                top.stairs(acc, pbins, color=c, lw=2, ls=ls, label=f"accepted ({level} level)")
-                bot.errorbar(centers, eff, yerr=err, fmt="o", ms=4, color=c, label=level)
-                res[level] = float(w[ok].sum() / w.sum())
-            summary[lab][name] = res
-            top.set_yscale("log")
-            top.set_ylim(bottom=1)
-            top.set_title(f"{name}, {lab}: {100 * res['hit']:.0f}% (hit), {100 * res['reco']:.0f}% (reco)", fontsize=10)
-            top.set_ylabel(r"events / bin (10 fb$^{-1}$ $\times$ 0.5)" if col == 0 else "")
-            bot.set_ylim(0, 1.05)
-            bot.set_xlabel(r"$p_\mathrm{IRF}$ [GeV/$c$]")
-            bot.set_ylabel("acceptance" if col == 0 else "")
-            for a_ in (top, bot):
-                style(a_)
-            col += 1
-    axes[0, 0].legend(frameon=False, fontsize=8)
-    fig.tight_layout()
-    fig.savefig(outdir / "fig6_recoil_acceptance.pdf")
-    plt.close(fig)
-
-    # Fig. 6, linear, laid out like PRC 105, 034001 Fig. 6(e)-(h): generated over the full p_IRF
-    # range (points), accepted at hit level (filled), accepted at reco level (points), 10 fb^-1 x 0.5
+    # Fig. 6 in the style of PRC 105, 034001: rows are beam settings, columns recoil p and n, panels
+    # share edges. Generated recoils over the full p_IRF range (black crosses), accepted at hit level
+    # above the p_IRF cut (filled), accepted at reco level (blue crosses, in the slot of the paper's
+    # smeared points), all for 10 fb^-1 x transparency. fig6b: acceptance vs p_IRF.
+    pink, pblue = "#f4c4c4", "#1f3fe0"
     lbins = np.linspace(0.0, 1.3, 40)
-    lc = 0.5 * (lbins[1:] + lbins[:-1])
-    hw = 0.5 * np.diff(lbins)
-    fig, axes = plt.subplots(len(data), 2, figsize=(9.6, 3.4 * len(data)), sharex=True, sharey="row", squeeze=False)
-    letters = iter("efghijklmnop")
-    for row, (lab, (d, _)) in enumerate(data.items()):
-        ymax = 0.0
-        for col, (code, name) in enumerate(((2212, "proton"), (2112, "neutron"))):
-            ax = axes[row, col]
+    lc, hw = 0.5 * (lbins[1:] + lbins[:-1]), 0.5 * np.diff(lbins)
+    hists = {}
+    for lab, (d, _) in data.items():
+        for code, name in ((2212, "proton"), (2112, "neutron")):
             m = d["rec_type"] == code
             x, w = d["rec_p_irf"][m], d["w_nb"][m] * scale
-            gen, _ = np.histogram(x, lbins, weights=w)
-            gerr = np.sqrt(np.histogram(x, lbins, weights=w**2)[0])
             cut = x > P_IRF_MIN
-            hit = cut & detected(d, "rec", "hit")[m]
-            rec = cut & detected(d, "rec", "reco")[m]
-            acc, _ = np.histogram(x[hit], lbins, weights=w[hit])
-            rco, _ = np.histogram(x[rec], lbins, weights=w[rec])
-            rerr = np.sqrt(np.histogram(x[rec], lbins, weights=w[rec] ** 2)[0])
-            ax.stairs(acc, lbins, fill=True, color=BLUE, alpha=0.35, lw=0, label="Accepted (hit level)")
-            g = gen > 0
-            ax.errorbar(lc[g], gen[g], xerr=hw[g], yerr=gerr[g], fmt="none", ecolor=INK, elinewidth=1.2, label="Generated")
-            r = rco > 0
-            ax.errorbar(lc[r], rco[r], xerr=hw[r], yerr=rerr[r], fmt="none", ecolor=ORANGE, elinewidth=1.2,
-                        label="Accepted (reco level)")
-            ymax = max(ymax, float(np.max(gen + gerr)), float(np.max(acc)))
-            ax.text(0.04, 0.92, f"({next(letters)})", transform=ax.transAxes, va="top", fontsize=12)
-            ax.text(0.96, 0.92, f"{name}, {lab}", transform=ax.transAxes, va="top", ha="right", fontsize=11)
-            ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0), useMathText=True)
-            if col == 0:
-                ax.set_ylabel(r"Events per bin (10 fb$^{-1}$ $\times$ 0.5)")
-            style(ax)
-        axes[row, 0].set_ylim(0, 1.12 * ymax)  # rows share y; set after both panels are drawn
-    for ax in axes[-1]:
-        ax.set_xlim(0, 1.3)
-        ax.set_xlabel(r"Spectator momentum (ion rest frame) [GeV/$c$]")
-    axes[0, 1].legend(frameon=False, fontsize=9, loc="upper right", bbox_to_anchor=(1.0, 0.84))
-    fig.tight_layout()
-    fig.savefig(outdir / "fig6_recoil_acceptance_linear.pdf")
+            sel = {"gen": np.ones(len(x), bool), "hit": cut & detected(d, "rec", "hit")[m],
+                   "reco": cut & detected(d, "rec", "reco")[m], "cut": cut}
+            hists[lab, name] = {k: (np.histogram(x[v], lbins, weights=w[v])[0],
+                                    np.sqrt(np.histogram(x[v], lbins, weights=w[v] ** 2)[0])) for k, v in sel.items()}
+            hists[lab, name]["w2"] = {k: np.histogram(x[cut & ~v], lbins, weights=w[cut & ~v] ** 2)[0] for k, v in sel.items()
+                                      if k in ("hit", "reco")}
+            summary[lab][f"recoil {name[0]}"] = {k: float(w[sel[k]].sum() / w[cut].sum()) for k in ("hit", "reco")}
+
+    def paper_grid(ylabel):
+        n = len(data)
+        fig, axes = plt.subplots(n, 2, figsize=(8.4, 2.8 * n + 0.9), sharey="row", squeeze=False,
+                                 gridspec_kw={"wspace": 0, "hspace": 0})
+        for row in range(n):
+            for col in range(2):
+                ax = axes[row, col]
+                ax.tick_params(direction="in", which="both", top=True, right=True, labelsize=11)
+                ax.set_xlim(0, 1.3)
+                ax.set_xticks([0.0, 0.5, 1.0] if col == 0 else [0.5, 1.0])
+                if row < n - 1:
+                    ax.tick_params(labelbottom=False)
+            axes[row, 0].set_ylabel(ylabel, fontsize=12)
+        fig.subplots_adjust(left=0.13, right=0.98, top=1 - 0.45 / fig.get_figheight(), bottom=0.55 / fig.get_figheight())
+        fig.supxlabel(r"Spectator Momentum (Ion Rest Frame) [GeV/$c$]", fontsize=12, y=0.1 / fig.get_figheight())
+        return fig, axes
+
+    def labels(ax, letter, text):
+        ax.text(0.05, 0.93, f"({letter})", transform=ax.transAxes, va="top", fontsize=13)
+        ax.text(0.95, 0.93, text, transform=ax.transAxes, va="top", ha="right", fontsize=12)
+
+    def spectra(log, letters, fname):
+        fig, axes = paper_grid("Events per bin")
+        top = max(float(np.max(hists[k]["gen"][0] + hists[k]["gen"][1])) for k in hists)
+        k10 = 0 if log else int(np.floor(np.log10(top)))
+        f = 10.0 ** k10
+        it = iter(letters)
+        for row, lab in enumerate(data):
+            ymax = 0.0
+            for col, name in enumerate(("proton", "neutron")):
+                ax, H = axes[row, col], hists[lab, name]
+                ax.stairs(H["hit"][0] / f, lbins, fill=True, color=pink, lw=0, label="Accepted", zorder=1)
+                for key, c, lbl in (("gen", INK, "Generated"), ("reco", pblue, "Reconstructed")):
+                    v, e = H[key]
+                    g = v > 0
+                    ax.errorbar(lc[g], v[g] / f, xerr=hw[g], yerr=e[g] / f, fmt="none", ecolor=c, elinewidth=1.4,
+                                label=lbl, zorder=2)
+                    if g.any():
+                        ymax = max(ymax, float(np.max(v[g] + e[g])) / f)
+                labels(ax, next(it), f"{name}, {lab}")
+            if log:
+                axes[row, 0].set_yscale("log")
+                axes[row, 0].set_ylim(1, ymax * 8)
+            else:
+                axes[row, 0].set_ylim(0, ymax * 1.3)
+        if not log and k10:
+            axes[0, 0].text(0.0, 1.02, rf"$\times10^{{{k10}}}$", transform=axes[0, 0].transAxes, fontsize=12, va="bottom")
+        if log:  # the paper's log panels carry no legend; put it in one row above the grid
+            h, l_ = axes[0, 1].get_legend_handles_labels()
+            fig.legend(h, l_, frameon=False, fontsize=11, ncol=3, loc="upper center", bbox_to_anchor=(0.555, 1.0))
+        else:
+            axes[0, 1].legend(frameon=False, fontsize=11, loc="upper right", bbox_to_anchor=(1.0, 0.85))
+        fig.savefig(outdir / fname)
+        plt.close(fig)
+
+    spectra(True, "abcdefgh", "fig6_recoil_acceptance.pdf")
+    spectra(False, "efghijkl", "fig6_recoil_acceptance_linear.pdf")
+
+    # fig6b: acceptance vs p_IRF (accepted / generated above the p_IRF cut), hit and reco level
+    fig, axes = paper_grid("Acceptance")
+    it = iter("abcdefgh")
+    for row, lab in enumerate(data):
+        for col, name in enumerate(("proton", "neutron")):
+            ax, H = axes[row, col], hists[lab, name]
+            gen = H["cut"][0]
+            ok = gen > 0
+            for j, (key, c, lbl) in enumerate((("hit", INK, "hit level"), ("reco", pblue, "reco level"))):
+                acc = H[key][0]
+                eff = np.divide(acc, gen, out=np.zeros_like(acc), where=ok)
+                err = np.sqrt(H[key][1] ** 2 * (1 - eff) ** 2 + H["w2"][key] * eff ** 2) / np.where(ok, gen, 1)
+                ax.errorbar(lc[ok] + (j - 0.5) * 0.25 * hw[ok], eff[ok], yerr=err[ok], fmt="o", ms=3.5, color=c,
+                            elinewidth=1.2, label=lbl)
+            ax.axvline(P_IRF_MIN, color=MUTED, lw=0.8, ls=":")
+            labels(ax, next(it), f"{name}, {lab}: {100 * summary[lab]['recoil ' + name[0]]['hit']:.0f}%")
+        axes[row, 0].set_ylim(0, 1.15)
+    axes[0, 1].legend(frameon=False, fontsize=11, loc="upper right", bbox_to_anchor=(1.0, 0.85))
+    fig.savefig(outdir / "fig6b_acceptance_vs_pirf.pdf")
     plt.close(fig)
 
     # Pair-type table: recoil-tagged and triple-coincidence fractions
@@ -419,7 +440,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         print(f"{lab}: recoil p {summary[lab]['recoil p']}, recoil n {summary[lab]['recoil n']}, "
               f"Q2 reach (>=100/GeV2) {summary[lab]['q2_reach_100_per_GeV2']}, "
               f"electron {summary[lab]['electron_truth_matched']:.2f}")
-    print(f"wrote {outdir}/fig3_angles.pdf fig4_pirf_vs_theta.pdf fig5_q2.pdf fig6_recoil_acceptance.pdf fig6_recoil_acceptance_linear.pdf summary.json pairs.txt")
+    print(f"wrote {outdir}/fig3_angles.pdf fig4_pirf_vs_theta.pdf fig5_q2.pdf fig6_recoil_acceptance.pdf fig6_recoil_acceptance_linear.pdf fig6b_acceptance_vs_pirf.pdf summary.json pairs.txt")
 
 
 def main():
