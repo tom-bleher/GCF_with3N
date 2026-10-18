@@ -155,6 +155,19 @@ class QEGeneratorFSI: public gcfGenerator
   // radiative/Coulomb reconstruction ambiguity). Valid for MF events only.
   double GetLastMFRho() const { return fLastMFRho; }
 
+  // Interaction vertex of the last generated event -- the one the cascade
+  // uses, or would use with FSI on. Drawn during generation (it fixes k_F(r)
+  // for the local onset / local Fermi gas), so a PWIA-only run must hand it
+  // to a separate FSI stage rather than let that stage re-sample it.
+  //   2N pair events: the SRC pair vertex (false if none was drawn, e.g. the
+  //                   light-cone path);
+  //   MF events:      the struck-nucleon position.
+  bool GetLastSrcVertex(TLorentzVector &x4) const {
+    if (fSrcVertexValid) x4 = fSrcVertex;
+    return fSrcVertexValid;
+  }
+  const TLorentzVector & GetLastMFPosition() const { return fLastMFPosition; }
+
  private:
   eNCrossSection * myCS;
 

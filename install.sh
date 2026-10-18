@@ -12,8 +12,10 @@
 #   4. generator suite without FSI         -> build/programs/<gen>/<gen>
 #   5. 2N + FSI  (genQE_FSI project)       -> src/programs/genQE_FSI/build/
 #   6. 3N + FSI  (genQE_3N project)        -> src/programs/genQE_3N/build/
-#   7. write build/gcf_env.sh, the runtime environment for the FSI binaries
-#   8. smoke test: generate a few events with each generator, check genT
+#   7. pipeline stages gcf_generate, gcf_fsi -> src/programs/gcf_stages/build/
+#      (used by ./gcf, the command-line and web front end; docs/PIPELINE.md)
+#   8. write build/gcf_env.sh, the runtime environment for the FSI binaries
+#   9. smoke test: generate a few events with each generator, check the trees
 #
 # Usage:
 #   ./install.sh [options]
@@ -62,6 +64,8 @@ SUITE_BINS=(genQE/genQE genQE_3N/genQE_3N genDIS/genDIS genIon/genIon
 FSI2N_BINS=(genQE genQE_FSI SRC_analysis_2N)
 FSI3N_BINS=(genQE_3N genQE_3N_FSI SRC_analysis_3N theta_plot theta_plot_fast
             theta_plot_sinelaw theta_scan)
+STAGES_DIR="$SRC_DIR/programs/gcf_stages"
+STAGES_BINS=(gcf_generate gcf_fsi)
 
 # ----------------------------------------------------------------------------
 # Small helpers
@@ -174,7 +178,7 @@ trap on_exit EXIT
 [[ "$PREFIX" == /* ]] || PREFIX="$PWD/$PREFIX"
 PREFIX="${PREFIX%/}"
 
-NSTEPS=$(( 2 + (DO_FSI ? 5 : 0) + DO_TEST ))
+NSTEPS=$(( 2 + (DO_FSI ? 6 : 0) + DO_TEST ))
 
 echo "=================================================================="
 echo " GCF_with3N install"
@@ -497,7 +501,16 @@ not built. Check the GENIE libs/headers and log4cpp ($PREFIX); log: $log"
     step_done
 
     # ------------------------------------------------------------------------
-    # 7. Runtime environment file (untracked; setup_env.sh is left untouched)
+    # 7. Pipeline stages: generation and FSI as separate programs (./gcf)
+    # ------------------------------------------------------------------------
+    step "Pipeline stages gcf_generate, gcf_fsi -> ${STAGES_DIR#"$REPO_DIR"/}/build/"
+    cmake_build "$LOG_DIR/cmake-gcf_stages.log" "$STAGES_DIR" "$STAGES_DIR/build" \
+        "${LOG4CPP_ARGS[@]}" "${XML2_ARGS[@]}"
+    expect_bins "$STAGES_DIR/build" "${STAGES_BINS[@]}"
+    step_done
+
+    # ------------------------------------------------------------------------
+    # 8. Runtime environment file (untracked; setup_env.sh is left untouched)
     # ------------------------------------------------------------------------
     step "Runtime environment -> ${ENV_FILE#"$REPO_DIR"/}"
     {
@@ -521,13 +534,13 @@ not built. Check the GENIE libs/headers and log4cpp ($PREFIX); log: $log"
 fi
 
 # ----------------------------------------------------------------------------
-# 8. Smoke test. genQE_3N(_FSI) open array/he3_3Ndensity_*.dnst relative to
+# 9. Smoke test. genQE_3N(_FSI) open array/he3_3Ndensity_*.dnst relative to
 #    the CWD, so they must run from src/programs/genQE_3N.
 # ----------------------------------------------------------------------------
 # genT_entries <file.root> — print the entry count of tree genT (-1 if absent)
 genT_entries() {
     local out
-    out="$(root -l -b -q -e "TFile *f = TFile::Open(\"$1\"); TTree *t = f ? (TTree*)f->Get(\"genT\") : nullptr; printf(\"GCF_ENTRIES=%lld\\n\", t ? t->GetEntries() : -1LL);" 2>&1)" || true
+    out="$(root -l -b -q -e "TFile *f = TFile::Open(\"$1\"); TTree *t = f ? (TTree*)f->Get(\"genT\") : nullptr; if (f && !t) t = (TTree*)f->Get(\"events\"); printf(\"GCF_ENTRIES=%lld\\n\", t ? t->GetEntries() : -1LL);" 2>&1)" || true
     sed -n 's/^GCF_ENTRIES=//p' <<<"$out"
 }
 
@@ -561,7 +574,7 @@ smoke() {
         exact)  [[ "$n" == "$nev" ]] ;;
         atmost) [[ "$n" =~ ^[0-9]+$ && "$n" -gt 0 && "$n" -le "$nev" ]] ;;
     esac || die "smoke test $label: genT has '${n:-?}' entries in $out (expected $([[ $mode == exact ]] && echo "$nev" || echo "1..$nev")); see $log"
-    info "$(printf '%-13s %4s entries in genT (%s %s requested)  %3ds' "$label" "$n" \
+    info "$(printf '%-13s %4s entries (%s %s requested)  %3ds' "$label" "$n" \
         "$([[ $mode == exact ]] && echo "==" || echo "<=")" "$nev" $((SECONDS - t0)))"
 }
 
@@ -578,6 +591,12 @@ if [[ $DO_TEST -eq 1 ]]; then
             "$FSI_DIR/build/genQE_FSI" 6 6 4.5 "$SMOKE_DIR/genQE_FSI.root" $NEV
         smoke genQE_3N_FSI "$N3_DIR" exact $NEV "$SMOKE_DIR/genQE_3N_FSI.root" \
             "$N3_DIR/build/genQE_3N_FSI" 6 1 "$SMOKE_DIR/genQE_3N_FSI.root" $NEV
+        smoke gcf_generate "$REPO_DIR" exact $NEV "$SMOKE_DIR/gcf_pwia.root" \
+            "$STAGES_DIR/build/gcf_generate" --model 3N --beam 6 --events $NEV \
+            --output "$SMOKE_DIR/gcf_pwia.root"
+        smoke gcf_fsi "$REPO_DIR" exact $NEV "$SMOKE_DIR/gcf_fsi.root" \
+            "$STAGES_DIR/build/gcf_fsi" --input "$SMOKE_DIR/gcf_pwia.root" \
+            --output "$SMOKE_DIR/gcf_fsi.root"
     fi
     step_done
 fi
@@ -598,6 +617,12 @@ if [[ $DO_FSI -eq 1 ]]; then
     echo "                   ${FSI2N_BINS[*]}"
     echo "   3N + FSI      : $(rel "$N3_DIR")/build/"
     echo "                   ${FSI3N_BINS[*]}"
+    echo "   pipeline      : $(rel "$STAGES_DIR")/build/  ${STAGES_BINS[*]}"
+    echo
+    echo " Easiest way to run: the ./gcf front end (no environment setup needed),"
+    echo "   ./gcf example 3N > my_run.toml && ./gcf run my_run.toml"
+    echo "   ./gcf gui          # web interface, open it through an SSH tunnel"
+    echo " See docs/PIPELINE.md."
     echo
     echo " To run the FSI generators, in each new shell:"
     echo "   source $ENV_FILE"

@@ -260,6 +260,7 @@ INukeFateHN_t HNIntranuke2018::HadronFateHN(const GHepParticle * p) const
        frac_cex     *= fNucCEXFac;    // scaling factors
        frac_abs     *= fNucAbsFac;
        frac_elas    *= fNucQEFac;
+       frac_inel    *= fPionFracInelScale;   // GCF
        if(pdgc==kPdgPi0) frac_abs*= 0.665;  //isospin factor
 
        LOG("HNIntranuke2018", pNOTICE) 
@@ -302,6 +303,8 @@ INukeFateHN_t HNIntranuke2018::HadronFateHN(const GHepParticle * p) const
 	                           * fHadroData2018->Frac(pdgc, kIHNFtInelas, ke, fRemnA, fRemnZ);
       double frac_cmp      = this->FateWeight(pdgc, kIHNFtCmp)
 	                           * fHadroData2018->Frac(pdgc, kIHNFtCmp,    ke, fRemnA , fRemnZ);
+      frac_elas *= fNucleonFracElasScale;   // GCF: per-channel switches
+      frac_inel *= fNucleonFracInelScale;
 
       LOG("HNIntranuke2018", pINFO) 
 	<< "\n frac{" << INukeHadroFates::AsString(kIHNFtElas)    << "} = " << frac_elas
@@ -1003,6 +1006,9 @@ void HNIntranuke2018::LoadConfig(void)
   GetParam( "HNINUKE-DelRPion",    fDelRPion ) ;
   GetParam( "HNINUKE-DelRNucleon", fDelRNucleon ) ;
 
+  GetParamDef( "FSI-Nucleon-FracElasScale",      fNucleonFracElasScale,   1.0 ) ;   // GCF
+  GetParamDef( "FSI-Nucleon-FracInelScale",      fNucleonFracInelScale,   1.0 ) ;   // GCF
+  GetParamDef( "FSI-Pion-FracInelScale",         fPionFracInelScale,      1.0 ) ;   // GCF
   GetParamDef( "FSI-ChargedPion-MFPScale",       fChPionMFPScale,         1.0 ) ;
   GetParamDef( "FSI-NeutralPion-MFPScale",       fNeutralPionMFPScale,    1.0 ) ;
   GetParamDef( "FSI-Nucleon-MFPScale",           fNucleonMFPScale,        1.0 ) ;
