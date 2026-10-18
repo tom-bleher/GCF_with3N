@@ -2,6 +2,8 @@
 #include <unistd.h>
 #include "TFile.h"
 #include "TTree.h"
+#include "TH1D.h"
+#include "TParameter.h"
 #include "DISGenerator.hh"
 #include "constants.hh"
 #include "helpers.hh"
@@ -9,6 +11,7 @@
 using namespace std;
 
 int nEvents;
+UInt_t seed = 0;
 TFile * outfile;
 bool verbose = false;
 TVector3 boost_vector;
@@ -31,6 +34,7 @@ void Usage()
        << "-P: Use text file to specify phase space\n"
        << "-M: Use randomized E* according to Barack's values\n"
        << "-O: Turn on peaking radiation\n"
+       << "-S: Random seed (positive integer; default 0 = random, printed at start)\n"
        << "-h: Print this message and exit\n\n\n";
 }
 
@@ -65,7 +69,7 @@ bool init(int argc, char ** argv)
     uType = (char *)"AV18_deut";
   
   int c;
-  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:E:MOh")) != -1)
+  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:E:MOS:h")) != -1)
     switch(c)
       {
 	
@@ -89,6 +93,9 @@ bool init(int argc, char ** argv)
       case 'O':
 	do_Rad = true;
 	break;
+      case 'S':
+	seed = strtoul(optarg, nullptr, 10);
+	break;
       case 'h':
 	Usage();
 	return false;
@@ -99,7 +106,10 @@ bool init(int argc, char ** argv)
 
   // Initialize objects
   myInfo = new gcfNucleus(Z,N,uType);
-  myRand = new TRandom3(0);
+  // Seed 0 (the default) draws a fresh seed; print and store it either way.
+  if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
+  cout << "Random seed: " << seed << "\n";
+  myRand = new TRandom3(seed);
   myCS = new DISCrossSection(pdsFile);
 
   if (do_Estar)
@@ -185,6 +195,11 @@ void fini()
 {
   outtree->SetName("genT");
   outtree->Write();
+  // attempts (exactly nEvents; only weight > 0 is stored) for per-attempt normalization, and the seed
+  TH1D hAttempts("hAttempts", "generation attempts", 1, 0., 1.);
+  hAttempts.SetBinContent(1, (double)nEvents);
+  hAttempts.Write();
+  TParameter<Long64_t>("seed", seed).Write();
   outfile->Delete("genTbuffer;*");
   outfile->Close();
 }
