@@ -145,7 +145,9 @@ Arguments:
 - `doFSI`: 1 = FSI enabled (default), 0 = FSI disabled
 - `model`: `hN` (default) or `hA` — selects the GENIE cascade model
 
-The program runs on **deuterium** (Z=2, N=2) at **6 GeV** beam energy with the **cc2** cross section model. These are hardcoded in the analysis program.
+The program runs on **carbon-12** with the **on-shell** (Rosenbluth) eN cross section, both hardcoded. Later positional arguments set σ_CM, the sampling mode (2N pair, SRC-only or single-nucleon mean field), the beam energy (default 5.01 GeV) and more; the full list is in the header of `analysis/SRC_analysis_2N.cpp`.
+
+The Q² sampling range defaults to 1–10 GeV². Set `GCF_QSQ_RANGE=MIN:MAX` (GeV²) to change it, e.g. `GCF_QSQ_RANGE=3:25` for EIC-energy runs. The range is printed at startup and written to the `.meta.txt` file.
 
 ### Running `genQE_FSI` (ROOT tree output)
 
@@ -192,6 +194,30 @@ Example (carbon-12, 4.5 GeV, 500k events):
 | `pRel[3]` | `Double_t` | Pair relative momentum [GeV/c] |
 | `q[3]` | `Double_t` | Virtual photon 3-momentum [GeV/c] |
 | `weight` | `Double_t` | Event weight (0 if absorbed/Pauli-blocked) |
+
+### EIC (collider-frame) output
+
+The generators work in the target rest frame with the electron along +z. An EIC collision of an electron of energy E_e with an ion of momentum A·p_N is the same event in the rest frame with an electron of energy E_IRF = γ(1+β)E_e, where γβ = A·p_N/M_A. Run the generator at E_IRF and convert its output with `tools/gcf2hepmc.py`. The converter rotates by π about y (electron along −z), boosts with the ion velocity, and writes head-on HepMC3 with the electron and the ion as status-4 beams. Feed the result to the afterburner (crossing angle, beam effects) and then npsim.
+
+```bash
+# rest-frame electron energy: 440.33 GeV for e+12C at 5x41, 2362.49 GeV at 10x110
+E=$(../../../tools/gcf2hepmc.py --beams 5x41 --ion C12 --print-ebeam-irf)
+printf 'QSq 3 25\n' > ps_eic.txt
+./build/genQE 6 6 $E gen.root 200000 -P ps_eic.txt -M          # PRC 105, 034001 settings
+../../../tools/gcf2hepmc.py gen.root gen.hepmc3 --beams 5x41 --ion C12 --paper-cuts
+# inside eic-shell:
+abconv -p ip6_eAu_41x5 -f hepmc3 -o ab gen.hepmc3
+npsim --compactFile geometry.xml --inputFiles ab.hepmc --outputFile sim.edm4hep.root -N -1
+```
+
+- **Which genQE.** Use this directory's `build/genQE`: its σ_CM default for ¹²C is 150 MeV/c (as in PRC 105, 034001), whereas the suite's `src/programs/genQE` defaults to 55 MeV/c. `-M` samples E* as in that paper (17.3 ± 9.6 MeV).
+- **What gets written.**
+  - `genQE` events: the scattered electron, the leading and recoil nucleons, and the A−2 remnant nucleus (mass from the `mAm2` branch, including E*). An unbound remnant (nn, pp) is skipped.
+  - `SRC_analysis_2N`, `genQE_FSI` and `genQE_3N_FSI` events: the electron plus the final-state particle list. GENIE drops the residual nucleus, so these have no remnant.
+- **Bookkeeping.** The HepMC event number is the source tree entry; the event weight is the generator weight (nb per attempt). `<output>.json` records the beams, cuts, counts, attempts and the cross section of the written sample.
+- **Beam check.** The converter refuses a file generated at the wrong E_IRF. Trees without `q` (`genQE_3N_FSI`) need `--ebeam-irf`.
+- **genQE_3N_FSI.** The default electron-angle window (`-t 5:40` degrees) is for fixed-target energies. Use `-t 0.1:1.5 -q 3:25` at 5x41 and `-t 0.02:0.3 -q 3:25` at 10x110.
+- **Remnant hits.** The remnant nucleus is tracked by Geant4. A ¹⁰Be or ¹⁰C remnant (Z/A ≠ ½) reaches the Roman pots, so attribute far-forward hits to particles rather than counting them per event.
 
 ---
 
