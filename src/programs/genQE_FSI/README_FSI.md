@@ -217,6 +217,9 @@ npsim --compactFile geometry.xml --inputFiles ab.hepmc --outputFile sim.edm4hep.
   ```
   - Default geometry: `epic_craterlake_5x41` with `fields/beamline_5x41_He4.xml` (Z/A = ½ rigidity), and `epic_craterlake_10x110_H2` for 10x110.
   - abconv always draws the same random sequence (it has no seed option), so the script runs it once over the whole sample and only then splits the events into jobs.
+  - **Q² slices.** With flat Q² sampling, Q² = 3–5 GeV² carries about 90% of the cross section but only about 9% of the events. Production therefore runs disjoint slices (`--q2 3:5`, `--q2 5:12`, `--q2 12:25`), each a separate run with its own seed. Each slice is normalized by its own attempts (in `run.json`), and the slices add: 0.0312 + 0.0039 + 0.0001 nb equals the single 3–25 GeV² run, 0.035 nb (¹²C, 5x41, paper cuts).
+  - **Resume.** `--stage resume` finishes an interrupted run. It reruns npsim and EICrecon only for the chunks without a successful exit code.
+  - **Long runs.** Start them detached so they survive the terminal, e.g. `setsid nohup tools/run_eic_sim.sh ... > run.out 2>&1 &`.
 - **Seeds.** `genQE -S <seed>` makes a run reproducible. The seed is printed and stored in the output (`seed`), and the converter copies it into its JSON. With no `-S`, a random seed is drawn and printed.
 - **Which genQE.** Use this directory's `build/genQE`: its σ_CM default for ¹²C is 150 MeV/c (as in PRC 105, 034001), whereas the suite's `src/programs/genQE` defaults to 55 MeV/c. `-M` samples E* as in that paper (17.3 ± 9.6 MeV).
 - **What gets written.**
