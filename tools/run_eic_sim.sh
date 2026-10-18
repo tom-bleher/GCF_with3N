@@ -21,7 +21,9 @@
 #   --reco-jobs N         parallel eicrecon jobs (default 40; ~2.9 GB each with one thread)
 #   --reco-threads N      eicrecon threads per job (default 1)
 #   --generator G         genQE (default; SRC pairs, no FSI) or genQE_FSI (GENIE FSI; with
-#                         --gen-args "-n" no FSI, with "-F 0.25" single-nucleon mean field)
+#                         --gen-args "-n" no FSI, with "-F 0.25" single-nucleon mean field),
+#                         genDIS (DIS off an SRC pair, CT18NN PDFs; use --no-cuts), or genQE_3N_FSI
+#                         (3N SRC; --attempts is then the number of accepted events; "-n" for no FSI)
 #   --gen-args "ARGS"     extra generator flags. E* sampling (-M) is added for A > 2 SRC runs
 #   --no-cuts             convert all events instead of Q2 > 3, xB > 1.2
 #   --compress N          ROOT compression of sim/reco output (default 505 = ZSTD level 5, about a
@@ -113,22 +115,37 @@ if [[ $STAGE == all || $STAGE == gen ]]; then
   set -u
   E_IRF=$("$GCF/tools/gcf2hepmc.py" --beams "$BEAMS" --ion "$ION" --print-ebeam-irf)
   printf 'QSq %s %s\n' "${Q2%%:*}" "${Q2##*:}" > ps.txt
-  case "$GEN" in genQE|genQE_FSI) ;; *) die "--generator must be genQE or genQE_FSI" ;; esac
+  case "$GEN" in genQE|genQE_FSI|genDIS|genQE_3N_FSI) ;; *) die "--generator must be genQE, genQE_FSI, genDIS or genQE_3N_FSI" ;; esac
   # E* of the A-2 remnant (-M) only exists for an SRC pair in a nucleus with A > 2: for the
   # deuteron it would give the empty remnant a mass, and the mean field (-F) has no pair.
   ESTAR="-M"; { (( Z + N <= 2 )) || [[ " $GEN_ARGS " == *" -F "* ]]; } && ESTAR=""
-  if [[ $GEN == genQE_FSI ]]; then
+  if [[ $GEN == genQE_FSI || $GEN == genQE_3N_FSI ]]; then
     F=$GCF/src/programs/genQE_FSI
     export GXMLPATH="$F/config/genie_override:$GENIE/config/G18_10a:$GENIE/config" GMSGCONF="$F/config/quiet_messenger.xml"
   fi
+  CONV_ARGS=()
+  case "$GEN" in
+    genQE|genQE_FSI)
+      CMD=("$GCF/src/programs/genQE_FSI/build/$GEN" "$Z" "$N" "$E_IRF" gen.root "$ATTEMPTS" -P ps.txt $ESTAR -S "$SEED") ;;
+    genDIS)
+      CMD=("$GCF/build/programs/genDIS/genDIS" "$Z" "$N" "$E_IRF" "$GCF/src/libraries/cross_sections/CTEQ/ct18nn.00.pds"
+           gen.root "$ATTEMPTS" -P ps.txt $ESTAR -S "$SEED") ;;
+    genQE_3N_FSI)
+      # the rest-frame electron scatters by a fraction of a degree; the window scales as 1/E_IRF
+      # (0.1-1.5 deg at 5x41 and 0.02-0.28 deg at 10x110 cover the Q2 = 3-25 GeV^2 phase space)
+      TW=$(awk -v e="$E_IRF" 'BEGIN { printf "%.4f:%.4f", 0.1 * 440.33 / e, 1.5 * 440.33 / e }')
+      CMD=("$GCF/src/programs/genQE_3N/build/genQE_3N_FSI" "$E_IRF" 1 gen.root "$ATTEMPTS" -A $((Z + N)) -Z "$Z"
+           -q "$Q2" -t "$TW" -S "$SEED")
+      CONV_ARGS=(--ebeam-irf "$E_IRF") ;;   # the 3N tree does not store q
+  esac
   # shellcheck disable=SC2086
-  log "$GEN $Z $N $E_IRF gen.root $ATTEMPTS -P ps.txt $ESTAR -S $SEED $GEN_ARGS"
+  log "${CMD[*]} $GEN_ARGS"
   # shellcheck disable=SC2086
-  "$GCF/src/programs/genQE_FSI/build/$GEN" "$Z" "$N" "$E_IRF" gen.root "$ATTEMPTS" -P ps.txt $ESTAR -S "$SEED" $GEN_ARGS \
-    > generator.log 2>&1 || die "$GEN failed (see generator.log)"
-  printf '%s\n' "$GEN $ESTAR $GEN_ARGS" > generator.txt
+  "${CMD[@]}" $GEN_ARGS > generator.log 2>&1 || die "$GEN failed (see generator.log)"
+  printf '%s\n' "${CMD[*]:1} $GEN_ARGS" | sed "s#$GCF/##g" > generator.txt
+  printf '%s\n' "$GEN $ESTAR $GEN_ARGS" > generator_short.txt
   # shellcheck disable=SC2086
-  "$GCF/tools/gcf2hepmc.py" gen.root gen.hepmc3 --beams "$BEAMS" --ion "$ION" $CUTS ${MAXEV:+-n $MAXEV} | tee -a run.log
+  "$GCF/tools/gcf2hepmc.py" gen.root gen.hepmc3 --beams "$BEAMS" --ion "$ION" $CUTS "${CONV_ARGS[@]}" ${MAXEV:+-n $MAXEV} | tee -a run.log
   # the vendored GENIE tree is rebuilt in place, so judge cleanliness on everything else
   { git -C "$GCF" rev-parse HEAD
     echo "modified_outside_genie=$(git -C "$GCF" status --porcelain -- . ':!src/programs/genQE_FSI/Generator-R-3_06_02' | wc -l)"
@@ -294,7 +311,9 @@ if expected_mm.exists():
 count = lambda pat, val: sum((p.read_text().strip() == val) for p in o.glob(pat))
 run = {
     "beams": beams, "ion": ion, "genQE_seed": int(seed), "chunk_size": int(chunk),
-    "generator": (o / "generator.txt").read_text().split() if (o / "generator.txt").exists() else ["genQE", "-M"],
+    "generator": (o / "generator_short.txt").read_text().split() if (o / "generator_short.txt").exists()
+                 else (o / "generator.txt").read_text().split() if (o / "generator.txt").exists() else ["genQE", "-M"],
+    "generator_command": (o / "generator.txt").read_text().strip() if (o / "generator_short.txt").exists() else None,
     "q2_range_GeV2": [float(x) for x in (o / "ps.txt").read_text().split()[1:3]] if (o / "ps.txt").exists() else None,
     "gcf": (o / "gcf_version.txt").read_text().split() if (o / "gcf_version.txt").exists() else None,
     "converter": json.loads((o / "gen.hepmc3.json").read_text()) if (o / "gen.hepmc3.json").exists() else None,

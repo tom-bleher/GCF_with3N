@@ -76,30 +76,35 @@ def stations(z):
 
 
 def final_nucleons(gen_path, nums):
-    """Per event: index (among the primaries after the electron) and PDG of the final-state
-    leading and recoil nucleon; -1 / 0 when there is none.
+    """Per event: {role: (index among the primaries after the electron, final PDG)}, (-1, 0) when absent.
 
-    genQE trees: the converter writes e', lead, recoil, [remnant], so 0 and 1. Particle-list
-    trees (genQE_FSI): the highest-momentum nucleon descended from the generated lead
-    (parentRole 0) or recoil (parentRole 1); none if the cascade absorbed it.
+    genQE trees: the converter writes e', lead, recoil, [remnant]. genDIS: e', recoil, [remnant] (the
+    struck system is not written). Particle-list trees (genQE_FSI, genQE_3N_FSI): the highest-momentum
+    nucleon descended from the generated lead (parentRole 0), recoil (1) or second recoil (2, 3N);
+    none if the cascade absorbed it.
     """
     t = uproot.open(gen_path)["genT"]
+    names = set(t.keys())
     lo, hi = int(min(nums)), int(max(nums)) + 1
-    if "part_pdg" not in t.keys():
+    if "part_pdg" not in names:
+        if "pHadron" in names:
+            g = t.arrays(["rec_type"], entry_start=lo, entry_stop=hi, library="np")
+            return {n: {"rec": (0, int(g["rec_type"][n - lo]))} for n in nums}
         g = t.arrays(["lead_type", "rec_type"], entry_start=lo, entry_stop=hi, library="np")
-        return {n: (0, 1, int(g["lead_type"][n - lo]), int(g["rec_type"][n - lo])) for n in nums}
+        return {n: {"lead": (0, int(g["lead_type"][n - lo])), "rec": (1, int(g["rec_type"][n - lo]))} for n in nums}
     g = t.arrays(["part_pdg", "part_parentRole", "part_px", "part_py", "part_pz"], entry_start=lo, entry_stop=hi, library="np")
+    three = "N3_type" in names
     out = {}
     for n in nums:
         i = n - lo
         pdg, role = np.asarray(g["part_pdg"][i]), np.asarray(g["part_parentRole"][i])
         p = np.sqrt(np.asarray(g["part_px"][i]) ** 2 + np.asarray(g["part_py"][i]) ** 2 + np.asarray(g["part_pz"][i]) ** 2)
-        res = []
-        for r in (0, 1):
+        res = {}
+        for r, name in ((0, "lead"), (1, "rec"), (2, "rec2"))[: 3 if three else 2]:
             m = np.flatnonzero((role == r) & ((pdg == 2212) | (pdg == 2112)))
             j = int(m[np.argmax(p[m])]) if len(m) else -1
-            res += [j]
-        out[n] = (res[0], res[1], int(pdg[res[0]]) if res[0] >= 0 else 0, int(pdg[res[1]]) if res[1] >= 0 else 0)
+            res[name] = (j, int(pdg[j]) if j >= 0 else 0)
+        out[n] = res
     return out
 
 
@@ -127,7 +132,13 @@ def extract_file(sim_path):
         assoc += [c for c in ZDC_CLUSTERS + CENTRAL_CLUSTERS if f"_{c}_sim/_{c}_sim.index" in keys]
         rbr += [f"_{c}_sim/_{c}_sim.index" for c in assoc]
         rbr += ["ScatteredElectronsTruth_objIdx/ScatteredElectronsTruth_objIdx.index",
-                "ReconstructedElectrons_objIdx/ReconstructedElectrons_objIdx.index"]
+                "ReconstructedElectrons_objIdx/ReconstructedElectrons_objIdx.index",
+                "_ReconstructedChargedParticleAssociations_rec/_ReconstructedChargedParticleAssociations_rec.index"]
+        rbr += [f"MCParticles/MCParticles.momentum.{c}" for c in "xyz"]
+        rbr += [f"ReconstructedChargedParticles/ReconstructedChargedParticles.momentum.{c}" for c in "xyz"]
+        zn = "ReconstructedHcalFarForwardZDCNeutrals"
+        if f"{zn}/{zn}.energy" in keys:
+            rbr += [f"{zn}/{zn}.energy"] + [f"{zn}/{zn}.momentum.{c}" for c in "xyz"]
         r = rt.arrays(rbr, library="ak")
         r_index = {int(n[0]): k for k, n in enumerate(r["EventHeader/EventHeader.eventNumber"])}
 
@@ -138,10 +149,11 @@ def extract_file(sim_path):
         prim = np.flatnonzero(st == 1)
         anc = ancestors(st, ak.to_numpy(s[mc[2]][k]), ak.to_numpy(s[mc[3]][k]), ak.to_numpy(s[mc[4]][k]))
         row = {"num": num, "n_primaries": len(prim)}
-        jl, jr, pl, pr = roles[num]
+        ev_roles = roles[num]
         pick = lambda pr_, j: pr_[1 + j] if 0 <= j and 1 + j < len(pr_) else -2  # noqa: E731
-        idx = {"lead": pick(prim, jl), "rec": pick(prim, jr)}
-        row["lead_final_pdg"], row["rec_final_pdg"] = pl, pr
+        idx = {role: pick(prim, j) for role, (j, _) in ev_roles.items()}
+        for role, (_, pdg_) in ev_roles.items():
+            row[f"{role}_final_pdg"] = pdg_
         for role, j in idx.items():
             for c in TRACKERS:
                 z = ak.to_numpy(s[f"{c}/{c}.position.z"][k])[ak.to_numpy(s[f"_{c}_particle/_{c}_particle.index"][k]) == j]
@@ -157,11 +169,11 @@ def extract_file(sim_path):
             rst = ak.to_numpy(r[mc[0]][q])
             ranc = ancestors(rst, ak.to_numpy(r[mc[2]][q]), ak.to_numpy(r[mc[3]][q]), ak.to_numpy(r[mc[4]][q]))
             rprim = np.flatnonzero(rst == 1)
-            ridx = {"lead": pick(rprim, jl), "rec": pick(rprim, jr)} if len(rprim) == len(prim) else None
+            ridx = {role: pick(rprim, j) for role, (j, _) in ev_roles.items()} if len(rprim) == len(prim) else None
             row["reco"] = ridx is not None
             row["e_truth_matched"] = len(r["ScatteredElectronsTruth_objIdx/ScatteredElectronsTruth_objIdx.index"][q]) > 0
             row["e_reco"] = len(r["ReconstructedElectrons_objIdx/ReconstructedElectrons_objIdx.index"][q]) > 0
-            for role in ROLES:
+            for role in ev_roles:
                 j = ridx[role] if ridx else -2
                 sim_of = lambda c: ak.to_numpy(r[f"_{c}_sim/_{c}_sim.index"][q])  # noqa: E731
                 row[f"{role}_b0track"] = bool(np.any(sim_of("B0TrackerCKFTrackAssociations") == j))
@@ -173,10 +185,40 @@ def extract_file(sim_path):
                             m = sim_of(c)
                             hit |= bool(np.any(ranc[m[m >= 0]] == j)) if len(m) else False
                     row[f"{role}_{group}"] = hit
+                # true lab momentum (after the afterburner) and the reconstructed one: the linked charged
+                # particle (B0 or central track), else the ZDC neutron for a ZDC-detected neutron
+                if j >= 0:
+                    for c in "xyz":
+                        row[f"{role}_true_p{c}"] = float(r[f"MCParticles/MCParticles.momentum.{c}"][q][j])
+                    cm = np.flatnonzero(sim_of("ReconstructedChargedParticleAssociations") == j)
+                    rec = None
+                    if len(cm):
+                        ri = int(r["_ReconstructedChargedParticleAssociations_rec/_ReconstructedChargedParticleAssociations_rec.index"][q][cm[0]])
+                        rec = [float(r[f"ReconstructedChargedParticles/ReconstructedChargedParticles.momentum.{c}"][q][ri]) for c in "xyz"]
+                    elif row[f"{role}_zdc_cluster"] and row[f"{role}_final_pdg"] == 2112 and f"{zn}/{zn}.energy" in r.fields:
+                        en = ak.to_numpy(r[f"{zn}/{zn}.energy"][q])
+                        if len(en):
+                            ni = int(np.argmax(en))
+                            rec = [float(r[f"{zn}/{zn}.momentum.{c}"][q][ni]) for c in "xyz"]
+                    if rec is not None:
+                        for c, v in zip("xyz", rec):
+                            row[f"{role}_reco_p{c}"] = v
         else:
             row["reco"] = False
         rows.append(row)
     return rows
+
+
+def lab_to_irf(px, py, pz, a, p_nucleon, m_ion, crossing=0.025, mass=0.93892):
+    """|p| in the ion rest frame of lab momenta, undoing the nominal crossing angle (ion beam along
+    (-sin, 0, cos) of the crossing angle) and the nominal ion boost, as an analysis would."""
+    ca, sa = np.cos(crossing), np.sin(crossing)
+    x, z = px * ca + pz * sa, -px * sa + pz * ca
+    bg = a * p_nucleon / m_ion
+    g = np.hypot(1.0, bg)
+    e = np.sqrt(mass**2 + px**2 + py**2 + pz**2)
+    zr = g * z - bg * e
+    return np.sqrt(x**2 + py**2 + zr**2)
 
 
 def boost_angles(p_irf, a, p_nucleon, m_ion):
@@ -199,34 +241,74 @@ def extract(run, jobs):
     with ProcessPoolExecutor(jobs) as ex:
         rows = [r for part in ex.map(extract_file, sims) for r in part]
     num = np.array([r["num"] for r in rows])
-    gen = uproot.open(run / "gen.root")["genT"].arrays(["pe", "pLead", "pRec", "q", "lead_type", "rec_type", "weight"], library="np")
     e_irf = beams["E_IRF_run_GeV"]
-    pe = gen["pe"][num]
+    gt = uproot.open(run / "gen.root")["genT"]
+    names = set(gt.keys())
+    # generator-level nucleons per role, by run type: 2N SRC (genQE, genQE_FSI incl. mean field),
+    # 3N SRC (genQE_3N_FSI), tagged DIS off an SRC pair (genDIS, no final leading nucleon)
+    if "p1_gen" in names:
+        run_kind = "3N"
+        g = gt.arrays(["pe", "p1_gen", "p2_gen", "p3_gen", "N1_type", "N2_type", "N3_type", "weight"], library="np")
+        gen_roles = {"lead": ("p1_gen", "N1_type"), "rec": ("p2_gen", "N2_type"), "rec2": ("p3_gen", "N3_type")}
+        g["q"] = np.column_stack([-g["pe"][:, 0], -g["pe"][:, 1], e_irf - g["pe"][:, 2]])
+    elif "pHadron" in names:
+        run_kind = "DIS"
+        g = gt.arrays(["pe", "q", "pRec", "rec_type", "lead_type", "p1_onshell", "E1_onshell", "weight"], library="np")
+        gen_roles = {"rec": ("pRec", "rec_type")}
+    else:
+        run_kind = "2N"
+        g = gt.arrays(["pe", "pLead", "pRec", "q", "lead_type", "rec_type", "weight"], library="np")
+        gen_roles = {"lead": ("pLead", "lead_type"), "rec": ("pRec", "rec_type")}
+    pe = g["pe"][num]
     ee = np.linalg.norm(pe, axis=1)
     q2 = 2 * e_irf * (ee - pe[:, 2])
-    xb = q2 / (2 * 0.938272 * (e_irf - ee))
-    out = {"num": num, "w_nb": gen["weight"][num] / conv["attempts"], "q2": q2, "xb": xb,
-           "lead_type": gen["lead_type"][num], "rec_type": gen["rec_type"][num]}
+    nu = e_irf - ee
+    xb = q2 / (2 * 0.938272 * nu)
+    out = {"num": num, "w_nb": g["weight"][num] / conv["attempts"], "q2": q2, "xb": xb}
+    if run_kind == "DIS":
+        out["lead_type"] = g["lead_type"][num]  # the struck nucleon (no final-state leading nucleon)
     z, a, m = {"C12": (6, 12, 11.174863), "d": (1, 2, 1.875613), "He4": (2, 4, 3.727379)}[beams["ion"]]
-    # missing momentum and energy of the struck nucleon (PRC 105, 034001 Fig. 7 cuts):
-    # p_miss = |p_lead - q|, E_miss = omega - T_lead - T_(A-1), with T_(A-1) = recoil energy of the A-1 system
-    pmiss_v = gen["pLead"][num] - gen["q"][num]
-    out["pmiss"] = np.linalg.norm(pmiss_v, axis=1)
-    m_am1 = m - 0.93892
-    t_lead = np.sqrt(0.93892**2 + (gen["pLead"][num] ** 2).sum(1)) - 0.93892
-    out["emiss"] = (e_irf - ee) - t_lead - (np.sqrt(m_am1**2 + out["pmiss"] ** 2) - m_am1)
-    for role, b in (("lead", "pLead"), ("rec", "pRec")):
-        p = gen[b][num]
+    for role, (pb, tb) in gen_roles.items():
+        p = g[pb][num]
+        out[f"{role}_type"] = g[tb][num]
         out[f"{role}_p_irf"] = np.linalg.norm(p, axis=1)
         out[f"{role}_theta_mrad"], out[f"{role}_p_lab"] = boost_angles(p, a, beams["ion_momentum_per_nucleon_GeV"], m)
-    keys = [k for k in rows[0] if k not in ("num",)]
+    qv = g["q"][num]
+    if "lead" in gen_roles:
+        # missing momentum and energy of the struck nucleon (PRC 105, 034001 Fig. 7 cuts):
+        # p_miss = |p_lead - q|, E_miss = omega - T_lead - T_(A-1), with T_(A-1) = recoil energy of the A-1 system
+        pl = g[gen_roles["lead"][0]][num]
+        out["pmiss"] = np.linalg.norm(pl - qv, axis=1)
+        m_am1 = m - 0.93892
+        t_lead = np.sqrt(0.93892**2 + (pl**2).sum(1)) - 0.93892
+        out["emiss"] = nu - t_lead - (np.sqrt(m_am1**2 + out["pmiss"] ** 2) - m_am1)
+    if run_kind == "DIS":
+        # tagged-DIS variables: x' = Q2 / (2 p1.q) with the struck nucleon's (on-shell) four-momentum,
+        # and the spectator light-cone fraction alpha_s = (E_s - p_s.q^) / m_N (1 at rest)
+        p1, e1 = g["p1_onshell"][num], g["E1_onshell"][num]
+        out["xprime"] = q2 / (2 * (e1 * nu - (p1 * qv).sum(1)))
+        ps = g["pRec"][num]
+        es = np.sqrt(0.93892**2 + (ps**2).sum(1))
+        qhat = qv / np.linalg.norm(qv, axis=1)[:, None]
+        out["alpha_s"] = (es - (ps * qhat).sum(1)) / 0.93892
+    if run_kind == "3N":
+        out["rec2_p_irf"] = np.linalg.norm(g["p3_gen"][num], axis=1)
+    keys = sorted({k for r in rows for k in r if k != "num"})
     for k in keys:
-        out[k] = np.array([r.get(k, False) for r in rows])
-    meta = {"run": str(run), "beams": beams, "attempts": conv["attempts"], "cuts": conv["cuts"],
+        mom = k.endswith(("_px", "_py", "_pz"))
+        out[k] = np.array([r.get(k, np.nan if mom else False) for r in rows])
+    for role in ("lead", "rec", "rec2"):
+        for kind in ("true", "reco"):
+            if f"{role}_{kind}_px" in out:
+                v = [out[f"{role}_{kind}_p{c}"] for c in "xyz"]
+                out[f"{role}_{kind}_p_lab_mag"] = np.sqrt(v[0] ** 2 + v[1] ** 2 + v[2] ** 2)
+                out[f"{role}_{kind}_p_irf"] = lab_to_irf(*v, a, beams["ion_momentum_per_nucleon_GeV"], m)
+    meta = {"run": str(run), "kind": run_kind, "beams": beams, "attempts": conv["attempts"], "cuts": conv["cuts"],
             "events": len(num), "q2_range": json.loads((run / "run.json").read_text()).get("q2_range_GeV2")
             if (run / "run.json").exists() else None}
     np.savez_compressed(run / "analysis_events.npz", meta=json.dumps(meta), **out)
-    bad = int(np.sum((out["n_primaries"] < 3) & (out["rec_type"] != 0)))  # mean field: e' + one nucleon
+    need = {"2N": 3, "3N": 4, "DIS": 2}[run_kind]  # e' + nucleons (mean field: e' + one nucleon)
+    bad = int(np.sum((out["n_primaries"] < need) & (out.get("rec_type", np.ones(len(num))) != 0)))
     print(f"{run.name}: {len(num)} events -> analysis_events.npz (reco matched {out['reco'].mean():.3f}"
           f"{f', {bad} events with < 3 primaries' if bad else ''})")
 
@@ -360,6 +442,115 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         print(f"wrote {outdir}/fig7_q2_mean_field.pdf summary.json")
         return
 
+    kinds = {lab: metas[0].get("kind", "2N") for lab, (_, metas) in data.items()}
+    if len(set(kinds.values())) > 1:
+        sys.exit(f"plots: settings of different run types cannot be mixed: {kinds}")
+    run_kind = next(iter(kinds.values()))
+
+    def acceptance_grid(var, bins, xlabel, roles, fname, cut_irf=True):
+        """Acceptance (hit and reco level) vs a generator variable, rows = settings, cols = p / n."""
+        fig, axes = plt.subplots(len(data), 2, figsize=(8.4, 2.8 * len(data) + 0.9), sharex=True, sharey=True,
+                                 squeeze=False, gridspec_kw={"wspace": 0, "hspace": 0})
+        cen_ = 0.5 * (bins[1:] + bins[:-1])
+        for row, (lab, (d, _)) in enumerate(data.items()):
+            for col, (code, name) in enumerate(((2212, "proton"), (2112, "neutron"))):
+                ax = axes[row, col]
+                for j, (level, c) in enumerate((("hit", INK), ("reco", "#1f3fe0"))):
+                    xs, ws, oks = [], [], []
+                    for role in roles:
+                        mm = d[f"{role}_type"] == code
+                        if cut_irf:
+                            mm &= d[f"{role}_p_irf"] > P_IRF_MIN
+                        xs.append(d[var(role)][mm]); ws.append(d["w_nb"][mm]); oks.append(detected(d, role, level)[mm])
+                    x, w, ok = np.concatenate(xs), np.concatenate(ws), np.concatenate(oks)
+                    if not len(x):
+                        continue
+                    gen, acc, eff, err = wstats(x, w, ok, bins)
+                    g = gen > 0
+                    ax.errorbar(cen_[g] + (j - 0.5) * 0.15 * np.diff(bins)[g], eff[g], yerr=err[g], fmt="o", ms=3.5,
+                                color=c, elinewidth=1.1, label=f"{level} level")
+                ax.text(0.95, 0.93, f"{name}, {lab}", transform=ax.transAxes, ha="right", va="top", fontsize=12,
+                        bbox=dict(facecolor="white", edgecolor="none", alpha=0.85, pad=1.5), zorder=5)
+                ax.tick_params(direction="in", which="both", top=True, right=True, labelsize=11)
+            axes[row, 0].set_ylabel("Acceptance", fontsize=12)
+            axes[row, 0].set_ylim(0, 1.12)
+        for ax in axes[-1]:
+            ax.set_xlabel(xlabel, fontsize=12)
+        axes[0, 1].legend(frameon=False, fontsize=10, loc="center right")
+        fig.tight_layout()
+        fig.subplots_adjust(wspace=0, hspace=0)
+        fig.savefig(outdir / fname)
+        plt.close(fig)
+
+    if run_kind == "3N":
+        # 3N SRC: how often 0, 1 or 2 of the recoils are detected far forward (hit level), by recoil-pair type,
+        # for events where both recoils carry p_IRF > 0.3 GeV/c
+        fig, axes = plt.subplots(1, len(data), figsize=(5.0 * len(data), 3.9), sharey=True, squeeze=False)
+        pair_name = {(2212, 2212): "pp", (2212, 2112): "pn", (2112, 2212): "pn", (2112, 2112): "nn"}
+        for ax, (lab, (d, _)) in zip(axes[0], data.items()):
+            both = (d["rec_p_irf"] > P_IRF_MIN) & (d["rec2_p_irf"] > P_IRF_MIN)
+            ndet = detected(d, "rec", "hit").astype(int) + detected(d, "rec2", "hit").astype(int)
+            nreco = detected(d, "rec", "reco").astype(int) + detected(d, "rec2", "reco").astype(int)
+            cats = sorted({pair_name[(int(a1), int(b1))] for a1, b1 in zip(d["rec_type"][both], d["rec2_type"][both])},
+                          key=["pp", "pn", "nn"].index)
+            w = d["w_nb"]
+            summary[lab]["3N"] = {}
+            for i, cat in enumerate(cats):
+                mc_ = both & np.array([pair_name[(int(a1), int(b1))] == cat for a1, b1 in zip(d["rec_type"], d["rec2_type"])])
+                fr = [float(w[mc_ & (ndet == k)].sum() / w[mc_].sum()) for k in (0, 1, 2)]
+                summary[lab]["3N"][cat] = {"share": float(w[mc_].sum() / w[both].sum()), "0 recoils": fr[0], "1 recoil": fr[1],
+                                          "2 recoils": fr[2], "2 recoils (reco)": float(w[mc_ & (nreco == 2)].sum() / w[mc_].sum())}
+                for k, c in enumerate((MUTED, ORANGE, BLUE)):
+                    ax.bar(i + (k - 1) * 0.26, fr[k], width=0.24, color=c, label=["0 detected", "1 detected", "both detected"][k] if i == 0 else None)
+                    ax.text(i + (k - 1) * 0.26, fr[k] + 0.015, f"{100 * fr[k]:.0f}%", ha="center", va="bottom", fontsize=8.5, color=INK)
+            ax.set_xticks(range(len(cats)))
+            ax.set_xticklabels([f"recoil pair {c}" for c in cats], fontsize=11)
+            ax.set_ylim(0, 1.05)
+            ax.text(0.97, 0.95, lab, transform=ax.transAxes, ha="right", va="top", fontsize=13, fontweight="bold")
+            frame(ax, minor=False)
+        axes[0, 0].set_ylabel("Fraction of 3N events", fontsize=12)
+        axes[0, 0].legend(frameon=False, fontsize=10, loc="upper left")
+        fig.tight_layout()
+        fig.savefig(outdir / "fig3N_recoil_tagging.pdf")
+        plt.close(fig)
+        acceptance_grid(lambda r: f"{r}_p_irf", np.linspace(0.3, 1.2, 19), r"Recoil Momentum (Ion Rest Frame) [GeV/$c$]",
+                        ("rec", "rec2"), "fig3N_recoil_acceptance_vs_pirf.pdf")
+        (outdir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+        for lab in data:
+            print(f"{lab}: {summary[lab]['3N']}")
+        print(f"wrote {outdir}/fig3N_recoil_tagging.pdf fig3N_recoil_acceptance_vs_pirf.pdf summary.json")
+        return
+
+    if run_kind == "DIS":
+        # Tagged DIS off SRC pairs: recoil acceptance vs the spectator light-cone fraction and momentum,
+        # and the tagged yield over (x', Q2) for 10 fb^-1 x transparency
+        acceptance_grid(lambda r: "alpha_s", np.linspace(0.5, 1.9, 15), r"Spectator Light-cone Fraction $\alpha_s$",
+                        ("rec",), "figDIS_recoil_acceptance_vs_alpha.pdf")
+        acceptance_grid(lambda r: f"{r}_p_irf", np.linspace(0.3, 1.2, 19), r"Spectator Momentum (Ion Rest Frame) [GeV/$c$]",
+                        ("rec",), "figDIS_recoil_acceptance_vs_pirf.pdf")
+        fig, axes = plt.subplots(1, len(data), figsize=(5.0 * len(data), 3.9), sharey=True, squeeze=False)
+        for ax, (lab, (d, _)) in zip(axes[0], data.items()):
+            tag = (d["rec_p_irf"] > P_IRF_MIN) & detected(d, "rec", "hit")
+            H, xe, ye = np.histogram2d(d["xprime"][tag], d["q2"][tag], bins=[np.linspace(0.2, 1.0, 33), np.linspace(3, 25, 45)],
+                                       weights=d["w_nb"][tag] * scale)
+            im = ax.pcolormesh(xe, ye, np.ma.masked_less(H.T, 1), cmap="Blues", norm=matplotlib.colors.LogNorm(vmin=1), rasterized=True)
+            ax.text(0.95, 0.93, lab, transform=ax.transAxes, ha="right", va="top", fontsize=13, fontweight="bold")
+            ax.set_xlabel(r"x$'$", fontsize=13, loc="right")
+            frame(ax)
+            summary[lab]["DIS"] = {"sigma_nb_pIRF>0.3": float(d["w_nb"][d["rec_p_irf"] > P_IRF_MIN].sum()),
+                                   "tagged_fraction_hit": float(d["w_nb"][tag].sum() / d["w_nb"][d["rec_p_irf"] > P_IRF_MIN].sum()),
+                                   "tagged_events_10fb_x_transparency": float(d["w_nb"][tag].sum() * scale)}
+        axes[0, 0].set_ylabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="top")
+        fig.colorbar(im, ax=axes[0, -1], label=rf"tagged events / bin ({lumi_nb_inv / 1e6:g} fb$^{{-1}}$ $\times$ {transparency:g})")
+        fig.tight_layout()
+        fig.savefig(outdir / "figDIS_xprime_q2_tagged.pdf")
+        plt.close(fig)
+        (outdir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+        for lab in data:
+            print(f"{lab}: {summary[lab]['DIS']}")
+        print(f"wrote {outdir}/figDIS_recoil_acceptance_vs_alpha.pdf figDIS_recoil_acceptance_vs_pirf.pdf figDIS_xprime_q2_tagged.pdf summary.json")
+        return
+
     # Fig. 3: angle w.r.t. the ion beam of recoil (green) and leading (red) nucleons, 10 fb^-1, no p_IRF cut
     fig, axes = plt.subplots(len(data), 1, figsize=(6.6, 3.9 * len(data)), squeeze=False)
     bins = np.arange(0, 51, 1.0)
@@ -483,6 +674,14 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
                                     np.sqrt(np.histogram(x[v], lbins, weights=w[v] ** 2)[0])) for k, v in sel.items()}
             hists[lab, name]["w2"] = {k: np.histogram(x[cut & ~v], lbins, weights=w[cut & ~v] ** 2)[0] for k, v in sel.items()
                                       if k in ("hit", "reco")}
+            # "smeared" spectrum: reconstructed momentum boosted back to the ion rest frame, for the
+            # reco-level accepted events (PRC 105, 034001 Fig. 6 blue points; there a parametrized smearing)
+            if "rec_reco_p_irf" in d:
+                xr = d["rec_reco_p_irf"][m]
+                ok = sel["reco"] & np.isfinite(xr)
+                hists[lab, name]["smear"] = (np.histogram(xr[ok], lbins, weights=w[ok])[0],
+                                             np.sqrt(np.histogram(xr[ok], lbins, weights=w[ok] ** 2)[0]))
+                hists[lab, name]["smear_coverage"] = float(w[ok].sum() / max(w[sel["reco"]].sum(), 1e-300))
             summary[lab][f"recoil {name[0]}"] = {k: float(w[sel[k]].sum() / w[cut].sum()) for k in ("hit", "reco")}
 
     def paper_grid(ylabel):
@@ -517,7 +716,8 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
             for col, name in enumerate(("proton", "neutron")):
                 ax, H = axes[row, col], hists[lab, name]
                 ax.stairs(H["hit"][0] / f, lbins, fill=True, color=pink, lw=0, label="Accepted", zorder=1)
-                for key, c, lbl in (("gen", INK, "Generated"), ("reco", pblue, "Reconstructed")):
+                blue = "smear" if "smear" in H else "reco"
+                for key, c, lbl in (("gen", INK, "Generated"), (blue, pblue, "Reconstructed")):
                     v, e = H[key]
                     g = v > 0
                     ax.errorbar(lc[g], v[g] / f, xerr=hw[g], yerr=e[g] / f, fmt="none", ecolor=c, elinewidth=1.4,
@@ -525,6 +725,11 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
                     if g.any():
                         ymax = max(ymax, float(np.max(v[g] + e[g])) / f)
                 labels(ax, next(it), f"{name}, {lab}")
+                cov = H.get("smear_coverage", 1.0)
+                if cov < 0.8:
+                    why = "no OMD/RP reconstruction\nfor ion beams" if name == "proton" else "no reconstructed\nZDC neutron"
+                    ax.text(0.95, 0.55, f"reco momentum for {100 * cov:.0f}%\nof accepted ({why})",
+                            transform=ax.transAxes, ha="right", va="top", fontsize=8.5, color=pblue)
             if log:
                 axes[row, 0].set_yscale("log")
                 axes[row, 0].set_ylim(1, ymax * 8)
@@ -547,6 +752,38 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
 
     spectra(True, "abcdefgh", "fig6_recoil_acceptance.pdf")
     spectra(False, "efghijkl", "fig6_recoil_acceptance_linear.pdf")
+
+    # Fig. 2: momentum resolution of the reconstructed recoil nucleons vs lab momentum (B0 tracks for
+    # protons, ZDC for neutrons); the paper used Yellow-Report parametrizations here
+    if all("rec_reco_p_lab_mag" in d for d, _ in data.values()):
+        fig, ax = plt.subplots(figsize=(6.6, 4.0))
+        pb = np.arange(10, 205, 10.0)
+        for lab, (d, _) in data.items():
+            for code, name, col, mk in ((2112, "Neutron", "#1029ff", "s"), (2212, "Proton", red if low_energy[lab] else "#d2a679", "o")):
+                m = (d["rec_final_pdg"] == code) & np.isfinite(d["rec_reco_p_lab_mag"]) & (d["rec_p_irf"] > P_IRF_MIN)
+                pt, rel = d["rec_true_p_lab_mag"][m], (d["rec_reco_p_lab_mag"][m] - d["rec_true_p_lab_mag"][m]) / d["rec_true_p_lab_mag"][m]
+                xs, ys, es = [], [], []
+                for lo, hi in zip(pb[:-1], pb[1:]):
+                    k = (pt >= lo) & (pt < hi)
+                    if k.sum() >= 30:
+                        q16, q84 = np.percentile(rel[k], [16, 84])
+                        sig = 0.5 * (q84 - q16)
+                        xs.append(0.5 * (lo + hi)); ys.append(sig); es.append(sig / np.sqrt(2 * k.sum()))
+                if xs:
+                    ax.errorbar(xs, ys, yerr=es, fmt=mk, ms=5, color=col, label=f"{name} ({lab})", capsize=0)
+                    summary[lab][f"recoil {name.lower()} dp/p (68% half-width)"] = float(np.median(ys))
+                    summary[lab][f"recoil {name.lower()} dp/p bias (median)"] = float(np.median(rel)) if len(rel) else None
+        ax.set_xlim(0, 210)
+        ax.set_ylim(0, None)
+        frame(ax)
+        ax.set_xlabel(r"p [GeV/$c$]", fontsize=13, loc="right")
+        ax.set_ylabel(r"$\Delta$p/p (68% half-width)", fontsize=13, loc="top")
+        ax.text(0.03, 0.95, r"recoil nucleons, $p_\mathrm{IRF} > 0.3$ GeV/$c$; protons: B0 tracks, neutrons: ZDC",
+                transform=ax.transAxes, fontsize=9, va="top", color=MUTED)
+        ax.legend(frameon=False, fontsize=10, loc="lower right")
+        fig.tight_layout()
+        fig.savefig(outdir / "fig2_resolution.pdf")
+        plt.close(fig)
 
     # fig6b: acceptance vs p_IRF (accepted / generated above the p_IRF cut), hit and reco level
     fig, axes = paper_grid("Acceptance")
@@ -597,7 +834,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         print(f"{lab}: recoil p {summary[lab]['recoil p']}, recoil n {summary[lab]['recoil n']}, "
               f"Q2 reach (>=100/GeV2) {summary[lab]['q2_reach_100_per_GeV2']}, "
               f"electron {summary[lab]['electron_truth_matched']:.2f}")
-    print(f"wrote {outdir}/fig3_angles.pdf fig4_pirf_vs_theta.pdf fig5_q2.pdf fig6_recoil_acceptance.pdf fig6_recoil_acceptance_linear.pdf fig6b_acceptance_vs_pirf.pdf summary.json pairs.txt")
+    print(f"wrote {outdir}/fig3_angles.pdf fig4_pirf_vs_theta.pdf fig5_q2.pdf fig2_resolution.pdf fig6_recoil_acceptance.pdf fig6_recoil_acceptance_linear.pdf fig6b_acceptance_vs_pirf.pdf summary.json pairs.txt")
 
 
 def main():

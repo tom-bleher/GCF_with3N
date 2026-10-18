@@ -24,6 +24,8 @@ Supported inputs (detected from the tree):
     leading and recoil nucleons and the A-2 remnant nucleus. The remnant needs
     the mAm2 branch; use --no-remnant for files written before it existed.
     The remnant is skipped when it is not a bound nucleus (e.g. nn, pp).
+  * genDIS, tree genT with pHadron: tagged DIS off an SRC pair. The electron, the recoil and the A-2
+    remnant are written; the struck system is a single unhadronized four-vector and is left out.
   * genQE_FSI and genQE_3N_FSI, tree genT with the part_* list, and
     SRC_analysis_2N, tree events: the scattered electron plus the final-state
     particle list (post-FSI, or the unscattered nucleons with FSI off). GENIE
@@ -123,6 +125,8 @@ def read_tree(path):
     names = set(t.keys())
     if "part_pdg" in names:
         kind = "particles"
+    elif {"pHadron", "pRec", "pe"} <= names:
+        kind = "genDIS"
     elif {"pLead", "pRec", "pe"} <= names:
         kind = "genQE"
     else:
@@ -260,6 +264,28 @@ def main():
                     p, m = a["pAm2"][i], float(m_am2[i])
                     parts.append((pdg, *p, math.sqrt(m * m + p @ p), m))
             events.append(parts)
+    elif kind == "genDIS":
+        # Tagged DIS off an SRC pair: the electron, the recoil and the A-2 remnant. The struck system
+        # (pHadron, EHadron) is a single unhadronized four-vector, so it is not written; the recoil
+        # tagging does not depend on it.
+        a = {b: t[b].array(library="np", entry_start=sl.start, entry_stop=sl.stop)
+             for b in ("pRec", "pAm2", "EAm2", "lead_type", "rec_type")}
+        z, a_num, m_a = IONS[args.ion]
+        for i in idx:
+            parts = [(11, *k[i, :3], math.hypot(np.linalg.norm(k[i, :3]), M_E), M_E)]
+            pdg, p = int(a["rec_type"][i]), a["pRec"][i]
+            m = PDG_MASS[pdg]
+            parts.append((pdg, *p, math.sqrt(m * m + p @ p), m))
+            if not args.no_remnant:
+                rpdg, (z2, a2) = remnant_species(z, a_num, int(a["lead_type"][i]), pdg)
+                if rpdg is None:
+                    if a2 > 0:
+                        key = f"Z={z2},A={a2}"
+                        skipped_remnant[key] = skipped_remnant.get(key, 0) + 1
+                else:
+                    p2, e2 = a["pAm2"][i], float(a["EAm2"][i])
+                    parts.append((rpdg, *p2, e2, math.sqrt(max(e2 * e2 - p2 @ p2, 0.0))))
+            events.append(parts)
     else:
         b = {n: t[n].array(library="np", entry_start=sl.start, entry_stop=sl.stop)
              for n in ("part_pdg", "part_px", "part_py", "part_pz", "part_E")}
@@ -310,7 +336,8 @@ def main():
         "attempts": attempts,
         "sum_weight_written": float(w[idx].sum()),
         "sigma_written_nb": float(w[idx].sum() / attempts) if attempts else None,
-        "remnant": None if kind != "genQE" or args.no_remnant else "A-2 nucleus with generator mass (incl. E*)",
+        "remnant": None if kind not in ("genQE", "genDIS") or args.no_remnant else "A-2 nucleus with generator mass (incl. E*)",
+        "struck_system": "not written (genDIS hadronic system is unhadronized)" if kind == "genDIS" else None,
         "remnant_skipped_unbound": skipped_remnant,
         "particles_written_by_pdg": {str(p): n for p, n in sorted(n_part.items())},
         "max_rest_frame_4momentum_imbalance_GeV": balance if kind == "genQE" and "mAm2" in names else None,
