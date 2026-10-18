@@ -4,6 +4,7 @@
 #include "TFile.h"
 #include "TTree.h"
 #include "TH1D.h"
+#include "TParameter.h"
 #include "QEGenerator.hh"
 #include "constants.hh"
 #include "helpers.hh"
@@ -19,6 +20,7 @@ TRandom3 * myRand;
 eNCrossSection * myCS;
 QEGenerator * myGen;
 TTree * outtree;
+UInt_t seed = 0;
 bool doLC;
 bool doCoul = false;
 double deltaECoul = 0;
@@ -44,6 +46,7 @@ void Usage()
        << "-C: Turn on coulomb correction\n"
        << "-r: Randomize nuclear properties\n"
        << "-l: Use Lightcone cross section\n"
+       << "-S: Random seed (positive integer; default 0 = random, printed at start)\n"
        << "-h: Print this message and exit\n\n\n";
 }
 
@@ -85,7 +88,7 @@ bool init(int argc, char ** argv)
     uType = (char *)"AV18_deut";
   
   int c;
-  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:u:c:s:E:Mk:OCrlh")) != -1)
+  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:u:c:s:E:Mk:OCrlS:h")) != -1)
     switch(c)
       {
 	
@@ -142,6 +145,9 @@ bool init(int argc, char ** argv)
       case 'l':
 	doLC = true;
 	break;
+      case 'S':
+	seed = strtoul(optarg, nullptr, 10);
+	break;
       case 'h':
 	Usage();
 	return false;
@@ -154,7 +160,11 @@ bool init(int argc, char ** argv)
 
   // Initialize objects
   myInfo = new gcfNucleus(Z,N,uType);
-  myRand = new TRandom3(0);
+  // Seed 0 (the default) draws a fresh seed; print and store it either way so
+  // any run can be reproduced.
+  if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
+  cout << "Random seed: " << seed << "\n";
+  myRand = new TRandom3(seed);
   myCS = new eNCrossSection(csMeth,ffMod);
 
   if (rand_flag)
@@ -254,6 +264,7 @@ void fini()
   TH1D hAttempts("hAttempts", "generation attempts", 1, 0., 1.);
   hAttempts.SetBinContent(1, (double)nEvents);
   hAttempts.Write();
+  TParameter<Long64_t>("seed", seed).Write();
   outfile->Delete("genTbuffer;*");
   outfile->Close();
 }
