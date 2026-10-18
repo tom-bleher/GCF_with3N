@@ -5,6 +5,8 @@
 #include <math.h>
 #include "TFile.h"
 #include "TTree.h"
+#include "TH1D.h"
+#include "TParameter.h"
 #include "QEGeneratorFSI.hh"
 #include "constants.hh"
 #include "helpers.hh"
@@ -72,6 +74,9 @@ Double_t pe[3], pLead[3], pRec[3], pAm2[3], pRel[3], q[3];
 Double_t weight;
 Int_t lead_type, rec_type;
 Int_t doFSI_flag;
+UInt_t seed = 0;
+bool doMF = false;      // -F: single-nucleon mean-field knockout instead of an SRC pair
+double beamE = 0.;      // for q in MF mode
 Int_t nPart;
 std::vector<int>    part_pdg, part_parentRole, part_rescatterCode;
 std::vector<double> part_px, part_py, part_pz, part_E;
@@ -92,6 +97,9 @@ void Usage()
        << "-C: Turn on coulomb correction\n"
        << "-r: Randomize nuclear properties\n"
        << "-l: Use Lightcone cross section\n"
+       << "-n: Disable FSI (PWIA, same generator)\n"
+       << "-F: Mean-field single-nucleon knockout from a global Fermi gas, kF in GeV/c (e.g. 0.25)\n"
+       << "-S: Random seed (positive integer; default 0 = random, printed at start)\n"
        << "-h: Print this message and exit\n\n\n";
 }
 
@@ -128,12 +136,14 @@ bool init(int argc, char ** argv)
   bool do_kCut = false;
   bool doRad = false;
   bool rand_flag = false;
+  bool noFSI = false;
+  double mfKF = 0.;
   doLC = false;
   if ((Z == 1) and (N == 1))
     uType = (char *)"AV18_deut";
   
   int c;
-  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:u:c:s:E:Mk:OCrlh")) != -1)
+  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:u:c:s:E:Mk:OCrlnF:S:h")) != -1)
     switch(c)
       {
 	
@@ -190,6 +200,17 @@ bool init(int argc, char ** argv)
       case 'l':
 	doLC = true;
 	break;
+      case 'n':
+	noFSI = true;
+	break;
+      case 'F':
+	doMF = true;
+	mfKF = atof(optarg);
+	if (mfKF <= 0. || mfKF > 0.5) { cerr << "Invalid -F kF (GeV/c, e.g. 0.25).\n"; return false; }
+	break;
+      case 'S':
+	seed = strtoul(optarg, nullptr, 10);
+	break;
       case 'h':
 	Usage();
 	return false;
@@ -202,7 +223,11 @@ bool init(int argc, char ** argv)
 
   // Initialize objects
   myInfo = new gcfNucleus(Z,N,uType);
-  myRand = new TRandom3(0);
+  // Seed 0 (the default) draws a fresh seed; print and store it either way. GENIE's
+  // generator is seeded from myRand (GenieFSIHelpers), so FSI replays too.
+  if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
+  cout << "Random seed: " << seed << "\n";
+  myRand = new TRandom3(seed);
   myCS = new eNCrossSection(csMeth,ffMod);
 
   if (rand_flag)
@@ -216,8 +241,13 @@ bool init(int argc, char ** argv)
   
   // Initialize FSI-enabled generator
   myGen = new QEGeneratorFSI(Ebeam + deltaECoul, myInfo, myCS, myRand);
-  myGen->EnableFSI(true);  // FSI is enabled by default, but explicit for clarity
-  doFSI_flag = 1;
+  myGen->EnableFSI(!noFSI);
+  doFSI_flag = noFSI ? 0 : 1;
+  beamE = Ebeam + deltaECoul;
+  if (doMF) {
+    myGen->SetFermiMomentumFG(mfKF);
+    myGen->SetFermiGasMode(QEGeneratorFSI::kGlobalFG);
+  }
   
   if ((Z == 1) and (N == 1))
     myGen->set_deuteron();
@@ -275,7 +305,8 @@ bool init(int argc, char ** argv)
     cout << "  xB range:       (no cut)\n";
   cout << "  sigma_CM:       " << myInfo->get_sigmaCM() << " GeV/c\n"
        << "  pRel cutoff:    " << kCut << " GeV/c\n"
-       << "  FSI:            enabled (hN2018)\n";
+       << "  FSI:            " << (noFSI ? "disabled (PWIA)" : "enabled (hN2018)") << "\n";
+  if (doMF)    cout << "  Mean field:     single nucleon, global Fermi gas, kF=" << mfKF << " GeV/c\n";
   if (doLC)    cout << "  Lightcone:      ON\n";
   if (doCoul)  cout << "  Coulomb corr:   ON\n";
   if (doRad)   cout << "  Radiation:      ON\n";
@@ -297,7 +328,12 @@ void evnt(int event)
   TLorentzVector vq;
   double Estar;
 
-  if (doLC)
+  if (doMF) {
+    myGen->generate_event_MF(weight, lead_type, rec_type, vk, vLead, vRec, vAm2);
+    vq = TLorentzVector(0., 0., beamE, beamE) - vk;
+    vRel.SetXYZ(0., 0., 0.);
+  }
+  else if (doLC)
     myGen->generate_event_lightcone(weight, lead_type, rec_type, vk, vLead, vRec, vAm2);
   else
     myGen->generate_event(weight, lead_type, rec_type, vk, vLead, vRec, vAm2, vRel, vq, Estar);
@@ -342,6 +378,11 @@ void fini()
 {
   outtree->SetName("genT");
   outtree->Write();
+  // Attempts (exactly nEvents; only weight > 0 is stored) for per-attempt normalization, and the seed.
+  TH1D hAttempts("hAttempts", "generation attempts", 1, 0., 1.);
+  hAttempts.SetBinContent(1, (double)nEvents);
+  hAttempts.Write();
+  TParameter<Long64_t>("seed", seed).Write();
   outfile->Delete("genTbuffer;*");
   outfile->Close();
 }

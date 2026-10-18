@@ -20,7 +20,12 @@
 #   --jobs N              parallel npsim jobs (default 64; ~1.8 GB each)
 #   --reco-jobs N         parallel eicrecon jobs (default 40; ~2.9 GB each with one thread)
 #   --reco-threads N      eicrecon threads per job (default 1)
+#   --generator G         genQE (default; SRC pairs, no FSI) or genQE_FSI (GENIE FSI; with
+#                         --gen-args "-n" no FSI, with "-F 0.25" single-nucleon mean field)
+#   --gen-args "ARGS"     extra generator flags. E* sampling (-M) is added for A > 2 SRC runs
 #   --no-cuts             convert all events instead of Q2 > 3, xB > 1.2
+#   --compress N          ROOT compression of sim/reco output (default 505 = ZSTD level 5, about a
+#                         third smaller than npsim/EICrecon's ZLIB 1; 0 keeps their output as is)
 #   --stage all|gen|sim|reco|resume|record
 #                         run one stage only (default all). resume finishes an interrupted run: it
 #                         keeps the split chunks and runs npsim and eicrecon only for the chunks
@@ -45,7 +50,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 GCF=$(cd "$HERE/.." && pwd)
 
-BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 RJOBS=40 RTHREADS=1 CUTS="--paper-cuts" STAGE=all
+BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 RJOBS=40 RTHREADS=1 CUTS="--paper-cuts" STAGE=all GEN=genQE GEN_ARGS="" COMPRESS=505
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --beams) BEAMS=$2; shift 2 ;;
@@ -60,6 +65,9 @@ while [[ $# -gt 0 ]]; do
     --reco-jobs) RJOBS=$2; shift 2 ;;
     --reco-threads) RTHREADS=$2; shift 2 ;;
     --no-cuts) CUTS=""; shift ;;
+    --generator) GEN=$2; shift 2 ;;
+    --gen-args) GEN_ARGS=$2; shift 2 ;;
+    --compress) COMPRESS=$2; shift 2 ;;
     --stage) STAGE=$2; shift 2 ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
@@ -105,8 +113,20 @@ if [[ $STAGE == all || $STAGE == gen ]]; then
   set -u
   E_IRF=$("$GCF/tools/gcf2hepmc.py" --beams "$BEAMS" --ion "$ION" --print-ebeam-irf)
   printf 'QSq %s %s\n' "${Q2%%:*}" "${Q2##*:}" > ps.txt
-  log "genQE $Z $N $E_IRF gen.root $ATTEMPTS -P ps.txt -M -S $SEED"
-  "$GCF/src/programs/genQE_FSI/build/genQE" "$Z" "$N" "$E_IRF" gen.root "$ATTEMPTS" -P ps.txt -M -S "$SEED" > genQE.log 2>&1
+  case "$GEN" in genQE|genQE_FSI) ;; *) die "--generator must be genQE or genQE_FSI" ;; esac
+  # E* of the A-2 remnant (-M) only exists for an SRC pair in a nucleus with A > 2: for the
+  # deuteron it would give the empty remnant a mass, and the mean field (-F) has no pair.
+  ESTAR="-M"; { (( Z + N <= 2 )) || [[ " $GEN_ARGS " == *" -F "* ]]; } && ESTAR=""
+  if [[ $GEN == genQE_FSI ]]; then
+    F=$GCF/src/programs/genQE_FSI
+    export GXMLPATH="$F/config/genie_override:$GENIE/config/G18_10a:$GENIE/config" GMSGCONF="$F/config/quiet_messenger.xml"
+  fi
+  # shellcheck disable=SC2086
+  log "$GEN $Z $N $E_IRF gen.root $ATTEMPTS -P ps.txt $ESTAR -S $SEED $GEN_ARGS"
+  # shellcheck disable=SC2086
+  "$GCF/src/programs/genQE_FSI/build/$GEN" "$Z" "$N" "$E_IRF" gen.root "$ATTEMPTS" -P ps.txt $ESTAR -S "$SEED" $GEN_ARGS \
+    > generator.log 2>&1 || die "$GEN failed (see generator.log)"
+  printf '%s\n' "$GEN $ESTAR $GEN_ARGS" > generator.txt
   # shellcheck disable=SC2086
   "$GCF/tools/gcf2hepmc.py" gen.root gen.hepmc3 --beams "$BEAMS" --ion "$ION" $CUTS ${MAXEV:+-n $MAXEV} | tee -a run.log
   # the vendored GENIE tree is rebuilt in place, so judge cleanliness on everything else
@@ -124,7 +144,7 @@ if [[ $STAGE != gen && $STAGE != record ]]; then
 set -uo pipefail
 OUT="$OUT"
 cd "\$OUT"
-STAGE=$STAGE CHUNK=$CHUNK JOBS=$JOBS RJOBS=$RJOBS RTHREADS=$RTHREADS SEED=$SEED FIELDMAPS="$FIELDMAPS"
+STAGE=$STAGE CHUNK=$CHUNK JOBS=$JOBS RJOBS=$RJOBS RTHREADS=$RTHREADS COMPRESS=$COMPRESS SEED=$SEED FIELDMAPS="$FIELDMAPS"
 EPIC_INSTALL="$EPIC_INSTALL" EPIC_CONFIG="$EPIC_CONFIG" FIELD="$FIELD" AB_PRESET="$AB_PRESET"
 EICRECON_INSTALL="${EICRECON_INSTALL:-}"
 EOF
@@ -150,9 +170,23 @@ for_chunks() {
   log "$step: $n chunks, $fail failed"
   [ "$fail" -eq 0 ]
 }
+# Jobs write to local scratch and copy one recompressed file to the run directory (fewer, smaller
+# writes to the shared disk). hadd -f<algo*100+level> rewrites every tree with the new compression.
+LOCAL=$(mktemp -d "${TMPDIR:-/tmp}/run_eic_sim.XXXXXX")
+trap 'rm -rf "$LOCAL"' EXIT
+land() { # local_file final_path
+  if [[ $COMPRESS != 0 ]]; then
+    hadd -f"$COMPRESS" "$1.z" "$1" > "$1.hadd.log" 2>&1 || { cat "$1.hadd.log"; return 1; }
+    mv -f "$1.z" "$2" && rm -f "$1" "$1.hadd.log"
+  else
+    mv -f "$1" "$2"
+  fi
+}
 sim() {
-  npsim --compactFile ../geometry.xml --inputFiles "../chunk_$1.hepmc" --outputFile "../sim_$1.edm4hep.root" \
-    --numberOfEvents -1 --random.seed $((SEED * 100000 + 10#$1 + 1)) > "../npsim_$1.log" 2>&1
+  local out=$LOCAL/sim_$1.edm4hep.root
+  npsim --compactFile ../geometry.xml --inputFiles "../chunk_$1.hepmc" --outputFile "$out" \
+    --numberOfEvents -1 --random.seed $((SEED * 100000 + 10#$1 + 1)) > "../npsim_$1.log" 2>&1 &&
+  land "$out" "../sim_$1.edm4hep.root"
 }
 RECO_FLAGS=(
   -PRPOTS:ForwardRomanPotStaticRecParticles:requireBeamProton=false
@@ -162,8 +196,10 @@ RECO_FLAGS=(
   -PFOFFMTRK:ForwardOffMRecParticles:requireMatchingMatrix=false
 )
 reco() {
+  local out=$LOCAL/reco_$1.edm4eic.root
   eicrecon "../sim_$1.edm4hep.root" -Pnthreads="$RTHREADS" -Pdd4hep:xml_files=../geometry.xml "${RECO_FLAGS[@]}" \
-    -Ppodio:output_file="../reco_$1.edm4eic.root" > "../eicrecon_$1.log" 2>&1
+    -Ppodio:output_file="$out" > "../eicrecon_$1.log" 2>&1 &&
+  land "$out" "../reco_$1.edm4eic.root"
 }
 
 if [[ $STAGE == all || $STAGE == sim ]]; then
@@ -258,6 +294,7 @@ if expected_mm.exists():
 count = lambda pat, val: sum((p.read_text().strip() == val) for p in o.glob(pat))
 run = {
     "beams": beams, "ion": ion, "genQE_seed": int(seed), "chunk_size": int(chunk),
+    "generator": (o / "generator.txt").read_text().split() if (o / "generator.txt").exists() else ["genQE", "-M"],
     "q2_range_GeV2": [float(x) for x in (o / "ps.txt").read_text().split()[1:3]] if (o / "ps.txt").exists() else None,
     "gcf": (o / "gcf_version.txt").read_text().split() if (o / "gcf_version.txt").exists() else None,
     "converter": json.loads((o / "gen.hepmc3.json").read_text()) if (o / "gen.hepmc3.json").exists() else None,
