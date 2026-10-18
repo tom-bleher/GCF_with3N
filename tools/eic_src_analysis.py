@@ -75,6 +75,34 @@ def stations(z):
     return 1 + int(np.sum(np.diff(z) > STATION_GAP_MM))
 
 
+def final_nucleons(gen_path, nums):
+    """Per event: index (among the primaries after the electron) and PDG of the final-state
+    leading and recoil nucleon; -1 / 0 when there is none.
+
+    genQE trees: the converter writes e', lead, recoil, [remnant], so 0 and 1. Particle-list
+    trees (genQE_FSI): the highest-momentum nucleon descended from the generated lead
+    (parentRole 0) or recoil (parentRole 1); none if the cascade absorbed it.
+    """
+    t = uproot.open(gen_path)["genT"]
+    lo, hi = int(min(nums)), int(max(nums)) + 1
+    if "part_pdg" not in t.keys():
+        g = t.arrays(["lead_type", "rec_type"], entry_start=lo, entry_stop=hi, library="np")
+        return {n: (0, 1, int(g["lead_type"][n - lo]), int(g["rec_type"][n - lo])) for n in nums}
+    g = t.arrays(["part_pdg", "part_parentRole", "part_px", "part_py", "part_pz"], entry_start=lo, entry_stop=hi, library="np")
+    out = {}
+    for n in nums:
+        i = n - lo
+        pdg, role = np.asarray(g["part_pdg"][i]), np.asarray(g["part_parentRole"][i])
+        p = np.sqrt(np.asarray(g["part_px"][i]) ** 2 + np.asarray(g["part_py"][i]) ** 2 + np.asarray(g["part_pz"][i]) ** 2)
+        res = []
+        for r in (0, 1):
+            m = np.flatnonzero((role == r) & ((pdg == 2212) | (pdg == 2112)))
+            j = int(m[np.argmax(p[m])]) if len(m) else -1
+            res += [j]
+        out[n] = (res[0], res[1], int(pdg[res[0]]) if res[0] >= 0 else 0, int(pdg[res[1]]) if res[1] >= 0 else 0)
+    return out
+
+
 def extract_file(sim_path):
     """Per-event detection flags of the leading and recoil nucleon for one sim/reco chunk."""
     sim_path = Path(sim_path)
@@ -87,6 +115,8 @@ def extract_file(sim_path):
     for c in ZDC_HITS:
         br += [f"{c}Contributions/{c}Contributions.energy", f"_{c}Contributions_particle/_{c}Contributions_particle.index"]
     s = uproot.open(sim_path)["events"].arrays(br, library="ak")
+    roles = final_nucleons(sim_path.parent / "gen.root",
+                           [int(n[0]) for n in s["EventHeader/EventHeader.eventNumber"]])
 
     r = None
     if reco_path.exists():
@@ -108,7 +138,10 @@ def extract_file(sim_path):
         prim = np.flatnonzero(st == 1)
         anc = ancestors(st, ak.to_numpy(s[mc[2]][k]), ak.to_numpy(s[mc[3]][k]), ak.to_numpy(s[mc[4]][k]))
         row = {"num": num, "n_primaries": len(prim)}
-        idx = {"lead": prim[1], "rec": prim[2]}  # converter order: e', lead, recoil, [remnant]
+        jl, jr, pl, pr = roles[num]
+        pick = lambda pr_, j: pr_[1 + j] if 0 <= j and 1 + j < len(pr_) else -2  # noqa: E731
+        idx = {"lead": pick(prim, jl), "rec": pick(prim, jr)}
+        row["lead_final_pdg"], row["rec_final_pdg"] = pl, pr
         for role, j in idx.items():
             for c in TRACKERS:
                 z = ak.to_numpy(s[f"{c}/{c}.position.z"][k])[ak.to_numpy(s[f"_{c}_particle/_{c}_particle.index"][k]) == j]
@@ -124,7 +157,7 @@ def extract_file(sim_path):
             rst = ak.to_numpy(r[mc[0]][q])
             ranc = ancestors(rst, ak.to_numpy(r[mc[2]][q]), ak.to_numpy(r[mc[3]][q]), ak.to_numpy(r[mc[4]][q]))
             rprim = np.flatnonzero(rst == 1)
-            ridx = {"lead": rprim[1], "rec": rprim[2]} if len(rprim) == len(prim) else None
+            ridx = {"lead": pick(rprim, jl), "rec": pick(rprim, jr)} if len(rprim) == len(prim) else None
             row["reco"] = ridx is not None
             row["e_truth_matched"] = len(r["ScatteredElectronsTruth_objIdx/ScatteredElectronsTruth_objIdx.index"][q]) > 0
             row["e_reco"] = len(r["ReconstructedElectrons_objIdx/ReconstructedElectrons_objIdx.index"][q]) > 0
@@ -166,7 +199,7 @@ def extract(run, jobs):
     with ProcessPoolExecutor(jobs) as ex:
         rows = [r for part in ex.map(extract_file, sims) for r in part]
     num = np.array([r["num"] for r in rows])
-    gen = uproot.open(run / "gen.root")["genT"].arrays(["pe", "pLead", "pRec", "lead_type", "rec_type", "weight"], library="np")
+    gen = uproot.open(run / "gen.root")["genT"].arrays(["pe", "pLead", "pRec", "q", "lead_type", "rec_type", "weight"], library="np")
     e_irf = beams["E_IRF_run_GeV"]
     pe = gen["pe"][num]
     ee = np.linalg.norm(pe, axis=1)
@@ -175,6 +208,13 @@ def extract(run, jobs):
     out = {"num": num, "w_nb": gen["weight"][num] / conv["attempts"], "q2": q2, "xb": xb,
            "lead_type": gen["lead_type"][num], "rec_type": gen["rec_type"][num]}
     z, a, m = {"C12": (6, 12, 11.174863), "d": (1, 2, 1.875613), "He4": (2, 4, 3.727379)}[beams["ion"]]
+    # missing momentum and energy of the struck nucleon (PRC 105, 034001 Fig. 7 cuts):
+    # p_miss = |p_lead - q|, E_miss = omega - T_lead - T_(A-1), with T_(A-1) = recoil energy of the A-1 system
+    pmiss_v = gen["pLead"][num] - gen["q"][num]
+    out["pmiss"] = np.linalg.norm(pmiss_v, axis=1)
+    m_am1 = m - 0.93892
+    t_lead = np.sqrt(0.93892**2 + (gen["pLead"][num] ** 2).sum(1)) - 0.93892
+    out["emiss"] = (e_irf - ee) - t_lead - (np.sqrt(m_am1**2 + out["pmiss"] ** 2) - m_am1)
     for role, b in (("lead", "pLead"), ("rec", "pRec")):
         p = gen[b][num]
         out[f"{role}_p_irf"] = np.linalg.norm(p, axis=1)
@@ -186,7 +226,7 @@ def extract(run, jobs):
             "events": len(num), "q2_range": json.loads((run / "run.json").read_text()).get("q2_range_GeV2")
             if (run / "run.json").exists() else None}
     np.savez_compressed(run / "analysis_events.npz", meta=json.dumps(meta), **out)
-    bad = int(np.sum(out["n_primaries"] < 3))
+    bad = int(np.sum((out["n_primaries"] < 3) & (out["rec_type"] != 0)))  # mean field: e' + one nucleon
     print(f"{run.name}: {len(num)} events -> analysis_events.npz (reco matched {out['reco'].mean():.3f}"
           f"{f', {bad} events with < 3 primaries' if bad else ''})")
 
@@ -195,7 +235,8 @@ def extract(run, jobs):
 
 def detected(d, role, level):
     """Far-forward detection of a nucleon (role: lead|rec) at 'hit' or 'reco' level."""
-    is_p = d[f"{role}_type"] == 2212
+    # the final-state particle decides the detector (FSI can change it, e.g. charge exchange)
+    is_p = d.get(f"{role}_final_pdg", d[f"{role}_type"]) == 2212
     if level == "hit":
         p_ok = (d[f"{role}_B0TrackerHits"] >= 3) | (d[f"{role}_ForwardOffMTrackerHits"] >= 2) | (d[f"{role}_ForwardRomanPotHits"] >= 2)
         n_ok = d[f"{role}_zdc_edep"] > 0
@@ -278,6 +319,46 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         ax.tick_params(direction="in", which="both", top=True, right=True, labelsize=12)
         if minor:
             ax.minorticks_on()
+
+    # Mean-field runs (single-nucleon knockout, no recoil): PRC 105, 034001 Fig. 7 only
+    mf = {lab: bool(np.all(d["rec_type"] == 0)) for lab, (d, _) in data.items()}
+    if any(mf.values()):
+        if not all(mf.values()):
+            sys.exit("plots: mean-field and SRC settings cannot be mixed in one call")
+        fig, ax = plt.subplots(figsize=(6.6, 3.8))
+        bins = np.arange(3, 25.5, 1.0)
+        cen7 = 0.5 * (bins[1:] + bins[:-1])
+        curves7 = {}
+        for lab, (d, _) in data.items():
+            w = d["w_nb"] * scale
+            kin = (d["q2"] > 3) & (d["pmiss"] < 0.3) & (d["emiss"] < 0.08)
+            ok = kin & d["e_truth_matched"] & detected_anywhere(d, "lead")
+            h = np.histogram(d["q2"][ok], bins, weights=w[ok])[0]
+            summary[lab].update({"mf_sigma_nb_cuts": float(d["w_nb"][kin].sum()),
+                                 "mf_e_and_nucleon_detected": float(w[ok].sum() / w[kin].sum()),
+                                 "mf_q2_reach_100_per_GeV2": float(bins[1:][h >= 100].max()) if (h >= 100).any() else None})
+            c, mk = (red, "o") if low_energy[lab] else ("#1029ff", "s")
+            g = h > 0
+            ax.plot(cen7[g], h[g], ls="none", marker=mk, ms=5, color=c)
+            curves7[lab] = (h, c)
+        ax.set_yscale("log")
+        ax.set_xlim(1, 25)
+        order = sorted(curves7, key=lambda l: -float(np.sum(curves7[l][0])))
+        for i, lab in enumerate(order):
+            h, c = curves7[lab]
+            k = 12 if i == 0 else 3
+            ax.text(cen7[k], max(h[k], 1e-3) * (9 if i == 0 else 0.2), lab, color=c, fontsize=15, ha="center", va="center")
+        frame(ax)
+        ax.set_ylabel("Events per bin", fontsize=13, loc="top")
+        ax.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="right")
+        fig.tight_layout()
+        fig.savefig(outdir / "fig7_q2_mean_field.pdf")
+        plt.close(fig)
+        (outdir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+        for lab in data:
+            print(f"{lab}: {summary[lab]}")
+        print(f"wrote {outdir}/fig7_q2_mean_field.pdf summary.json")
+        return
 
     # Fig. 3: angle w.r.t. the ion beam of recoil (green) and leading (red) nucleons, 10 fb^-1, no p_IRF cut
     fig, axes = plt.subplots(len(data), 1, figsize=(6.6, 3.9 * len(data)), squeeze=False)
