@@ -244,6 +244,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
+    from matplotlib.colors import LogNorm
 
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
@@ -279,8 +280,9 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     # Fig. 4: p_IRF vs angle of the recoil nucleon
     fig, axes = plt.subplots(1, len(data), figsize=(5.2 * len(data), 3.8), squeeze=False)
     for ax, (lab, (d, _)) in zip(axes[0], data.items()):
-        ax.hist2d(d["rec_theta_mrad"], d["rec_p_irf"], bins=[np.linspace(0, 30, 61), np.linspace(0, 1.2, 49)],
-                  weights=d["w_nb"] * lumi_nb_inv, cmap="Blues", cmin=1e-12)
+        _, _, _, im = ax.hist2d(d["rec_theta_mrad"], d["rec_p_irf"], bins=[np.linspace(0, 30, 61), np.linspace(0, 1.2, 49)],
+                                weights=d["w_nb"] * lumi_nb_inv, cmap="Blues", norm=LogNorm(vmin=1))
+        fig.colorbar(im, ax=ax, label=r"events / bin (10 fb$^{-1}$)")
         ax.axhline(P_IRF_MIN, color=ORANGE, lw=1.5, ls="--")
         ax.set_xlabel(r"recoil $\theta$ w.r.t. ion beam [mrad]")
         ax.set_ylabel(r"recoil $p_\mathrm{IRF}$ [GeV/$c$]")
