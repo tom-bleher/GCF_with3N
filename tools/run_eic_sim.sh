@@ -11,13 +11,19 @@
 #   --ion C12|d|He4       target; must have Z/A = 1/2, the rigidity of the light-ion lattices (required)
 #   --attempts N          genQE attempts; about 13% pass the paper cuts (required)
 #   --out DIR             run directory, created; must not exist unless --stage is given (required)
+#   --q2 MIN:MAX          Q2 sampling range in GeV^2 (default 3:25). Production can be split into
+#                         disjoint Q2 slices, each its own run with its own seed and attempts; a
+#                         slice's events normalize by its own attempts, and slices add.
 #   --seed S              genQE seed (default 1); npsim chunk i uses S*100000 + i + 1
 #   --max-events N        convert at most N events (smoke tests)
 #   --chunk-size N        events per npsim/eicrecon job (default 500)
 #   --jobs N              parallel jobs (default 64)
 #   --reco-threads N      eicrecon threads per job (default 1)
 #   --no-cuts             convert all events instead of Q2 > 3, xB > 1.2
-#   --stage all|gen|sim|reco|record   run one stage only (default all); record rewrites run.json
+#   --stage all|gen|sim|reco|resume|record
+#                         run one stage only (default all). resume finishes an interrupted run: it
+#                         keeps the split chunks and runs npsim and eicrecon only for the chunks
+#                         that have not succeeded yet. record rewrites run.json.
 #
 # Environment:
 #   EPIC_INSTALL      epic install prefix (required), e.g. ~/eic/dev/epic_craterlake_5x41/install
@@ -38,13 +44,14 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 GCF=$(cd "$HERE/.." && pwd)
 
-BEAMS="" ION="" ATTEMPTS="" OUT="" SEED=1 MAXEV="" CHUNK=500 JOBS=64 RTHREADS=1 CUTS="--paper-cuts" STAGE=all
+BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 RTHREADS=1 CUTS="--paper-cuts" STAGE=all
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --beams) BEAMS=$2; shift 2 ;;
     --ion) ION=$2; shift 2 ;;
     --attempts) ATTEMPTS=$2; shift 2 ;;
     --out) OUT=$2; shift 2 ;;
+    --q2) Q2=$2; shift 2 ;;
     --seed) SEED=$2; shift 2 ;;
     --max-events) MAXEV=$2; shift 2 ;;
     --chunk-size) CHUNK=$2; shift 2 ;;
@@ -59,6 +66,7 @@ done
 die() { echo "run_eic_sim: $*" >&2; exit 2; }
 [[ -n $BEAMS && -n $ION && -n $OUT ]] || die "--beams, --ion and --out are required (see --help)"
 [[ $STAGE == all || $STAGE == gen ]] && [[ -z $ATTEMPTS ]] && die "--attempts is required"
+[[ $Q2 =~ ^[0-9.]+:[0-9.]+$ ]] && awk -F: '{exit !($1 >= 0 && $2 > $1)}' <<< "$Q2" || die "--q2 must be MIN:MAX with 0 <= MIN < MAX"
 case "$ION" in C12) Z=6 N=6 ;; d) Z=1 N=1 ;; He4) Z=2 N=2 ;; *) die "--ion must be C12, d or He4 (Z/A = 1/2)" ;; esac
 case "$BEAMS" in
   5x41)   : "${EPIC_CONFIG:=epic_craterlake_5x41}" "${FIELD=fields/beamline_5x41_He4.xml}" "${AB_PRESET:=ip6_eAu_41x5}" ;;
@@ -74,7 +82,7 @@ if [[ ! -f $EPIC_INSTALL/bin/thisepic.sh ]]; then
 fi
 [[ -x $EIC_SHELL ]] || die "EIC_SHELL=$EIC_SHELL is not executable"
 [[ -d $FIELDMAPS ]] || die "FIELDMAPS=$FIELDMAPS is not a directory"
-if [[ $STAGE == all || $STAGE == reco ]]; then
+if [[ $STAGE == all || $STAGE == reco || $STAGE == resume ]]; then
   [[ -n ${EICRECON_INSTALL:-} && -f $EICRECON_INSTALL/bin/eicrecon-this.sh ]] || die "set EICRECON_INSTALL"
 fi
 if [[ $STAGE == all ]]; then
@@ -94,7 +102,7 @@ if [[ $STAGE == all || $STAGE == gen ]]; then
   source "$GCF/setup_env.sh" > /dev/null
   set -u
   E_IRF=$("$GCF/tools/gcf2hepmc.py" --beams "$BEAMS" --ion "$ION" --print-ebeam-irf)
-  printf 'QSq 3 25\n' > ps.txt
+  printf 'QSq %s %s\n' "${Q2%%:*}" "${Q2##*:}" > ps.txt
   log "genQE $Z $N $E_IRF gen.root $ATTEMPTS -P ps.txt -M -S $SEED"
   "$GCF/src/programs/genQE_FSI/build/genQE" "$Z" "$N" "$E_IRF" gen.root "$ATTEMPTS" -P ps.txt -M -S "$SEED" > genQE.log 2>&1
   # shellcheck disable=SC2086
@@ -106,7 +114,7 @@ if [[ $STAGE == all || $STAGE == gen ]]; then
 fi
 
 # ---------------------------------------------------------------- simulation and reconstruction (eic-shell)
-case $STAGE in all|gen|sim|reco|record) ;; *) die "--stage must be all, gen, sim, reco or record" ;; esac
+case $STAGE in all|gen|sim|reco|resume|record) ;; *) die "--stage must be all, gen, sim, reco, resume or record" ;; esac
 if [[ $STAGE != gen && $STAGE != record ]]; then
   cat > container_stage.sh <<EOF
 #!/bin/bash
@@ -130,12 +138,13 @@ for_chunks() {
   local step=$1
   for f in chunk_*.hepmc; do
     local i=${f//[!0-9]/}
+    [[ $STAGE == resume && $(cat "exit_${step}_$i" 2>/dev/null) == 0 ]] && continue
     mkdir -p "work_$i"; ln -sfn "$FIELDMAPS" "work_$i/fieldmaps"
     while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n || true; done
     { if (cd "work_$i" && "$step" "$i"); then echo 0; else echo 1; fi > "exit_${step}_$i"; } &
   done
   wait
-  local n fail; n=$(ls exit_"${step}"_* | wc -l); fail=$(grep -LxF 0 exit_"${step}"_* | wc -l)
+  local n fail; n=$(ls exit_"${step}"_* 2>/dev/null | wc -l); fail=$(grep -LxF 0 exit_"${step}"_* 2>/dev/null | wc -l)
   log "$step: $n chunks, $fail failed"
   [ "$fail" -eq 0 ]
 }
@@ -182,11 +191,18 @@ if [[ $STAGE == all || $STAGE == sim ]]; then
      --outputFile prefetch.edm4hep.root > ../prefetch.log 2>&1) || { log "prefetch failed"; exit 4; }
 fi
 export DETECTOR_CACHE="$OUT/prefetch/calibrations${DETECTOR_CACHE:+:$DETECTOR_CACHE}"
-if [[ $STAGE == all || $STAGE == sim ]]; then
+if [[ $STAGE == resume ]]; then
+  [[ -f geometry.xml && -d prefetch/calibrations ]] && ls chunk_*.hepmc > /dev/null 2>&1 \
+    || { log "resume: no split chunks, geometry or prefetch here; rerun with --stage sim"; exit 3; }
+  log "resume: $(grep -lxF 0 exit_sim_* 2>/dev/null | wc -l) of $(ls chunk_*.hepmc | wc -l) chunks already simulated"
+fi
+if [[ $STAGE == all || $STAGE == sim || $STAGE == resume ]]; then
   log "npsim: $(ls chunk_*.hepmc | wc -l) chunks of $CHUNK, $JOBS parallel"
   for_chunks sim || log "WARNING: npsim failures (see exit_sim_*)"
 fi
-if [[ $STAGE == all || $STAGE == reco ]]; then
+if [[ $STAGE == all || $STAGE == reco || $STAGE == resume ]]; then
+  [[ $STAGE == resume ]] && for f in chunk_*.hepmc; do  # re-reconstruct chunks whose sim was redone
+    i=${f//[!0-9]/}; [[ sim_$i.edm4hep.root -nt exit_reco_$i ]] && rm -f "exit_reco_$i"; done
   source "$EICRECON_INSTALL/bin/eicrecon-this.sh"
   log "eicrecon: $(command -v eicrecon), $RTHREADS threads/job"
   for_chunks reco || log "WARNING: eicrecon failures (see exit_reco_*)"
@@ -240,6 +256,7 @@ if expected_mm.exists():
 count = lambda pat, val: sum((p.read_text().strip() == val) for p in o.glob(pat))
 run = {
     "beams": beams, "ion": ion, "genQE_seed": int(seed), "chunk_size": int(chunk),
+    "q2_range_GeV2": [float(x) for x in (o / "ps.txt").read_text().split()[1:3]] if (o / "ps.txt").exists() else None,
     "gcf": (o / "gcf_version.txt").read_text().split() if (o / "gcf_version.txt").exists() else None,
     "converter": json.loads((o / "gen.hepmc3.json").read_text()) if (o / "gen.hepmc3.json").exists() else None,
     "epic": {"install": epic, "config": config, "field_swap": field or None, "git": git(epic)},
