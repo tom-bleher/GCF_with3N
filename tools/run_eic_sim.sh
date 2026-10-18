@@ -17,7 +17,8 @@
 #   --seed S              genQE seed (default 1); npsim chunk i uses S*100000 + i + 1
 #   --max-events N        convert at most N events (smoke tests)
 #   --chunk-size N        events per npsim/eicrecon job (default 500)
-#   --jobs N              parallel jobs (default 64)
+#   --jobs N              parallel npsim jobs (default 64; ~1.8 GB each)
+#   --reco-jobs N         parallel eicrecon jobs (default 40; ~2.9 GB each with one thread)
 #   --reco-threads N      eicrecon threads per job (default 1)
 #   --no-cuts             convert all events instead of Q2 > 3, xB > 1.2
 #   --stage all|gen|sim|reco|resume|record
@@ -44,7 +45,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 GCF=$(cd "$HERE/.." && pwd)
 
-BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 RTHREADS=1 CUTS="--paper-cuts" STAGE=all
+BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 RJOBS=40 RTHREADS=1 CUTS="--paper-cuts" STAGE=all
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --beams) BEAMS=$2; shift 2 ;;
@@ -56,6 +57,7 @@ while [[ $# -gt 0 ]]; do
     --max-events) MAXEV=$2; shift 2 ;;
     --chunk-size) CHUNK=$2; shift 2 ;;
     --jobs) JOBS=$2; shift 2 ;;
+    --reco-jobs) RJOBS=$2; shift 2 ;;
     --reco-threads) RTHREADS=$2; shift 2 ;;
     --no-cuts) CUTS=""; shift ;;
     --stage) STAGE=$2; shift 2 ;;
@@ -122,7 +124,7 @@ if [[ $STAGE != gen && $STAGE != record ]]; then
 set -uo pipefail
 OUT="$OUT"
 cd "\$OUT"
-STAGE=$STAGE CHUNK=$CHUNK JOBS=$JOBS RTHREADS=$RTHREADS SEED=$SEED FIELDMAPS="$FIELDMAPS"
+STAGE=$STAGE CHUNK=$CHUNK JOBS=$JOBS RJOBS=$RJOBS RTHREADS=$RTHREADS SEED=$SEED FIELDMAPS="$FIELDMAPS"
 EPIC_INSTALL="$EPIC_INSTALL" EPIC_CONFIG="$EPIC_CONFIG" FIELD="$FIELD" AB_PRESET="$AB_PRESET"
 EICRECON_INSTALL="${EICRECON_INSTALL:-}"
 EOF
@@ -135,12 +137,12 @@ source "$EPIC_INSTALL/bin/thisepic.sh" "$EPIC_CONFIG"
 # run step $1 for every chunk, at most JOBS at a time, one work dir per chunk (the FileLoader
 # writes calibrations/ into the cwd, and eicrecon reads the material map from there)
 for_chunks() {
-  local step=$1
+  local step=$1 max=$2
   for f in chunk_*.hepmc; do
     local i=${f//[!0-9]/}
     [[ $STAGE == resume && $(cat "exit_${step}_$i" 2>/dev/null) == 0 ]] && continue
     mkdir -p "work_$i"; ln -sfn "$FIELDMAPS" "work_$i/fieldmaps"
-    while [ "$(jobs -rp | wc -l)" -ge "$JOBS" ]; do wait -n || true; done
+    while [ "$(jobs -rp | wc -l)" -ge "$max" ]; do wait -n || true; done
     { if (cd "work_$i" && "$step" "$i"); then echo 0; else echo 1; fi > "exit_${step}_$i"; } &
   done
   wait
@@ -198,14 +200,14 @@ if [[ $STAGE == resume ]]; then
 fi
 if [[ $STAGE == all || $STAGE == sim || $STAGE == resume ]]; then
   log "npsim: $(ls chunk_*.hepmc | wc -l) chunks of $CHUNK, $JOBS parallel"
-  for_chunks sim || log "WARNING: npsim failures (see exit_sim_*)"
+  for_chunks sim "$JOBS" || log "WARNING: npsim failures (see exit_sim_*)"
 fi
 if [[ $STAGE == all || $STAGE == reco || $STAGE == resume ]]; then
   [[ $STAGE == resume ]] && for f in chunk_*.hepmc; do  # re-reconstruct chunks whose sim was redone
     i=${f//[!0-9]/}; [[ sim_$i.edm4hep.root -nt exit_reco_$i ]] && rm -f "exit_reco_$i"; done
   source "$EICRECON_INSTALL/bin/eicrecon-this.sh"
-  log "eicrecon: $(command -v eicrecon), $RTHREADS threads/job"
-  for_chunks reco || log "WARNING: eicrecon failures (see exit_reco_*)"
+  log "eicrecon: $(command -v eicrecon), $RJOBS parallel, $RTHREADS threads/job"
+  for_chunks reco "$RJOBS" || log "WARNING: eicrecon failures (see exit_reco_*)"
 fi
 
 # versions and inputs for run.json
