@@ -244,70 +244,141 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    from matplotlib.colors import LogNorm
 
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     data = {lab: load(dirs) for lab, dirs in settings.items()}
-    colors = dict(zip(data, (BLUE, ORANGE, AQUA)))
     scale = lumi_nb_inv * transparency
     summary = {}
 
-    # Fig. 3: angles of leading and recoil nucleons w.r.t. the ion beam
-    fig, axes = plt.subplots(1, len(data), figsize=(5.2 * len(data), 4.2), squeeze=False)
-    for ax, (lab, (d, _)) in zip(axes[0], data.items()):
-        bins = np.linspace(0, 50, 101)
-        for role, c, name in (("rec", BLUE, "Recoil nucleon"), ("lead", ORANGE, "Leading nucleon")):
-            m = d["rec_p_irf"] > P_IRF_MIN
-            h, _ = np.histogram(d[f"{role}_theta_mrad"][m], bins, weights=d["w_nb"][m] * lumi_nb_inv)
-            ax.stairs(h, bins, color=c, lw=2, label=name)
-        ax.axvspan(0, 20, color=MUTED, alpha=0.08, lw=0)
-        ax.axvline(20, color=MUTED, lw=0.8, ls=":")
-        ax.axvline(30, color=MUTED, lw=0.8, ls=":")
-        ax.text(10, 1.01, "far forward", transform=ax.get_xaxis_transform(), ha="center", va="bottom", color=MUTED, fontsize=8)
-        ax.text(40, 1.01, "central endcap", transform=ax.get_xaxis_transform(), ha="center", va="bottom", color=MUTED, fontsize=8)
-        ax.set_yscale("log")
-        ax.set_ylim(bottom=1)
-        ax.set_xlabel(r"$\theta$ w.r.t. ion beam [mrad]")
-        ax.set_ylabel(r"events / 0.5 mrad (10 fb$^{-1}$)")
-        ax.set_title(f"$^{{12}}$C$(e,e'NN)$, {lab}", fontsize=11, pad=16)
-        ax.legend(frameon=False, fontsize=9, loc="upper center", bbox_to_anchor=(0.5, -0.17), ncol=2)
-        style(ax)
-    fig.tight_layout()
+    # The figures follow the style of PRC 105, 034001 (Figs. 3-6). The paper's evaporation nucleons
+    # (from BeAGLE) are not simulated here, so Figs. 3 and 4 show recoil and leading nucleons only.
+    green, red, orange, magenta, brown = "#45c045", "#f0281e", "#ff9800", "#ee5fbf", "#9a5a1c"
+    low_energy = {lab: metas[0]["beams"]["ion_momentum_per_nucleon_GeV"] < 75 for lab, (_, metas) in data.items()}
+    for lab in data:
+        summary.setdefault(lab, {})
+
+    def place_label(ax, text, color, pts, anchor, taken, bw=0.18, bh=0.13, **kw):
+        """Put text at the free spot nearest anchor (axes fractions): no data point inside its box."""
+        best = None
+        for xf in np.linspace(0.1, 0.9, 41):
+            for yf in np.linspace(0.1, 0.78, 35):
+                if np.any((np.abs(pts[:, 0] - xf) < bw / 2) & (np.abs(pts[:, 1] - yf) < bh / 2)):
+                    continue
+                if any(abs(xf - a) < (bw + aw) / 2 and abs(yf - b) < (bh + ah) / 2 for a, b, aw, ah in taken):
+                    continue
+                dd = (xf - anchor[0]) ** 2 + (yf - anchor[1]) ** 2
+                if best is None or dd < best[0]:
+                    best = (dd, xf, yf)
+        xf, yf = best[1:] if best else anchor
+        taken.append((xf, yf, bw, bh))
+        ax.text(xf, yf, text, transform=ax.transAxes, color=color, ha="center", va="center", **kw)
+
+    def frame(ax, minor=True):
+        ax.tick_params(direction="in", which="both", top=True, right=True, labelsize=12)
+        if minor:
+            ax.minorticks_on()
+
+    # Fig. 3: angle w.r.t. the ion beam of recoil (green) and leading (red) nucleons, 10 fb^-1, no p_IRF cut
+    fig, axes = plt.subplots(len(data), 1, figsize=(6.6, 3.9 * len(data)), squeeze=False)
+    bins = np.arange(0, 51, 1.0)
+    cen, hw3 = 0.5 * (bins[1:] + bins[:-1]), 0.5 * np.diff(bins)
+    for ax, (lab, (d, _)) in zip(axes[:, 0], data.items()):
+        w = d["w_nb"] * lumi_nb_inv
+        curves, errs = {}, {}
+        for role, c, mk in (("rec", green, "o"), ("lead", red, "^")):
+            x = d[f"{role}_theta_mrad"]
+            h = np.histogram(x, bins, weights=w)[0] / 1e3
+            e = np.sqrt(np.histogram(x, bins, weights=w**2)[0]) / 1e3
+            g = h > 0
+            ax.errorbar(cen[g], h[g], xerr=hw3[g], yerr=e[g], fmt=mk, ms=4, color=c, elinewidth=1, capsize=0)
+            curves[role], errs[role] = h, e
+        ymax = 1.15 * max(float(np.max(v)) for v in curves.values())
+        ax.set_xlim(0, 50)
+        ax.set_ylim(0, ymax)
+        frame(ax)
+        for x0 in (20, 30):
+            ax.axvline(x0, color=orange if x0 == 20 else magenta, lw=1, ls=":")
+        y_arrow = 0.965 * ymax
+        ax.annotate("", xy=(0.3, y_arrow), xytext=(19.7, y_arrow), arrowprops=dict(arrowstyle="<->", color=orange, lw=1.8))
+        ax.annotate("", xy=(49.5, y_arrow), xytext=(30.3, y_arrow), arrowprops=dict(arrowstyle="->", color=magenta, lw=1.8))
+        ax.text(4.2, 1.01, "far-forward region", transform=ax.get_xaxis_transform(), ha="left", va="bottom",
+                color=orange, fontsize=12, fontweight="bold")
+        ax.text(40, 1.01, "central hadron endcap", transform=ax.get_xaxis_transform(), ha="center", va="bottom",
+                color=magenta, fontsize=12, fontweight="bold")
+        ax.text(0.0, 1.01, r"$\times10^3$", transform=ax.transAxes, ha="left", va="bottom", fontsize=12)
+        zdc = 4.0
+        ax.plot([zdc, zdc], [-0.07, 0.04], transform=ax.get_xaxis_transform(), color=brown, lw=2, clip_on=False)
+        ax.text(zdc, -0.2, "ZDC limit", transform=ax.get_xaxis_transform(), ha="center", va="bottom",
+                color=brown, fontsize=12, fontweight="bold")
+        ax.text(0.92, 0.84, lab, transform=ax.transAxes, ha="right", fontsize=12, fontweight="bold")
+        # direct labels in free space next to each curve (data points incl. error bars kept clear)
+        pts = []
+        for role in ("rec", "lead"):
+            h, e = curves[role], errs[role]
+            for y in (h, h + e, np.maximum(h - e, 0)):
+                g = h > 0
+                pts.append(np.column_stack([cen[g] / 50, y[g] / ymax]))
+        pts = np.vstack(pts + [np.array([[0.92, 0.86], [0.85, 0.86]])])  # keep the setting tag clear
+        taken = []
+        for role, c, text, anchor in (("rec", green, "Recoil\nNucleon", lambda k: (cen[k] / 50 + 0.14, 0.62 * curves["rec"][k] / ymax)),
+                                       ("lead", red, "Leading\nNucleon", lambda k: (cen[k] / 50, 0.25))):
+            k = int(np.argmax(curves[role]))
+            place_label(ax, text, c, pts, anchor(k), taken, fontsize=12, fontweight="bold")
+        ax.set_ylabel("Events per bin", fontsize=13)
+        ax.set_xlabel(r"$\theta$ [mrad]", fontsize=13, loc="right")
+    fig.tight_layout(h_pad=2.5)
     fig.savefig(outdir / "fig3_angles.pdf")
     plt.close(fig)
 
-    # Fig. 4: p_IRF vs angle of the recoil nucleon
-    fig, axes = plt.subplots(1, len(data), figsize=(5.2 * len(data), 3.8), squeeze=False)
-    for ax, (lab, (d, _)) in zip(axes[0], data.items()):
-        _, _, _, im = ax.hist2d(d["rec_theta_mrad"], d["rec_p_irf"], bins=[np.linspace(0, 30, 61), np.linspace(0, 1.2, 49)],
-                                weights=d["w_nb"] * lumi_nb_inv, cmap="Blues", norm=LogNorm(vmin=1))
-        fig.colorbar(im, ax=ax, label=r"events / bin (10 fb$^{-1}$)")
-        ax.axhline(P_IRF_MIN, color=ORANGE, lw=1.5, ls="--")
-        ax.set_xlabel(r"recoil $\theta$ w.r.t. ion beam [mrad]")
-        ax.set_ylabel(r"recoil $p_\mathrm{IRF}$ [GeV/$c$]")
-        ax.set_title(f"recoil nucleons, {lab}", fontsize=11)
-        style(ax)
+    # Fig. 4: recoil momentum in the ion rest frame vs opening angle to the ion beam (jet map, empty bins white)
+    fig, axes = plt.subplots(len(data), 1, figsize=(4.6, 2.9 * len(data)), squeeze=False)
+    for ax, (lab, (d, _)) in zip(axes[:, 0], data.items()):
+        xmax = 15 if low_energy[lab] else 8
+        H, xe, ye = np.histogram2d(d["rec_theta_mrad"], d["rec_p_irf"], bins=[np.linspace(0, xmax, 61), np.linspace(0, 0.8, 41)],
+                                   weights=d["w_nb"] * lumi_nb_inv)
+        ax.pcolormesh(xe, ye, np.ma.masked_less_equal(H, 0).T, cmap="jet", vmin=0, shading="flat", rasterized=True)
+        ax.axhline(P_IRF_MIN, color="red", lw=2, ls=(0, (5, 3)))
+        ax.text(0.05, 0.9, lab, transform=ax.transAxes, fontsize=15, va="top", color="#333333",
+                bbox=dict(facecolor="white", edgecolor="none", alpha=0.85, pad=2))
+        ax.text(0.95, 0.08, "Recoil\nNucleons", transform=ax.transAxes, fontsize=13, ha="right", va="bottom", color="#333333")
+        ax.set_xticks(np.arange(0, xmax + 1, 5 if xmax >= 10 else 2))
+        ax.set_xlim(0, xmax)
+        ax.set_ylim(0, 0.8)
+        ax.set_xlabel("Opening Angle [mrad]", fontsize=12, color="#333333")
+        ax.set_ylabel("Momentum (IRF) [GeV]", fontsize=12, color="#333333")
+        ax.tick_params(labelsize=11, colors="#333333")
     fig.tight_layout()
     fig.savefig(outdir / "fig4_pirf_vs_theta.pdf")
     plt.close(fig)
 
-    # Fig. 5: Q2 of events with a detected recoil (hit level), 10 fb^-1 x transparency
-    fig, ax = plt.subplots(figsize=(6.4, 4.0))
+    # Fig. 5: Q2 of events with a recoil detected far forward, 10 fb^-1 x transparency, one point per GeV^2
+    fig, ax = plt.subplots(figsize=(6.6, 3.8))
     bins = np.arange(3, 25.5, 1.0)
+    cen5 = 0.5 * (bins[1:] + bins[:-1])
+    curves5 = {}
     for lab, (d, _) in data.items():
         m = (d["rec_p_irf"] > P_IRF_MIN) & detected(d, "rec", "hit")
         h, _ = np.histogram(d["q2"][m], bins, weights=d["w_nb"][m] * scale)
-        ax.stairs(h, bins, color=colors[lab], lw=2, label=lab)
-        summary.setdefault(lab, {})["q2_reach_100_per_GeV2"] = float(bins[1:][h >= 100].max()) if (h >= 100).any() else None
-    ax.axhline(100, color=MUTED, lw=0.8, ls=":")
+        summary[lab]["q2_reach_100_per_GeV2"] = float(bins[1:][h >= 100].max()) if (h >= 100).any() else None
+        c, mk = (red, "o") if low_energy[lab] else ("#1029ff", "s")
+        g = h > 0
+        ax.plot(cen5[g], h[g], ls="none", marker=mk, ms=5, color=c)
+        curves5[lab] = (h, c)
     ax.set_yscale("log")
-    ax.set_ylim(bottom=0.1)
-    ax.set_xlabel(r"$Q^2$ [GeV$^2$]")
-    ax.set_ylabel(rf"events / GeV$^2$ ({lumi_nb_inv / 1e6:g} fb$^{{-1}}$ $\times$ {transparency:g})")
-    ax.set_title(r"$^{12}$C$(e,e'N_\mathrm{rec})$, recoil detected far forward, $x_B>1.2$, $p_\mathrm{IRF}>0.3$", fontsize=10)
-    ax.legend(frameon=False)
-    style(ax)
+    ax.set_xlim(1, 25)
+    lo = min(float(np.min(h[h > 0])) for h, _ in curves5.values())
+    hi = max(float(np.max(h)) for h, _ in curves5.values())
+    ax.set_ylim(lo / 2, hi * 2)
+    # direct labels: the higher curve labeled above itself, the lower below
+    order = sorted(curves5, key=lambda l: -float(np.sum(curves5[l][0])))
+    for i, lab in enumerate(order):
+        h, c = curves5[lab]
+        k = 12 if i == 0 else 3
+        ax.text(cen5[k], h[k] * (9 if i == 0 else 0.2), lab, color=c, fontsize=15, ha="center", va="center")
+    frame(ax)
+    ax.set_ylabel("Events per bin", fontsize=13, loc="top")
+    ax.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="right")
     fig.tight_layout()
     fig.savefig(outdir / "fig5_q2.pdf")
     plt.close(fig)
@@ -380,11 +451,13 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
                 axes[row, 0].set_ylim(0, ymax * 1.3)
         if not log and k10:
             axes[0, 0].text(0.0, 1.02, rf"$\times10^{{{k10}}}$", transform=axes[0, 0].transAxes, fontsize=12, va="bottom")
+        h, l_ = axes[0, 1].get_legend_handles_labels()
+        order = [l_.index(x) for x in ("Generated", "Accepted", "Reconstructed")]
+        h, l_ = [h[i] for i in order], [l_[i] for i in order]
         if log:  # the paper's log panels carry no legend; put it in one row above the grid
-            h, l_ = axes[0, 1].get_legend_handles_labels()
             fig.legend(h, l_, frameon=False, fontsize=11, ncol=3, loc="upper center", bbox_to_anchor=(0.555, 1.0))
         else:
-            axes[0, 1].legend(frameon=False, fontsize=11, loc="upper right", bbox_to_anchor=(1.0, 0.85))
+            axes[0, 1].legend(h, l_, frameon=False, fontsize=11, loc="upper right", bbox_to_anchor=(1.0, 0.85))
         fig.savefig(outdir / fname)
         plt.close(fig)
 
