@@ -348,6 +348,49 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     fig.savefig(outdir / "fig6_recoil_acceptance.pdf")
     plt.close(fig)
 
+    # Fig. 6, linear, laid out like PRC 105, 034001 Fig. 6(e)-(h): generated over the full p_IRF
+    # range (points), accepted at hit level (filled), accepted at reco level (points), 10 fb^-1 x 0.5
+    lbins = np.linspace(0.0, 1.3, 40)
+    lc = 0.5 * (lbins[1:] + lbins[:-1])
+    hw = 0.5 * np.diff(lbins)
+    fig, axes = plt.subplots(len(data), 2, figsize=(9.6, 3.4 * len(data)), sharex=True, sharey="row", squeeze=False)
+    letters = iter("efghijklmnop")
+    for row, (lab, (d, _)) in enumerate(data.items()):
+        ymax = 0.0
+        for col, (code, name) in enumerate(((2212, "proton"), (2112, "neutron"))):
+            ax = axes[row, col]
+            m = d["rec_type"] == code
+            x, w = d["rec_p_irf"][m], d["w_nb"][m] * scale
+            gen, _ = np.histogram(x, lbins, weights=w)
+            gerr = np.sqrt(np.histogram(x, lbins, weights=w**2)[0])
+            cut = x > P_IRF_MIN
+            hit = cut & detected(d, "rec", "hit")[m]
+            rec = cut & detected(d, "rec", "reco")[m]
+            acc, _ = np.histogram(x[hit], lbins, weights=w[hit])
+            rco, _ = np.histogram(x[rec], lbins, weights=w[rec])
+            rerr = np.sqrt(np.histogram(x[rec], lbins, weights=w[rec] ** 2)[0])
+            ax.stairs(acc, lbins, fill=True, color=BLUE, alpha=0.35, lw=0, label="Accepted (hit level)")
+            g = gen > 0
+            ax.errorbar(lc[g], gen[g], xerr=hw[g], yerr=gerr[g], fmt="none", ecolor=INK, elinewidth=1.2, label="Generated")
+            r = rco > 0
+            ax.errorbar(lc[r], rco[r], xerr=hw[r], yerr=rerr[r], fmt="none", ecolor=ORANGE, elinewidth=1.2,
+                        label="Accepted (reco level)")
+            ymax = max(ymax, float(np.max(gen + gerr)), float(np.max(acc)))
+            ax.text(0.04, 0.92, f"({next(letters)})", transform=ax.transAxes, va="top", fontsize=12)
+            ax.text(0.96, 0.92, f"{name}, {lab}", transform=ax.transAxes, va="top", ha="right", fontsize=11)
+            ax.ticklabel_format(axis="y", style="sci", scilimits=(0, 0), useMathText=True)
+            if col == 0:
+                ax.set_ylabel(r"Events per bin (10 fb$^{-1}$ $\times$ 0.5)")
+            style(ax)
+        axes[row, 0].set_ylim(0, 1.12 * ymax)  # rows share y; set after both panels are drawn
+    for ax in axes[-1]:
+        ax.set_xlim(0, 1.3)
+        ax.set_xlabel(r"Spectator momentum (ion rest frame) [GeV/$c$]")
+    axes[0, 1].legend(frameon=False, fontsize=9, loc="upper right", bbox_to_anchor=(1.0, 0.84))
+    fig.tight_layout()
+    fig.savefig(outdir / "fig6_recoil_acceptance_linear.pdf")
+    plt.close(fig)
+
     # Pair-type table: recoil-tagged and triple-coincidence fractions
     lines = []
     for lab, (d, metas) in data.items():
@@ -376,7 +419,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         print(f"{lab}: recoil p {summary[lab]['recoil p']}, recoil n {summary[lab]['recoil n']}, "
               f"Q2 reach (>=100/GeV2) {summary[lab]['q2_reach_100_per_GeV2']}, "
               f"electron {summary[lab]['electron_truth_matched']:.2f}")
-    print(f"wrote {outdir}/fig3_angles.pdf fig4_pirf_vs_theta.pdf fig5_q2.pdf fig6_recoil_acceptance.pdf summary.json pairs.txt")
+    print(f"wrote {outdir}/fig3_angles.pdf fig4_pirf_vs_theta.pdf fig5_q2.pdf fig6_recoil_acceptance.pdf fig6_recoil_acceptance_linear.pdf summary.json pairs.txt")
 
 
 def main():
