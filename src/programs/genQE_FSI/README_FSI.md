@@ -210,6 +210,14 @@ abconv -p ip6_eAu_41x5 -f hepmc3 -o ab gen.hepmc3
 npsim --compactFile geometry.xml --inputFiles ab.hepmc --outputFile sim.edm4hep.root -N -1
 ```
 
+- **Production driver.** `tools/run_eic_sim.sh` runs the whole chain: genQE on the host, then abconv, chunked npsim and EICrecon inside eic-shell. Each run directory gets a `run.json` recording versions, geometry, seeds, material map and job status. For example:
+  ```bash
+  EPIC_INSTALL=~/eic/dev/epic_craterlake_5x41/install EICRECON_INSTALL=~/eic/dev/EICrecon/install \
+    tools/run_eic_sim.sh --beams 5x41 --ion C12 --attempts 1500000 --seed 1 --out runs/c12_5x41
+  ```
+  - Default geometry: `epic_craterlake_5x41` with `fields/beamline_5x41_He4.xml` (Z/A = ½ rigidity), and `epic_craterlake_10x110_H2` for 10x110.
+  - abconv always draws the same random sequence (it has no seed option), so the script runs it once over the whole sample and only then splits the events into jobs.
+- **Seeds.** `genQE -S <seed>` makes a run reproducible. The seed is printed and stored in the output (`seed`), and the converter copies it into its JSON. With no `-S`, a random seed is drawn and printed.
 - **Which genQE.** Use this directory's `build/genQE`: its σ_CM default for ¹²C is 150 MeV/c (as in PRC 105, 034001), whereas the suite's `src/programs/genQE` defaults to 55 MeV/c. `-M` samples E* as in that paper (17.3 ± 9.6 MeV).
 - **What gets written.**
   - `genQE` events: the scattered electron, the leading and recoil nucleons, and the A−2 remnant nucleus (mass from the `mAm2` branch, including E*). An unbound remnant (nn, pp) is skipped.

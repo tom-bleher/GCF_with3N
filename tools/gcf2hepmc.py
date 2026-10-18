@@ -127,6 +127,7 @@ def read_tree(path):
         kind = "genQE"
     else:
         sys.exit(f"{path}: tree {t.name} has neither part_pdg nor pLead/pRec/pe")
+    seed = int(f["seed"].member("fVal")) if "seed" in keys else None
     attempts = None
     if "hAttempts" in keys:
         attempts = float(f["hAttempts"].values()[0])
@@ -135,7 +136,7 @@ def read_tree(path):
         for line in meta.read_text().splitlines():
             if line.startswith("n_events_attempts="):
                 attempts = float(line.split("=", 1)[1])
-    return t, names, kind, attempts
+    return t, names, kind, attempts, seed
 
 
 def electron_and_beam(t, names, sl):
@@ -201,7 +202,7 @@ def main():
     if args.print_ebeam_irf:
         print(f"{frame.e_irf:.6f}")
         return
-    t, names, kind, attempts = read_tree(args.input)
+    t, names, kind, attempts, seed = read_tree(args.input)
     stop = t.num_entries
     sl = slice(args.first, stop)
 
@@ -295,6 +296,7 @@ def main():
         "output": str(Path(args.output).resolve()),
         "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         "gcf_commit": git_commit(),
+        "generator_seed": seed,
         "beams": {"electron_GeV": e_beam, "ion": args.ion, "ion_pdg": pdg_ion,
                   "ion_momentum_per_nucleon_GeV": p_nucleon, "ion_momentum_GeV": ibz,
                   "gamma": frame.g, "E_IRF_beams_GeV": frame.e_irf, "E_IRF_run_GeV": e_run},
