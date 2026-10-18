@@ -530,6 +530,9 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
                 axes[row, 0].set_ylim(1, ymax * 8)
             else:
                 axes[row, 0].set_ylim(0, ymax * 1.3)
+                if row > 0:  # rows touch: drop the top tick label so it does not collide with the row above
+                    from matplotlib.ticker import MaxNLocator
+                    axes[row, 0].yaxis.set_major_locator(MaxNLocator(nbins=6, prune="upper"))
         if not log and k10:
             axes[0, 0].text(0.0, 1.02, rf"$\times10^{{{k10}}}$", transform=axes[0, 0].transAxes, fontsize=12, va="bottom")
         h, l_ = axes[0, 1].get_legend_handles_labels()
