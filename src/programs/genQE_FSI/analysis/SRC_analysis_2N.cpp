@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <cstdio>
 #include <vector>
 #include <algorithm>
 #include "QEGeneratorFSI.hh"
@@ -77,6 +78,13 @@ CLI (positional; later args optional):
                            momentum, and her double test is what leaks pairs
                            into the mean-field class. Provided so the size of
                            that leak can be measured.
+
+Environment:
+
+  GCF_QSQ_RANGE="MIN:MAX"  Q^2 sampling range in GeV^2 (default: the
+                           QEGeneratorFSI range, 1-10 GeV^2). EIC-energy runs
+                           (Ebeam = rest-frame-equivalent electron energy,
+                           e.g. 440 GeV for 5x41) reach Q^2 ~ 20-25 GeV^2.
 
 A companion <output>.meta.txt file is written so the Python analysis can
 recover wf_mode, kF, total weight, etc.
@@ -216,6 +224,17 @@ int main(int argc, char **argv) {
                                           : QEGeneratorFSI::kGlobalFG);
     }
 
+    // Q^2 sampling range (all wf_modes share solve_lepton_kinematics).
+    if (const char* qr = std::getenv("GCF_QSQ_RANGE")) {
+        double qlo = 0., qhi = 0.;
+        if (std::sscanf(qr, "%lf:%lf", &qlo, &qhi) != 2 || qlo < 0. || qhi <= qlo) {
+            std::cerr << "ERROR: GCF_QSQ_RANGE must be \"MIN:MAX\" in GeV^2 with "
+                         "0 <= MIN < MAX; got \"" << qr << "\"" << std::endl;
+            return 1;
+        }
+        myGen->set_QSq_range(qlo, qhi);
+    }
+
     std::cout << "\n========================================\n"
               << "  2N SRC Analysis — TTree output\n"
               << "========================================\n"
@@ -224,6 +243,7 @@ int main(int argc, char **argv) {
               << "  FSI:          " << (doFSI ? fsi_backend_str.c_str() : "DISABLED") << "\n"
               << "  sigma_CM:     " << sigCM_val << " GeV/c\n"
               << "  kF:           " << kF << " GeV/c\n"
+              << "  Q2 range:     [" << myGen->get_QSqmin() << ", " << myGen->get_QSqmax() << "] GeV^2\n"
               << "  WF mode:      " << wf_mode << " (" << wf_mode_name << ")";
     if (isMF) std::cout << "   [single-nucleon MF, "
                         << (useLocalFG ? "local" : "global") << " Fermi gas, kF=" << kF << " GeV/c]";
@@ -501,6 +521,8 @@ int main(int argc, char **argv) {
             }
             meta << "sigma_CM=" << sigCM_val << "\n";
             meta << "Ebeam=" << Ebeam << "\n";
+            meta << "QSq_min=" << myGen->get_QSqmin() << "\n";
+            meta << "QSq_max=" << myGen->get_QSqmax() << "\n";
             meta << "doFSI=" << (doFSI ? 1 : 0) << "\n";
             meta << "fsi_model=" << fsi_model_name << "\n";
             meta << "src_vertex_rho_power=" << fsi::GetSRCVertexRhoPower() << "\n";
