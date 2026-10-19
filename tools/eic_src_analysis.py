@@ -12,6 +12,10 @@ Two steps:
       Figures and a summary table. Q2 slices of one beam setting are listed together;
       each run's events are normalized by that run's own attempts, so slices add.
 
+  band --setting LABEL=RUN_DIR[,RUN_DIR...] [--setting ...] -o OUTDIR [--replicas N]
+      GCF contact-uncertainty band (12C PWIA runs): the contacts are varied within their
+      uncertainties and every event reweighted exactly by S'(k_rel)/S(k_rel); no new simulation.
+
 Event weight: w = (generator weight) / (attempts of its run), in nb, so sum(w) over a
 selection is its cross section; yields for 10 fb^-1 are sigma[nb] * 1e7, times 0.5 for
 nucleon transparency as in the paper (applied only where a figure says so).
@@ -119,6 +123,9 @@ def extract_file(sim_path):
         br += [f"{c}/{c}.position.z", f"_{c}_particle/_{c}_particle.index"]
     for c in ZDC_HITS:
         br += [f"{c}Contributions/{c}Contributions.energy", f"_{c}Contributions_particle/_{c}Contributions_particle.index"]
+    evap = (sim_path.parent / "gen_deex.hepmc3.json").exists()
+    if evap:  # Geant4 de-excitation products of the A-2 remnant (run_eic_sim.sh --deexcite)
+        br += [f"MCParticles/MCParticles.momentum.{c}" for c in "xyz"]
     s = uproot.open(sim_path)["events"].arrays(br, library="ak")
     roles = final_nucleons(sim_path.parent / "gen.root",
                            [int(n[0]) for n in s["EventHeader/EventHeader.eventNumber"]])
@@ -164,6 +171,24 @@ def extract_file(sim_path):
                 cp = ak.to_numpy(s[f"_{c}Contributions_particle/_{c}Contributions_particle.index"][k])
                 e += float(ce[anc[cp] == j].sum()) if len(cp) else 0.0
             row[f"{role}_zdc_edep"] = e
+        if evap:
+            # primaries after e', lead and recoil are the de-excitation products (appended by tools/deexcite)
+            n_known = 1 + max((j for j, _ in ev_roles.values() if j >= 0), default=-1) + 1
+            pdg_all = ak.to_numpy(s["MCParticles/MCParticles.PDG"][k])
+            mom = [ak.to_numpy(s[f"MCParticles/MCParticles.momentum.{c}"][k]) for c in "xyz"]
+            ev = []
+            for j in prim[n_known:]:
+                hits = []
+                for c in TRACKERS:
+                    z = ak.to_numpy(s[f"{c}/{c}.position.z"][k])[ak.to_numpy(s[f"_{c}_particle/_{c}_particle.index"][k]) == j]
+                    hits.append(stations(z))
+                e = 0.0
+                for c in ZDC_HITS:
+                    ce = ak.to_numpy(s[f"{c}Contributions/{c}Contributions.energy"][k])
+                    cp = ak.to_numpy(s[f"_{c}Contributions_particle/_{c}Contributions_particle.index"][k])
+                    e += float(ce[anc[cp] == j].sum()) if len(cp) else 0.0
+                ev.append((int(pdg_all[j]), float(mom[0][j]), float(mom[1][j]), float(mom[2][j]), *hits, e))
+            row["evap"] = ev
         if r is not None and num in r_index:
             q = r_index[num]
             rst = ak.to_numpy(r[mc[0]][q])
@@ -293,6 +318,20 @@ def extract(run, jobs):
         out["alpha_s"] = (es - (ps * qhat).sum(1)) / 0.93892
     if run_kind == "3N":
         out["rec2_p_irf"] = np.linalg.norm(g["p3_gen"][num], axis=1)
+    if any("evap" in r for r in rows):
+        # flat per-product arrays, evap_event = row of the event
+        ev = [(i, *t) for i, r in enumerate(rows) for t in r.get("evap", [])]
+        cols = ["event", "pdg", "px", "py", "pz", "B0TrackerHits", "ForwardOffMTrackerHits", "ForwardRomanPotHits", "zdc_edep"]
+        arr = np.array(ev, dtype=float).reshape(-1, len(cols))
+        for j, c in enumerate(cols):
+            out[f"evap_{c}"] = arr[:, j].astype(int) if c in ("event", "pdg") or c.endswith("Hits") else arr[:, j]
+        px, py, pz = out["evap_px"], out["evap_py"], out["evap_pz"]
+        ca, sa = np.cos(0.025), np.sin(0.025)  # angle to the ion beam (nominal crossing angle undone)
+        out["evap_theta_mrad"] = 1e3 * np.arctan2(np.hypot(px * ca + pz * sa, py), -px * sa + pz * ca)
+        nucleon = np.isin(out["evap_pdg"], (2212, 2112))
+        out["evap_p_irf"] = np.where(nucleon, lab_to_irf(px, py, pz, a, beams["ion_momentum_per_nucleon_GeV"], m), np.nan)
+        for r in rows:
+            r.pop("evap", None)
     keys = sorted({k for r in rows for k in r if k != "num"})
     for k in keys:
         mom = k.endswith(("_px", "_py", "_pz"))
@@ -337,6 +376,9 @@ def load(dirs):
     parts = [np.load(Path(r) / "analysis_events.npz") for r in dirs]
     keys = [k for k in parts[0].files if k != "meta"]
     d = {k: np.concatenate([p[k] for p in parts]) for k in keys}
+    if "evap_event" in d:  # per-product event index: offset by the events of the preceding runs
+        off = np.cumsum([0] + [len(p["num"]) for p in parts[:-1]])
+        d["evap_event"] = np.concatenate([p["evap_event"] + o for p, o in zip(parts, off)])
     metas = [json.loads(str(p["meta"])) for p in parts]
     return d, metas
 
@@ -806,6 +848,77 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     fig.savefig(outdir / "fig6b_acceptance_vs_pirf.pdf")
     plt.close(fig)
 
+    # Evaporation (runs with the Geant4 de-excitation of the A-2 remnant): Fig. 3 with the evaporation
+    # nucleons as in PRC 105, 034001 (there from BeAGLE), their rest-frame momenta, where they land in
+    # the far-forward detectors, and how often they share the ZDC with a recoil neutron
+    if all("evap_pdg" in d for d, _ in data.values()):
+        blue_ev = "#1f3fe0"
+        fig, axes = plt.subplots(len(data), 2, figsize=(11.0, 3.6 * len(data)), squeeze=False)
+        for row, (lab, (d, _)) in enumerate(data.items()):
+            w = d["w_nb"] * lumi_nb_inv
+            ev, pdg = d["evap_event"], d["evap_pdg"]
+            nuc = np.isin(pdg, (2212, 2112))
+            we = w[ev]
+            ax = axes[row, 0]
+            tb = np.arange(0, 20.25, 0.25) if low_energy[lab] else np.arange(0, 8.1, 0.1)
+            tc = 0.5 * (tb[1:] + tb[:-1])
+            for x, wt, c, name in ((d["rec_theta_mrad"], w, green, "Recoil nucleon"), (d["lead_theta_mrad"], w, red, "Leading nucleon"),
+                                   (d["evap_theta_mrad"][nuc & (pdg == 2212)], we[nuc & (pdg == 2212)], blue_ev, "Evaporation protons"),
+                                   (d["evap_theta_mrad"][pdg == 2112], we[pdg == 2112], "#00a0c0", "Evaporation neutrons")):
+                h = np.histogram(x, tb, weights=wt)[0]
+                ax.step(tc, h, where="mid", color=c, lw=1.6, label=name)
+            ax.axvline(4.0, color=brown, lw=1, ls=":")
+            ax.text(4.0, 1.01, "ZDC limit", transform=ax.get_xaxis_transform(), ha="center", va="bottom", color=brown, fontsize=10)
+            ax.set_yscale("log")
+            ax.set_xlim(tb[0], tb[-1])
+            frame(ax)
+            ax.set_xlabel(r"$\theta$ w.r.t. ion beam [mrad]", fontsize=12, loc="right")
+            ax.set_ylabel("Particles per bin (10 fb$^{-1}$)", fontsize=11)
+            ax.text(0.03, 0.95, lab, transform=ax.transAxes, ha="left", va="top", fontsize=12, fontweight="bold")
+            lo_, hi_ = ax.get_ylim()
+            ax.set_ylim(lo_, hi_ * 60)  # headroom for the legend
+            ax.legend(frameon=False, fontsize=9, loc="upper right", ncol=2)
+            ax = axes[row, 1]
+            pb = np.linspace(0, 0.6, 61)
+            for code, c, name in ((2212, blue_ev, "Evaporation protons"), (2112, "#00a0c0", "Evaporation neutrons")):
+                m = pdg == code
+                ax.stairs(np.histogram(d["evap_p_irf"][m], pb, weights=we[m])[0], pb, color=c, lw=1.6, label=name)
+            for code, c, name in ((2212, green, "Recoil protons"), (2112, "#7d9a3a", "Recoil neutrons")):
+                m = d["rec_type"] == code
+                ax.stairs(np.histogram(d["rec_p_irf"][m], pb, weights=w[m])[0], pb, color=c, lw=1.2, ls="--", label=name)
+            ax.axvline(P_IRF_MIN, color=MUTED, lw=1, ls=":")
+            ax.set_yscale("log")
+            frame(ax)
+            ax.set_xlabel(r"Momentum (Ion Rest Frame) [GeV/$c$]", fontsize=12, loc="right")
+            lo_, hi_ = ax.get_ylim()
+            ax.set_ylim(lo_, hi_ * 60)
+            ax.legend(frameon=False, fontsize=9, loc="upper right", ncol=2)
+            # summary: multiplicities, detection, and the overlap with the recoil sample
+            n_ev = float(w.sum())
+            det_p = (d["evap_B0TrackerHits"] >= 3) | (d["evap_ForwardOffMTrackerHits"] >= 2) | (d["evap_ForwardRomanPotHits"] >= 2)
+            det_n = d["evap_zdc_edep"] > 0
+            sp, sn = pdg == 2212, pdg == 2112
+            frac = lambda m_, ok: float(we[m_ & ok].sum() / max(we[m_].sum(), 1e-300))  # noqa: E731
+            zdc_evap = np.zeros(len(w), bool)
+            np.logical_or.at(zdc_evap, ev[sn & det_n], True)
+            recn = (d["rec_type"] == 2112) & (d["rec_p_irf"] > P_IRF_MIN) & detected(d, "rec", "hit")
+            summary[lab]["evaporation"] = {
+                "neutrons_per_event": float(we[sn].sum() / n_ev), "protons_per_event": float(we[sp].sum() / n_ev),
+                "products_per_event_by_pdg": {str(int(c_)): float(we[pdg == c_].sum() / n_ev) for c_ in np.unique(pdg)},
+                "evap_protons_B0": frac(sp, d["evap_B0TrackerHits"] >= 3), "evap_protons_OMD": frac(sp, d["evap_ForwardOffMTrackerHits"] >= 2),
+                "evap_protons_RP": frac(sp, d["evap_ForwardRomanPotHits"] >= 2), "evap_protons_any": frac(sp, det_p),
+                "evap_neutrons_ZDC": frac(sn, det_n),
+                "evap_nucleons_above_pIRF_cut": frac(nuc, d["evap_p_irf"] > P_IRF_MIN),
+                "events_with_evap_neutron_in_ZDC": float(w[zdc_evap].sum() / n_ev),
+                "tagged_recoil_neutrons_sharing_ZDC_with_evap_neutron": float(w[recn & zdc_evap].sum() / max(w[recn].sum(), 1e-300)),
+            }
+        fig.tight_layout()
+        fig.savefig(outdir / "figEvap_angles_momenta.pdf")
+        plt.close(fig)
+        for lab in data:
+            print(f"{lab}: evaporation {summary[lab]['evaporation']}")
+
+
     # Pair-type table: recoil-tagged and triple-coincidence fractions
     lines = []
     for lab, (d, metas) in data.items():
@@ -837,6 +950,176 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     print(f"wrote {outdir}/fig3_angles.pdf fig4_pirf_vs_theta.pdf fig5_q2.pdf fig2_resolution.pdf fig6_recoil_acceptance.pdf fig6_recoil_acceptance_linear.pdf fig6b_acceptance_vs_pirf.pdf summary.json pairs.txt")
 
 
+# ----------------------------------------------------------------------------- contact uncertainty band
+
+# GCF k-space contacts from the Scale and Scheme paper with their uncertainties, as set in
+# src/libraries/nucleus/gcfSRC.cc (set_Contacts_SS_k, AV18), per A/2; gcfSRC::randomize_Contacts
+# varies each one independently with a Gaussian of this width
+CONTACTS_SS_K = {"C12": {"Cpp0": (1.140, 0.210), "Cnn0": (1.140, 0.210), "Cpn0": (1.244, 0.319), "Cpn1": (15.876, 1.770)}}
+GEV_FM = 0.1973  # src/include/constants.hh
+
+
+def av18_phi_sq():
+    """AV18 pn spin-0 and spin-1 |phi|^2 tables (src/libraries/nucleus/universal_functions/AV18.hh)."""
+    import re
+    text = (Path(__file__).resolve().parent.parent / "src/libraries/nucleus/universal_functions/AV18.hh").read_text()
+    tab = {}
+    for name in ("AV18_pn0", "AV18_pn1"):
+        body = re.search(name + r"\[100\]\s*=\s*\{([^}]*)\}", text).group(1)
+        tab[name] = np.array([float(x) for x in body.replace("\n", "").split(",") if x.strip()])
+        assert len(tab[name]) == 100
+    return tab["AV18_pn0"], tab["AV18_pn1"]
+
+
+def phi_sq(table, k):
+    """gcfSRC::get_phiSq without its constant normalization (ratios at equal k only)."""
+    b = np.asarray(k) / GEV_FM / 0.1
+    i = np.clip(np.floor(b).astype(int), 1, 99)
+    x = b - i
+    v = x * table[i] + (1 - x) * table[i - 1]
+    return np.where((b >= 1) & (b <= 100), v, 0.0)
+
+
+def contact_basis(d, k):
+    """Per event, the coefficients b_c of the contact-reweighting factor f = sum_c C'_c b_c (f = 1 at the
+    nominal contacts): the weight goes with S(k_rel) = 2 C_pp0 phi_pp0^2, 2 C_nn0 phi_nn0^2 or
+    C_pn0 phi_pn0^2 + C_pn1 phi_pn1^2 of the struck pair (gcfSRC::get_S)."""
+    c = {n: v[0] for n, v in CONTACTS_SS_K["C12"].items()}
+    t0, t1 = av18_phi_sq()
+    f0, f1 = phi_sq(t0, k), phi_sq(t1, k)
+    lt, rt = d["lead_type"], d["rec_type"]
+    pp, nn = (lt == 2212) & (rt == 2212), (lt == 2112) & (rt == 2112)
+    pn = ~pp & ~nn
+    b = np.zeros((len(k), 4))  # columns: Cpp0, Cnn0, Cpn0, Cpn1
+    b[pp, 0] = 1 / c["Cpp0"]
+    b[nn, 1] = 1 / c["Cnn0"]
+    den = c["Cpn0"] * f0 + c["Cpn1"] * f1
+    ok = pn & (den > 0)
+    b[ok, 2] = f0[ok] / den[ok]
+    b[ok, 3] = f1[ok] / den[ok]
+    return b
+
+
+def band(settings, outdir, lumi_nb_inv, transparency, n_rep, seed):
+    """Contact-uncertainty band of the 12C PWIA results by exact reweighting of the simulated events."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    scale = lumi_nb_inv * transparency
+    names = list(CONTACTS_SS_K["C12"])
+    nom = np.array([CONTACTS_SS_K["C12"][n][0] for n in names])
+    sig = np.array([CONTACTS_SS_K["C12"][n][1] for n in names])
+    rng = np.random.default_rng(seed)
+    reps = np.clip(nom + sig * rng.standard_normal((n_rep, 4)), 0, None)
+    pct = lambda a: np.percentile(a, [16, 50, 84], axis=0)  # noqa: E731
+    summary = {"contacts_per_A_over_2": {n: {"value": v[0], "sigma": v[1]} for n, v in CONTACTS_SS_K["C12"].items()},
+               "replicas": n_rep, "seed": seed, "method": "independent Gaussian contacts (gcfSRC::randomize_Contacts), "
+               "exact per-event reweighting S'(k_rel)/S(k_rel); 16th/50th/84th percentiles over replicas"}
+    red, blue = "#f0281e", "#1029ff"
+    bins = np.arange(3, 25.5, 1.0)
+    cen = 0.5 * (bins[1:] + bins[:-1])
+    lbins = np.linspace(0.0, 1.3, 40)
+    lc = 0.5 * (lbins[1:] + lbins[:-1])
+    fig5, ax5 = plt.subplots(figsize=(6.6, 3.8))
+    fig6, ax6 = plt.subplots(len(settings), 2, figsize=(8.4, 2.8 * len(settings) + 0.9), sharey="row", squeeze=False,
+                             gridspec_kw={"wspace": 0, "hspace": 0})
+    figr, axr = plt.subplots(1, 2, figsize=(10.0, 3.8), sharey=True)
+    for row, (lab, dirs) in enumerate(settings.items()):
+        d, metas = load(dirs)
+        if any(m_.get("kind", "2N") != "2N" for m_ in metas) or metas[0]["beams"]["ion"] != "C12":
+            sys.exit("band: 12C SRC-pair (genQE) runs only")
+        k = np.concatenate([np.linalg.norm(uproot.open(Path(r) / "gen.root")["genT"]["pRel"].array(library="np")
+                                           [np.load(Path(r) / "analysis_events.npz")["num"]], axis=1) for r in dirs])
+        B = contact_basis(d, k)
+        assert np.allclose(B @ nom, 1.0), "reweighting factor is not 1 at the nominal contacts"
+        w = d["w_nb"]
+        lin = lambda sel, x=None, bb=None: (np.stack([np.histogram(x[sel], bb, weights=(w * B[:, c])[sel])[0] for c in range(4)])  # noqa: E731
+                                            if x is not None else np.array([(w * B[:, c])[sel].sum() for c in range(4)]))
+        cut = d["rec_p_irf"] > P_IRF_MIN
+        tag = cut & detected(d, "rec", "hit")
+        out = {}
+        # cross section after the cuts and the p_IRF cut, and the recoil-tagged yields for 10 fb^-1 x transparency
+        out["sigma_nb_cuts_pIRF"] = pct(reps @ lin(cut))
+        for code, name in ((2212, "p"), (2112, "n")):
+            m = d["rec_type"] == code
+            out[f"recoil {name} tagged events"] = pct(reps @ lin(tag & m) * scale)
+            out[f"recoil {name} acceptance (hit)"] = pct((reps @ lin(tag & m)) / (reps @ lin(cut & m)))
+        for lt, rt, pair in ((2212, 2212, "pp"), (2212, 2112, "pn"), (2112, 2212, "np"), (2112, 2112, "nn")):
+            m = cut & (d["lead_type"] == lt) & (d["rec_type"] == rt)
+            out[f"share {pair}"] = pct((reps @ lin(m)) / (reps @ lin(cut)))
+        # Fig. 5 with the band, and the Q2 reach per replica
+        H = reps @ lin(tag, d["q2"], bins) * scale
+        h_nom = nom @ lin(tag, d["q2"], bins) * scale
+        reach = np.array([bins[1:][h >= 100].max() if (h >= 100).any() else np.nan for h in H])
+        out["q2_reach_100_per_GeV2"] = np.nanpercentile(reach, [16, 50, 84])
+        lo, hi = np.percentile(H, [16, 84], axis=0)
+        c, mk = (red, "o") if metas[0]["beams"]["ion_momentum_per_nucleon_GeV"] < 75 else (blue, "s")
+        g = h_nom > 0
+        ax5.fill_between(cen[g], lo[g], hi[g], step=None, color=c, alpha=0.2, lw=0)
+        ax5.plot(cen[g], h_nom[g], ls="none", marker=mk, ms=5, color=c, label=lab)
+        ok = h_nom > 0
+        axr[0].fill_between(cen[ok], (lo / h_nom - 1)[ok], (hi / h_nom - 1)[ok], color=c, alpha=0.25, lw=0, label=lab)
+        # Fig. 6: accepted recoil spectra (hit level) with the band
+        for col, (code, name) in enumerate(((2212, "proton"), (2112, "neutron"))):
+            ax = ax6[row, col]
+            m = tag & (d["rec_type"] == code)
+            Hs = reps @ lin(m, d["rec_p_irf"], lbins) * scale
+            hn = nom @ lin(m, d["rec_p_irf"], lbins) * scale
+            l6, h6 = np.percentile(Hs, [16, 84], axis=0)
+            ok = hn > 0
+            ls_ = "-" if code == 2212 else "--"
+            for y in (l6, h6):
+                axr[1].plot(lc[ok], (y / hn - 1)[ok], ls=ls_, color=c, lw=1.6,
+                            label=f"recoil {name}, {lab}" if y is l6 else None)
+            ax.stairs(hn, lbins, color="#f4c4c4", fill=True, lw=0, label="Accepted (nominal contacts)")
+            ax.fill_between(lc, l6, h6, step="mid", color=INK, alpha=0.25, lw=0, label="contact uncertainty (68%)")
+            ax.tick_params(direction="in", which="both", top=True, right=True, labelsize=11)
+            ax.set_xlim(0, 1.3)
+            ax.set_xticks([0.0, 0.5, 1.0] if col == 0 else [0.5, 1.0])
+            rel = (h6.sum() - l6.sum()) / 2 / max(hn.sum(), 1e-300)
+            ax.text(0.95, 0.93, f"{name}, {lab}\n$\\pm${100 * rel:.0f}% (68%)", transform=ax.transAxes, va="top", ha="right", fontsize=11)
+            if row < len(settings) - 1:
+                ax.tick_params(labelbottom=False)
+        ax6[row, 0].set_yscale("log")
+        ax6[row, 0].set_ylim(1, None)
+        ax6[row, 0].set_ylabel("Events per bin", fontsize=12)
+        summary[lab] = {key: {"p16": float(v[0]), "median": float(v[1]), "p84": float(v[2])} for key, v in out.items()}
+        summary[lab]["runs"] = [m_["run"] for m_ in metas]
+        print(f"{lab}: " + ", ".join(f"{key} {v[1]:.4g} [{v[0]:.4g}, {v[2]:.4g}]" for key, v in out.items()))
+    ax5.set_yscale("log")
+    ax5.set_xlim(1, 25)
+    ax5.tick_params(direction="in", which="both", top=True, right=True, labelsize=12)
+    ax5.set_ylabel("Events per bin", fontsize=13, loc="top")
+    ax5.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="right")
+    ax5.axhline(100, color=MUTED, lw=0.8, ls=":")
+    ax5.legend(frameon=False, fontsize=12, title="band: GCF contact uncertainty (68%)", title_fontsize=10)
+    fig5.tight_layout()
+    fig5.savefig(outdir / "figband_q2.pdf")
+    for ax, xl in zip(axr, (r"Q$^2$ [GeV$^2$/c$^4$]", r"Spectator Momentum (Ion Rest Frame) [GeV/$c$]")):
+        ax.axhline(0, color=MUTED, lw=0.8)
+        ax.tick_params(direction="in", which="both", top=True, right=True, labelsize=11)
+        ax.set_xlabel(xl, fontsize=12, loc="right")
+    axr[0].set_xlim(3, 25)
+    axr[1].set_xlim(P_IRF_MIN, 1.2)
+    axr[0].set_ylabel("relative contact uncertainty (68%)", fontsize=12)
+    axr[0].text(0.03, 0.95, "recoil-tagged yield", transform=axr[0].transAxes, va="top", fontsize=11)
+    axr[1].text(0.03, 0.95, "accepted recoils (hit level)", transform=axr[1].transAxes, va="top", fontsize=11)
+    axr[0].legend(frameon=False, fontsize=10, loc="lower right")
+    axr[1].legend(frameon=False, fontsize=9, loc="lower right", ncol=2)
+    figr.tight_layout()
+    figr.savefig(outdir / "figband_relative.pdf")
+    fig6.subplots_adjust(left=0.13, right=0.98, top=1 - 0.45 / fig6.get_figheight(), bottom=0.55 / fig6.get_figheight())
+    fig6.supxlabel(r"Spectator Momentum (Ion Rest Frame) [GeV/$c$]", fontsize=12, y=0.1 / fig6.get_figheight())
+    h_, l_ = ax6[0, 1].get_legend_handles_labels()
+    fig6.legend(h_, l_, frameon=False, fontsize=10, ncol=2, loc="upper center", bbox_to_anchor=(0.555, 1.0))
+    fig6.savefig(outdir / "figband_recoil_spectra.pdf")
+    (outdir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
+    print(f"wrote {outdir}/figband_q2.pdf figband_recoil_spectra.pdf figband_relative.pdf summary.json")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -848,6 +1131,13 @@ def main():
     p.add_argument("-o", "--outdir", required=True)
     p.add_argument("--lumi-fb", type=float, default=10.0, help="integrated luminosity per nucleus [fb^-1] (default 10)")
     p.add_argument("--transparency", type=float, default=0.5, help="flat nucleon transparency factor (default 0.5)")
+    b = sub.add_parser("band", help="GCF contact-uncertainty band of 12C runs by reweighting (no new simulation)")
+    b.add_argument("--setting", action="append", required=True, help="LABEL=RUN_DIR[,RUN_DIR...] (Q2 slices of one setting)")
+    b.add_argument("-o", "--outdir", required=True)
+    b.add_argument("--lumi-fb", type=float, default=10.0)
+    b.add_argument("--transparency", type=float, default=0.5)
+    b.add_argument("--replicas", type=int, default=1000)
+    b.add_argument("--seed", type=int, default=1)
     a = ap.parse_args()
     if a.cmd == "extract":
         for r in a.runs:
@@ -857,7 +1147,10 @@ def main():
         for s in a.setting:
             lab, dirs = s.split("=", 1)
             settings[lab] = dirs.split(",")
-        plots(settings, a.outdir, a.lumi_fb * 1e6, a.transparency)
+        if a.cmd == "band":
+            band(settings, a.outdir, a.lumi_fb * 1e6, a.transparency, a.replicas, a.seed)
+        else:
+            plots(settings, a.outdir, a.lumi_fb * 1e6, a.transparency)
 
 
 if __name__ == "__main__":
