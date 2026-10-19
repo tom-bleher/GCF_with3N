@@ -25,6 +25,10 @@
 #                         genDIS (DIS off an SRC pair, CT18NN PDFs; use --no-cuts), or genQE_3N_FSI
 #                         (3N SRC; --attempts is then the number of accepted events; "-n" for no FSI)
 #   --gen-args "ARGS"     extra generator flags. E* sampling (-M) is added for A > 2 SRC runs
+#   --deexcite            de-excite the A-2 remnant with Geant4 (evaporation nucleons, light fragments,
+#                         photons) before the afterburner: tools/deexcite, built inside eic-shell with
+#                         cmake -S tools/deexcite -B tools/deexcite/build && cmake --build tools/deexcite/build
+#                         (genQE and genDIS, whose output carries the remnant)
 #   --no-cuts             convert all events instead of Q2 > 3, xB > 1.2
 #   --compress N          ROOT compression of sim/reco output (default 505 = ZSTD level 5, about a
 #                         third smaller than npsim/EICrecon's ZLIB 1; 0 keeps their output as is)
@@ -52,7 +56,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 GCF=$(cd "$HERE/.." && pwd)
 
-BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 RJOBS=40 RTHREADS=1 CUTS="--paper-cuts" STAGE=all GEN=genQE GEN_ARGS="" COMPRESS=505
+BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 RJOBS=40 RTHREADS=1 CUTS="--paper-cuts" STAGE=all GEN=genQE GEN_ARGS="" COMPRESS=505 DEEX=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --beams) BEAMS=$2; shift 2 ;;
@@ -70,6 +74,7 @@ while [[ $# -gt 0 ]]; do
     --generator) GEN=$2; shift 2 ;;
     --gen-args) GEN_ARGS=$2; shift 2 ;;
     --compress) COMPRESS=$2; shift 2 ;;
+    --deexcite) DEEX=1; shift ;;
     --stage) STAGE=$2; shift 2 ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
@@ -96,6 +101,11 @@ fi
 [[ -d $FIELDMAPS ]] || die "FIELDMAPS=$FIELDMAPS is not a directory"
 if [[ $STAGE == all || $STAGE == reco || $STAGE == resume ]]; then
   [[ -n ${EICRECON_INSTALL:-} && -f $EICRECON_INSTALL/bin/eicrecon-this.sh ]] || die "set EICRECON_INSTALL"
+fi
+DEEX_BIN=$GCF/tools/deexcite/build/deexcite
+if [[ $DEEX == 1 ]]; then
+  [[ $GEN == genQE || $GEN == genDIS ]] || die "--deexcite needs the A-2 remnant in the event: genQE or genDIS"
+  [[ -x $DEEX_BIN ]] || die "--deexcite: build tools/deexcite inside eic-shell first (see --help)"
 fi
 if [[ $STAGE == all ]]; then
   [[ -e $OUT ]] && die "$OUT exists; use a new directory or --stage to continue a run"
@@ -163,7 +173,7 @@ OUT="$OUT"
 cd "\$OUT"
 STAGE=$STAGE CHUNK=$CHUNK JOBS=$JOBS RJOBS=$RJOBS RTHREADS=$RTHREADS COMPRESS=$COMPRESS SEED=$SEED FIELDMAPS="$FIELDMAPS"
 EPIC_INSTALL="$EPIC_INSTALL" EPIC_CONFIG="$EPIC_CONFIG" FIELD="$FIELD" AB_PRESET="$AB_PRESET"
-EICRECON_INSTALL="${EICRECON_INSTALL:-}"
+EICRECON_INSTALL="${EICRECON_INSTALL:-}" DEEX=$DEEX DEEX_BIN="$DEEX_BIN"
 EOF
   cat >> container_stage.sh <<'EOF'
 log() { echo "[$(date +%T)] $*" | tee -a run.log; }
@@ -227,7 +237,15 @@ if [[ $STAGE == all || $STAGE == sim ]]; then
     sed -i -E "s#fields/beamline_[^\"]+\.xml#$FIELD#" geometry.xml
   fi
   log "geometry: $EPIC_CONFIG with $(grep -o 'fields/beamline_[^"]*\.xml' geometry.xml)"
-  abconv -p "$AB_PRESET" -f hepmc3 --plot-off -o ab gen.hepmc3 > abconv.log 2>&1 || { log "abconv failed"; exit 4; }
+  AB_IN=gen.hepmc3
+  if [[ $DEEX == 1 ]]; then
+    # Geant4 de-excitation of the A-2 remnant; its products follow all other particles, so the
+    # analysis's role order (e', lead, recoil) is unchanged
+    "$DEEX_BIN" gen.hepmc3 gen_deex.hepmc3 --seed "$SEED" > deexcite.log 2>&1 || { log "deexcite failed (deexcite.log)"; exit 4; }
+    log "$(grep '^deexcite:' deexcite.log)"
+    AB_IN=gen_deex.hepmc3
+  fi
+  abconv -p "$AB_PRESET" -f hepmc3 --plot-off -o ab "$AB_IN" > abconv.log 2>&1 || { log "abconv failed"; exit 4; }
   log "abconv $AB_PRESET: $(grep -c '^E ' ab.hepmc) events"
   rm -f chunk_*.hepmc
   awk -v per="$CHUNK" '
@@ -317,6 +335,7 @@ run = {
     "q2_range_GeV2": [float(x) for x in (o / "ps.txt").read_text().split()[1:3]] if (o / "ps.txt").exists() else None,
     "gcf": (o / "gcf_version.txt").read_text().split() if (o / "gcf_version.txt").exists() else None,
     "converter": json.loads((o / "gen.hepmc3.json").read_text()) if (o / "gen.hepmc3.json").exists() else None,
+    "deexcitation": json.loads((o / "gen_deex.hepmc3.json").read_text()) if (o / "gen_deex.hepmc3.json").exists() else None,
     "epic": {"install": epic, "config": config, "field_swap": field or None, "git": git(epic)},
     "eicrecon": {"install": eicrecon or None, "git": git(eicrecon) if eicrecon else None},
     "abconv_preset": preset,
