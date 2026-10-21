@@ -62,11 +62,18 @@ def in_region_R(theta12, theta23, A=135.0, K=4.0):
     line3 = -(theta12 - A) + 180.0 - (180.0 - A) * B
     return (theta23 <= line1) & (theta23 >= line2) & (theta23 >= line3)
 
-def in_region_L(theta12, theta23, A=135.0, K=4.0):
-    return in_region_R(360.0 - theta12 - theta23, theta23, A, K)
+# L and BR are R with theta12 resp. theta23 replaced by theta13. For coplanar
+# momenta (p1+p2+p3 = 0, e.g. p3 reconstructed) theta13 = 360 - theta12 -
+# theta23, the mirror used when theta13 is not given. The truth momenta here
+# are NOT coplanar when the generator's CM motion is on, so callers pass the
+# actual theta13.
+def in_region_L(theta12, theta23, A=135.0, K=4.0, theta13=None):
+    t13 = 360.0 - theta12 - theta23 if theta13 is None else theta13
+    return in_region_R(t13, theta23, A, K)
 
-def in_region_BR(theta12, theta23, A=135.0, K=4.0):
-    return in_region_R(theta12, 360.0 - theta12 - theta23, A, K)
+def in_region_BR(theta12, theta23, A=135.0, K=4.0, theta13=None):
+    t13 = 360.0 - theta12 - theta23 if theta13 is None else theta13
+    return in_region_R(theta12, t13, A, K)
 
 def _triangle_area(p1, p2, p3):
     """Area of triangle given 3 vertices."""
@@ -323,12 +330,13 @@ def plot_theta_heatmap(d, out_dir):
         mask = base_mask & cut_mask
         t12 = d["theta12"][mask]
         t23 = d["theta23"][mask]
+        t13 = d["theta13"][mask]
         w = d["weight"][mask]
         w_tot = sum(w) + 1e-30
 
-        fL = sum(w[in_region_L(t12, t23)]) / w_tot
+        fL = sum(w[in_region_L(t12, t23, theta13=t13)]) / w_tot
         fR = sum(w[in_region_R(t12, t23)]) / w_tot
-        fBR = sum(w[in_region_BR(t12, t23)]) / w_tot
+        fBR = sum(w[in_region_BR(t12, t23, theta13=t13)]) / w_tot
         fC = sum(w[in_region_center(t12, t23, center_radius)]) / w_tot
         print(f"  [{cut_label}] L: {fL:.6f}  R: {fR:.6f}  BR: {fBR:.6f}  Center(r={center_radius:.2f}): {fC:.6f}")
 
@@ -463,7 +471,7 @@ def plot_region_overlays(d, out_dir):
                 & (d["lead_over_q"] > 0.75) \
                 & (d["interplane_angle"] < 20)
 
-    mask_L = mask_cuts & in_region_L(d["theta12"], d["theta23"])
+    mask_L = mask_cuts & in_region_L(d["theta12"], d["theta23"], theta13=d["theta13"])
     mask_R = mask_cuts & in_region_R(d["theta12"], d["theta23"])
 
     variables = [
@@ -778,6 +786,7 @@ def plot_xB_by_region(d, out_dir):
     """xB distributions per region, with and without theta(pmiss,q)>90 cut."""
     t12 = d["theta12"]
     t23 = d["theta23"]
+    t13 = d["theta13"]
     w = d["weight"]
     xB = d["xB"]
     angle_pq = d["p1_angle_q"]
@@ -785,9 +794,9 @@ def plot_xB_by_region(d, out_dir):
     Q2_cut = d["Q2"] >= 1.0
 
     regions = [
-        ("Region L", in_region_L(t12, t23) & Q2_cut, 'purple'),
+        ("Region L", in_region_L(t12, t23, theta13=t13) & Q2_cut, 'purple'),
         ("Region R", in_region_R(t12, t23) & Q2_cut, 'tab:blue'),
-        ("Region BR", in_region_BR(t12, t23) & Q2_cut, 'green'),
+        ("Region BR", in_region_BR(t12, t23, theta13=t13) & Q2_cut, 'green'),
     ]
 
     fig, axes = plt.subplots(1, 3, figsize=(20, 5))
@@ -849,13 +858,14 @@ def plot_E1_over_mN_by_region(d, out_dir):
     """E1/mN distribution per region."""
     t12 = d["theta12"]
     t23 = d["theta23"]
+    t13 = d["theta13"]
     w = d["weight"]
     Q2_cut = d["Q2"] >= 1.0
 
     regions = [
-        ("Region L", in_region_L(t12, t23) & Q2_cut, 'purple'),
+        ("Region L", in_region_L(t12, t23, theta13=t13) & Q2_cut, 'purple'),
         ("Region R", in_region_R(t12, t23) & Q2_cut, 'tab:blue'),
-        ("Region BR", in_region_BR(t12, t23) & Q2_cut, 'green'),
+        ("Region BR", in_region_BR(t12, t23, theta13=t13) & Q2_cut, 'green'),
     ]
 
     fig, ax = plt.subplots(figsize=(7, 5))
@@ -886,7 +896,8 @@ def compute_region_fractions(d):
     w_total = np.sum(d["weight"][mask_cuts])
     t12 = d["theta12"][mask_cuts]
     t23 = d["theta23"][mask_cuts]
-    w_L = np.sum(d["weight"][mask_cuts][in_region_L(t12, t23)])
+    t13 = d["theta13"][mask_cuts]
+    w_L = np.sum(d["weight"][mask_cuts][in_region_L(t12, t23, theta13=t13)])
     w_R = np.sum(d["weight"][mask_cuts][in_region_R(t12, t23)])
 
     print("\n--- Region fractions with kinematic cuts ---")
