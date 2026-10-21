@@ -24,7 +24,8 @@
 #                         --gen-args "-n" no FSI, with "-F 0.25" single-nucleon mean field),
 #                         genDIS (DIS off an SRC pair, CT18NN PDFs; use --no-cuts), or genQE_3N_FSI
 #                         (3N SRC; --attempts is then the number of accepted events; "-n" for no FSI)
-#   --gen-args "ARGS"     extra generator flags. E* sampling (-M) is added for A > 4 SRC runs
+#   --gen-args "ARGS"     extra generator flags. E* sampling (-M) is added for A > 4 SRC runs (4He runs
+#                         at E* = 0; Pybus et al. 2020 varied the 4He A-2 E* over 0-10 MeV as a systematic)
 #   --deexcite            de-excite the A-2 remnant with Geant4 (evaporation nucleons, light fragments,
 #                         photons) before the afterburner: tools/deexcite, built inside eic-shell with
 #                         cmake -S tools/deexcite -B tools/deexcite/build && cmake --build tools/deexcite/build
@@ -129,7 +130,10 @@ if [[ $STAGE == all || $STAGE == gen ]]; then
   # E* of the A-2 remnant (-M) only exists for an SRC pair in a nucleus with A > 4: for the
   # deuteron it would give the empty remnant a mass, and for 4He it would turn the A-2 = 2 pn
   # remnant into a deuteron with mass m_d + E* (about 17 MeV), which does not exist; pp and nn are
-  # unbound either way. The mean field (-F) has no pair, and genQE_3N_FSI has no -M.
+  # unbound either way. E* = 0 is the edge of the 0-10 MeV band Pybus et al. 2020 (4He(e,e'pN) with
+  # GCF, arXiv:2003.02318) used as a systematic for the 4He A-2 system, which gcfNucleus mirrors with
+  # Estar_max = 0.010 under -r; that band is not applied here. The mean field (-F) has no pair, and
+  # genQE_3N_FSI has no -M.
   ESTAR="-M"; { (( Z + N <= 4 )) || [[ $GEN == genQE_3N_FSI || " $GEN_ARGS " == *" -F "* ]]; } && ESTAR=""
   if [[ $GEN == genQE_FSI || $GEN == genQE_3N_FSI ]]; then
     F=$GCF/src/programs/genQE_FSI
