@@ -24,7 +24,7 @@
 #                         --gen-args "-n" no FSI, with "-F 0.25" single-nucleon mean field),
 #                         genDIS (DIS off an SRC pair, CT18NN PDFs; use --no-cuts), or genQE_3N_FSI
 #                         (3N SRC; --attempts is then the number of accepted events; "-n" for no FSI)
-#   --gen-args "ARGS"     extra generator flags. E* sampling (-M) is added for A > 2 SRC runs
+#   --gen-args "ARGS"     extra generator flags. E* sampling (-M) is added for A > 4 SRC runs
 #   --deexcite            de-excite the A-2 remnant with Geant4 (evaporation nucleons, light fragments,
 #                         photons) before the afterburner: tools/deexcite, built inside eic-shell with
 #                         cmake -S tools/deexcite -B tools/deexcite/build && cmake --build tools/deexcite/build
@@ -126,9 +126,11 @@ if [[ $STAGE == all || $STAGE == gen ]]; then
   E_IRF=$("$GCF/tools/gcf2hepmc.py" --beams "$BEAMS" --ion "$ION" --print-ebeam-irf)
   printf 'QSq %s %s\n' "${Q2%%:*}" "${Q2##*:}" > ps.txt
   case "$GEN" in genQE|genQE_FSI|genDIS|genQE_3N_FSI) ;; *) die "--generator must be genQE, genQE_FSI, genDIS or genQE_3N_FSI" ;; esac
-  # E* of the A-2 remnant (-M) only exists for an SRC pair in a nucleus with A > 2: for the
-  # deuteron it would give the empty remnant a mass, and the mean field (-F) has no pair.
-  ESTAR="-M"; { (( Z + N <= 2 )) || [[ " $GEN_ARGS " == *" -F "* ]]; } && ESTAR=""
+  # E* of the A-2 remnant (-M) only exists for an SRC pair in a nucleus with A > 4: for the
+  # deuteron it would give the empty remnant a mass, and for 4He it would turn the A-2 = 2 pn
+  # remnant into a deuteron with mass m_d + E* (about 17 MeV), which does not exist; pp and nn are
+  # unbound either way. The mean field (-F) has no pair, and genQE_3N_FSI has no -M.
+  ESTAR="-M"; { (( Z + N <= 4 )) || [[ $GEN == genQE_3N_FSI || " $GEN_ARGS " == *" -F "* ]]; } && ESTAR=""
   if [[ $GEN == genQE_FSI || $GEN == genQE_3N_FSI ]]; then
     F=$GCF/src/programs/genQE_FSI
     export GXMLPATH="$F/config/genie_override:$GENIE/config/G18_10a:$GENIE/config" GMSGCONF="$F/config/quiet_messenger.xml"
