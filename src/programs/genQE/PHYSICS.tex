@@ -91,14 +91,18 @@ linearly interpolated at runtime.
 
 \subsection{Available NN interactions}
 
-Several sets of $\varphi^{2}(k)$ and contact values are included:
+Several sets of $\varphi^{2}(k)$ are included, but an interaction can only
+be run for nuclei that also have contact values for it:
 \begin{itemize}[nosep]
   \item \textbf{AV18} --- Argonne $v_{18}$ (default)
   \item \textbf{N2LO\_10} --- Chiral N$^{2}$LO, $R = 1.0\fm$
   \item \textbf{N2LO\_12} --- Chiral N$^{2}$LO, $R = 1.2\fm$
-  \item \textbf{N3LO\_600} --- Chiral N$^{3}$LO, $\Lambda = 600\MeV$
+  \item \textbf{N3LO\_600} --- Chiral N$^{3}$LO, $\Lambda = 600\MeV$;
+        universal functions only.  No nucleus has contacts for it, so
+        selecting it aborts (exit code $-2$).
   \item \textbf{AV4Pc} --- Argonne AV4$'$
-  \item \textbf{NV2\_1a} --- Norfolk NV2+Ia
+  \item \textbf{NV2\_1a} --- Norfolk NV2+Ia; contacts only for $^{2}$H,
+        $^{3}$He and $^{4}$He
   \item \textbf{AV18\_deut} --- AV18 with deuteron-specific wave function
         (no contact dependence)
 \end{itemize}
@@ -106,15 +110,25 @@ Several sets of $\varphi^{2}(k)$ and contact values are included:
 \subsection{Contact coefficients}
 
 Contact values $C_{ij}^{A}$ are stored per nucleus and NN interaction.
-They are loaded by \texttt{gcfSRC} on initialization.  Representative
-values (AV18, $^{12}$C):
+They are loaded on initialization by
+\texttt{gcfSRC::}\allowbreak\texttt{set\_Contacts()}, which takes the first
+set that exists for the nucleus and interaction, in the order: $k$-space values from the Scale-and-Scheme paper, $r$-space
+values from the same paper, the deuteron distribution (\texttt{AV18\_deut},
+no contacts), and finally contact ratios from fits to EG2 data.  For AV18
+this gives $k$-space contacts for $^{2}$H through $^{12}$C, $r$-space
+contacts for $^{16}$O, $^{40}$Ca and $^{40}$Ar, and the EG2 fallback for
+$^{27}$Al, $^{56}$Fe and $^{208}$Pb (see issue~\#64).  The values used for
+AV18, $^{12}$C ($k$-space) are
 \begin{equation}
-  C_{pp0} \approx C_{nn0} \approx 5.4,
+  C_{pp0} = C_{nn0} \approx 6.84,
   \qquad
-  C_{pn0} \approx 5.4,
+  C_{pn0} \approx 7.46,
   \qquad
-  C_{pn1} \approx 110.7.
+  C_{pn1} \approx 95.3;
 \end{equation}
+for comparison, the $r$-space set is $C_{pp0}=C_{nn0}=C_{pn0}\approx 4.30$,
+$C_{pn1}\approx 78.8$, and the EG2 set is $C_{pp0}=C_{nn0}=C_{pn0}\approx 1.07$,
+$C_{pn1}=16$.
 The $pn1$ (deuteron-like) channel dominates by roughly an order of magnitude.
 
 %======================================================================
@@ -156,7 +170,9 @@ or held fixed.
 
 \subsection{Step 1: Pair type selection}
 
-A pair type $(ij) \in \{pp,\,nn,\,pn\}$ is chosen uniformly.
+The lead and recoil isospins are drawn independently, each $p$ or $n$
+with probability $1/2$, so the pair is $pp$ or $nn$ with probability $1/4$
+each and $pn$ (either ordering) with probability $1/2$.
 The event weight carries an overall factor of~4 (2 nucleons $\times$ 2
 possible isospin assignments).
 
@@ -285,44 +301,84 @@ The electron--nucleon cross section $\sigma_{eN}$ is evaluated at the
 sampled kinematics.  Three prescriptions are available:
 
 \paragraph{On-shell.}
-Standard Rosenbluth formula assuming the nucleon is on-shell:
+The Rosenbluth cross section for a free nucleon at rest,
 \begin{equation}
-  \frac{d\sigma}{d\Omega}
+  \sigma_{\text{Ros}}
   = \frac{\alpha^{2}}{4E_{\text{beam}}^{2}\sin^{4}(\theta/2)}
-    \,\frac{E_{k}}{E_{\text{beam}}}
+    \,\frac{E'}{E_{\text{beam}}}
     \left[\frac{G_{E}^{2}+\tau G_{M}^{2}}{1+\tau}\cos^{2}\frac{\theta}{2}
           + 2\tau G_{M}^{2}\sin^{2}\frac{\theta}{2}\right],
 \end{equation}
-with $\tau = Q^{2}/(4m_{N}^{2})$.
-
-\paragraph{CC1 (de Forest, default).}
-Off-shell generalization using current-conservation prescription~1.
-Constructs structure functions $w_{C}$, $w_{T}$, $w_{S}$, $w_{I}$ from
-form factors $G_{E}$, $G_{M}$, and evaluates
+with $\tau = Q^{2}/(4m_{N}^{2})$, is returned in de Forest's $\sigma_{eN}$
+normalisation, which carries no recoil or flux factor (his Eq.~(13)):
 \begin{equation}
-  \sigma_{\text{CC1}} = \sigma_{\text{Mott}}\,
-    \bigl[v_{L}\,w_{C} + v_{T}\,w_{T} + v_{S}\,w_{S} + v_{I}\,w_{I}\bigr],
+  \sigma_{\text{onshell}}
+  = \sigma_{\text{Ros}}\;\frac{E_{\text{beam}}}{E'\,(1+2\tau)} .
 \end{equation}
-where $v_{L,T,S,I}$ are kinematic response functions.
+This equals CC1 for a nucleon at rest, and is about
+$0.47\,\sigma_{\text{Ros}}$ at $6\GeV$, $25^{\circ}$.  Only the electron
+angle $\theta$ is taken from the event:
+$E' = E_{\text{beam}}m_{N}/[m_{N} + E_{\text{beam}}(1-\cos\theta)]$ and
+$Q^{2} = 2E_{\text{beam}}E'(1-\cos\theta)$ are recomputed from elastic
+kinematics, so $\tau$ and the form factors are evaluated at the elastic
+$Q^{2}$, not the event's (e.g.\ $4.2$ instead of $4.7\GeV^{2}$ at
+$x_{B}=1.38$).
 
-\paragraph{CC2.}
-Alternative current-conservation prescription with modified structure
-function weighting (different treatment of $\bar{p}$ components).
+\paragraph{CC1 and CC2 (de Forest).}
+Both are de Forest's off-shell extrapolations
+(Nucl.\ Phys.\ A 392 (1983) 232).  They use the same current conservation,
+$\vect{q}\cdot\vect{J} = \omega\rho$ (his Eq.~(9)), which puts the
+longitudinal current in the Coulomb gauge, and the same cross section
+(his Eq.~(13)),
+\begin{equation}
+  \sigma_{eN} = \sigma_{\text{Mott}}
+    \Bigl[\tfrac{Q^{4}}{q^{4}}\,w_{C}
+      + \bigl(\tfrac{Q^{2}}{2q^{2}} + \tan^{2}\tfrac{\theta}{2}\bigr)w_{T}
+      + \tfrac{Q^{2}}{q^{2}}\bigl(\tfrac{Q^{2}}{q^{2}}
+           + \tan^{2}\tfrac{\theta}{2}\bigr)^{1/2} w_{I}\cos\phi
+      + \bigl(\tfrac{Q^{2}}{q^{2}}\cos^{2}\phi + \tan^{2}\tfrac{\theta}{2}\bigr)w_{S}
+    \Bigr],
+\end{equation}
+with $\sigma_{\text{Mott}} = 4\alpha^{2}E'^{2}\cos^{2}(\theta/2)/Q^{4}$,
+$q = |\vect{q}|$, and $\phi$ the angle between the scattering plane and the
+$(\vect{p}_{\text{lead}},\vect{q})$ plane.  They differ only in the
+off-shell nucleon vertex from which $w_{C,T,S,I}$ are built (using $F_{1}$
+and $\kappa F_{2}$ obtained from $G_{E}$, $G_{M}$):
+\begin{itemize}[nosep]
+  \item \textbf{CC1} (default): the Gordon-reduced vertex
+        $\gamma_{\mu}(F_{1}+\kappa F_{2}) + i(p'+p)_{\mu}\kappa F_{2}/2m_{N}$
+        (his Eq.~(16)), giving the structure functions of his Eq.~(17).
+        These are the free ones with
+        $\bar{E} = \sqrt{p^{2}+m_{N}^{2}}$
+        ($\vect{p} = \vect{p}_{\text{lead}} - \vect{q}$) and
+        $\bar{\omega} = E_{\text{lead}} - \bar{E}$ in place of $E$
+        and~$\omega$.
+  \item \textbf{CC2}: the vertex
+        $\gamma_{\mu}F_{1} - \sigma_{\mu\nu}q_{\nu}\,\kappa F_{2}/2m_{N}$
+        (his Eq.~(15)), giving the structure functions of his Eq.~(18).
+\end{itemize}
 
 \subsection{Step 6: Form factors}
 
-Three electromagnetic form-factor models:
+Three electromagnetic form-factor models are implemented in
+\texttt{eNCrossSection}, but every driver (\texttt{genQE},
+\texttt{genQE\_EIC}, \ldots) hard-codes \texttt{kelly}, so dipole and Ye
+cannot be selected without editing the source.
 
 \paragraph{Dipole.}
 $G_{E}^{p} = G_{D} = (1 + Q^{2}/0.71)^{-2}$, $G_{M}^{p} = \mu_{p}\,G_{D}$.
 
-\paragraph{Kelly (default).}
+\paragraph{Kelly (used).}
 Rational parameterization:
 \begin{equation}
-  G(Q^{2}) = \frac{1 + a_{1}\tau}{1 + b_{1}\tau + b_{2}\tau^{2} + b_{3}\tau^{3}}.
+  G(Q^{2}) = \frac{1 + a_{1}\tau}{1 + b_{1}\tau + b_{2}\tau^{2} + b_{3}\tau^{3}},
 \end{equation}
-Fit parameters given separately for $G_{E}^{p}$, $G_{M}^{p}/\mu_{p}$,
-$G_{E}^{n}$, $G_{M}^{n}/\mu_{n}$.
+with fit parameters given separately for $G_{E}^{p}$, $G_{M}^{p}/\mu_{p}$
+and $G_{M}^{n}/\mu_{n}$.  $G_{E}^{n}$ uses Kelly's Galster form instead,
+\begin{equation}
+  G_{E}^{n} = \frac{A\tau}{1 + B\tau}\,G_{D},
+  \qquad A = 1.70,\quad B = 3.30.
+\end{equation}
 
 \paragraph{Ye.}
 13-parameter $z$-expansion fit.
@@ -340,22 +396,35 @@ The total event weight is
 
 \paragraph{Coulomb correction.}
 The electron energy is shifted before and after scattering by the nuclear
-Coulomb potential:
+Coulomb potential, taken as $0.775$ of the potential at the centre of a
+uniformly charged sphere:
 \begin{equation}
   \Delta E_{\text{Coulomb}}
-  = \frac{3}{2}\,\frac{Z\alpha_{\text{em}}}{R_{C}},
+  = 0.775\times\frac{3}{2}\,\frac{Z\alpha_{\text{em}}\,\hbar c}{R_{C}},
   \qquad
-  R_{C} = 1.1\,A^{1/3}\fm.
+  R_{C} = \bigl(1.1\,A^{1/3} + 0.86\,A^{-1/3}\bigr)\fm,
 \end{equation}
+and $\Delta E_{\text{Coulomb}} = 0$ for $^{2}$H.  The beam gains
+$\Delta E_{\text{Coulomb}}$ before the vertex; afterwards the scattered
+electron loses it and outgoing protons gain it.
 
 \paragraph{Bremsstrahlung.}
-Radiative corrections via the peaking approximation.  A Poisson-distributed
-number of photons is emitted; each photon's energy fraction sampled from
+Radiative corrections via the peaking approximation.  The incoming and the
+scattered electron each lose a single energy $\Delta E$ (one emission, not a
+Poisson number of photons), with $\Delta E/E = r^{1/\lambda}$ for uniform
+$r \in [0,1]$, i.e.
 \begin{equation}
   P(\Delta E/E) \propto \left(\frac{\Delta E}{E}\right)^{\lambda - 1},
   \qquad
   \lambda = \frac{\alpha}{\pi}\left(\ln\frac{4E^{2}}{m_{e}^{2}} - 1\right).
 \end{equation}
+The weight is multiplied by
+$(1-\delta_{\text{hard}})\,
+ \bigl(E_{\text{beam}}/\sqrt{E_{\text{beam}}E'}\bigr)^{\lambda_{i}}
+ \bigl(E'/\sqrt{E_{\text{beam}}E'}\bigr)^{\lambda_{f}}$, with
+$\lambda_{i,f}$ evaluated at $E_{\text{beam}}$ and $E'$ and
+$\delta_{\text{hard}} = \frac{2\alpha}{\pi}\bigl(-\frac{13}{12}
+\ln\frac{Q^{2}}{m_{e}^{2}} + \frac{8}{3}\bigr)$.
 
 %======================================================================
 \section{Output}
@@ -386,7 +455,8 @@ Branch & Type & Description \\
 
 For each Monte Carlo trial:
 \begin{enumerate}
-  \item Select pair type ($pp$, $nn$, or $pn$) uniformly.
+  \item Draw lead and recoil isospins independently ($pp$, $nn$: $1/4$
+        each; $pn$: $1/2$).
   \item Sample $\vect{P}_{\text{CM}}$ (Gaussian) and $\vect{k}_{\text{rel}}$
         (uniform in $k$, $\cos\theta$, $\phi$).
   \item Evaluate GCF spectral function $S(k)$; apply Pauli cut.
@@ -394,7 +464,7 @@ For each Monte Carlo trial:
   \item (Optional) Apply Coulomb shift and bremsstrahlung to beam.
   \item Sample $Q^{2}$ and $\phi_{k}$; solve quadratic for $k_{\perp}$.
   \item Compute Jacobian $J$ from energy conservation constraint.
-  \item Evaluate $\sigma_{eN}$ (CC1/CC2/on-shell with Kelly/dipole/Ye).
+  \item Evaluate $\sigma_{eN}$ (CC1/CC2/on-shell, with Kelly form factors).
   \item Multiply all weight factors; store event if $w > 0$.
 \end{enumerate}
 
