@@ -231,7 +231,9 @@ int main(int argc, char **argv)
   unique_ptr<gcfNucleus> nucleus;
   unique_ptr<QEGeneratorFSI> gen2;
   if (model == "3N") {
-    // QEGenerator_3N reads its density tables from array/ relative to the
+    // QEGenerator_3N reads its density tables from $GCF_3N_ARRAY_DIR if set,
+    // else from the compile-time GCF_3N_ARRAY_DIR. This standalone build
+    // does not define the latter, so it falls back to array/ relative to the
     // working directory; construct it from the genQE_3N source directory.
     char cwd[PATH_MAX];
     const bool haveCwd = getcwd(cwd, sizeof cwd) != nullptr;

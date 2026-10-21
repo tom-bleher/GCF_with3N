@@ -39,8 +39,11 @@ Sample definitions:
 
 Event building is detector-style and operates on the generator's flat
 final-state particle list (part_* branches): lead = highest-momentum
-accepted proton, recoil = highest-momentum other accepted proton, and no
-event is ever discarded for having extra protons. The paper's theta_pq,
+accepted proton. By default (--epp-recoil unique) the event is (e,e'pp)
+only when exactly one other accepted proton has |p| >= 0.35 GeV/c, which
+is then the recoil; with two or more it stays (e,e'p) only. Events in
+which either generated nucleon was absorbed (hA fate 4) are discarded
+(--absorption-veto, on by default). The paper's theta_pq,
 |p_N|/|q| and |p_recoil| requirements are SRC selection CUTS, not part of
 that definition -- see the long note above flatlist_resolve.
 
@@ -71,11 +74,13 @@ NEUTRON = 2112
 # ---------------------------------------------------------------------------
 # T+SCX parameters — Eq. 3 of the paper
 #
-# ALL VALUES ARE EXACT, FOR 12C, FROM THE PRIMARY REFERENCES:
+# Values for 12C.
 #
-# Transparencies: Colle, Cosyn & Ryckebusch, PRC 93, 034608 (2016),
-#   Table I (page 13 of the preprint), KinB kinematics
-#   (CLAS-like: x_B>=1.2, theta_{p1,q}<=25deg, 0.62<|p1|/|q|<0.96)
+# Transparencies: T_N = 0.53 and T_NN = 0.44 are N. Wright's values, taken
+#   from her gst_plotter.C:1356 (transparency = .44/.53). They are NOT the
+#   RMSGA values of Colle, Cosyn & Ryckebusch, PRC 93, 034608 (2016),
+#   Table I (KinB), which for 12C are T^pp = 0.280, T^pn = 0.286 and a
+#   measured (T^p)^2 = 0.26.
 #
 # SCX probabilities: Duer et al., PRL 122, 172502 (2019),
 #   Supplemental Material Table III (page 9 of the preprint)
@@ -2571,8 +2576,10 @@ def main():
                         default="detector",
                         help=("Event-building convention. 'detector' (default) "
                               "is ours: lead = highest-momentum accepted "
-                              "proton, recoil = next highest, nothing ever "
-                              "dropped, SRC cuts applied afterwards. 'wright' "
+                              "proton, recoil chosen by --epp-recoil "
+                              "(default 'unique'), absorbed events dropped "
+                              "by --absorption-veto (default on), SRC cuts "
+                              "applied afterwards. 'wright' "
                               "reproduces N. Wright's genie_gcf_loop.C: the "
                               "same lead, but the absorption veto, her "
                               "multi-recoil lottery (events with two "

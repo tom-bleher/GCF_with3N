@@ -1,8 +1,10 @@
 """Line-bounded angular regions in (theta12, theta23) [deg].
 
-Vectorized port of the ``is_in_region2`` lambda in
-``analysis/SRC_analysis_3N.cpp`` (region division visualized at
-https://www.desmos.com/calculator/x8p0w0wbjt).
+Vectorized port of the ``is_in_region2`` lambda that
+``analysis/SRC_analysis_3N.cpp`` contained before commit fe37fce (the
+version at ``fe37fce^``); the current analysis writes a TTree and no longer
+has it. Region division visualized at
+https://www.desmos.com/calculator/x8p0w0wbjt.
 
 Constants: a = 54 deg, b = a/2 = 27 deg, c = 160 deg, d = 7c/8 = 140 deg.
 
