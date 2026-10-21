@@ -65,9 +65,12 @@ merged with `hadd`.
 
 A config has up to three tables. Unset options take the defaults shown by
 `gcf <command> --help`; options that don't apply to the chosen model are an
-error rather than silently ignored. The exception, for now, is `nn` and
-`estar` with `model = "MF"`: the config accepts them, but the mean-field
-generator uses neither, so they have no effect (#77).
+error rather than silently ignored. For `model = "MF"` that covers `nn`,
+`estar`, `sigma_cm`, `kcut`, `onset` and `prel_is`, and the only MF target is
+¹²C, the one nucleus with A−1 residual masses; `gcf_generate --model MF`
+rejects the same options and targets when called directly. Called directly
+with `--model 3N` or `2N`, `gcf_generate` does not check this yet and ignores
+options that belong to another model (#119).
 
 ```toml
 [run]
