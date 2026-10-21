@@ -99,7 +99,7 @@ int main(int argc, char ** argv)
 	double f1 = (1 - Y) / 2.0;
 	double f2 = (sqrt(3)*X + Y + 1.0) / 4.0;
 	double f3 = 1 - f1 - f2;	
-	if((f1>0.5) || (f2>0.5) || (f3>0.5) || (f1<0.0) || (f2<0.0) || (f3<0.0)){
+	if((f1>0.5) || (f2>0.5) || (f3>0.5) || (f1<=0.0) || (f2<0.0) || (f3<0.0)){
 	  ppFile << 0 << " ";
 	  continue;
 	}
@@ -111,7 +111,8 @@ int main(int argc, char ** argv)
 	double p_1 = k_1 * GeVfm;
 	double p_2 = k_2 * GeVfm;
 	double p_3 = k_3 * GeVfm;
-	ppFile << myGen->get_rho_ptot_f1f2f3(k_1,k_2,k_3) << " ";		
+	// density per (p_miss, f1, f2): p_tot = p_miss/f1, so dp_tot = dp_miss/f1
+	ppFile << myGen->get_rho_ptot_f1f2f3(k_1,k_2,k_3) / f1 << " ";		
       }
       ppFile << "\n";
     }
@@ -164,7 +165,8 @@ int main(int argc, char ** argv)
       double p_3 = k_3 * GeVfm;
       double p_tot = k_tot * GeVfm;
       double p_miss = k_miss * GeVfm;
-      ppFile << p_miss << " " << (p_miss/p_tot)*myGen->get_rho_ptot_f1f2f3(k_1,k_2,k_3) << "\n";			
+      // density per (p_miss, f1, f2): p_tot = p_miss/f1, so dp_tot = dp_miss/f1
+      ppFile << p_miss << " " << myGen->get_rho_ptot_f1f2f3(k_1,k_2,k_3) / f1 << "\n";			
     }
     ppFile.close();
   }  

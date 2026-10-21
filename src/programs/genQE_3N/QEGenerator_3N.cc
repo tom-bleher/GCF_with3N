@@ -227,10 +227,10 @@ void QEGenerator_3N::generate_event(double &weight, int &N1_type, int &N2_type, 
   v_3 = (- 0.5 * v_a) -  v_b;
 
   // Momentum cuts on the INTERNAL (wavefunction-frame) momenta, i.e. the
-  // ones get_rho evaluates the 3N density at. Cutting after the CM boost
-  // let configurations with tiny internal momenta through, where the
-  // 1/(p1*p2*p3) Jacobian in get_rho_ptot_f1f2f3 diverges and produced
-  // rare huge-weight events.
+  // ones get_rho evaluates the 3N density at. This is the SRC condition
+  // k > kF on the initial state; cutting after the CM boost would test the
+  // lab momenta instead and let configurations with tiny internal momenta
+  // through.
   if(v_1.Mag() < fkMinInternal || v_2.Mag() < fkMinInternal || v_3.Mag() < fkMinInternal){
     weight = 0;
     return;
@@ -472,8 +472,17 @@ double QEGenerator_3N::get_rho_ptot_f1f2f3(double k_1, double k_2, double k_3){
     return 0;
   }
   
-  //double J = (8/sqrt(3)) * (p_cm * p_cm * p_rel * p_rel * sin(theta_prime*M_PI/180)) / (p_1 * p_2 * p_3 * p_tot * p_tot);
-  double J = (8/sqrt(3)) / (p_1 * p_2 * p_3 * p_tot * p_tot);
+  //The table is a density per d^3pa d^3pb (see get_rho). The Jacobi map
+  //(p1,p2) -> (pa,pb) has |det| = 1, and integrating out the overall
+  //orientation of the triangle p1+p2+p3 = 0 gives
+  //    d^3pa d^3pb = d^3p1 d^3p2 = 8 pi^2 p1 p2 p3 dp1 dp2 dp3,
+  //while p_i = f_i p_tot gives dp1 dp2 dp3 = p_tot^2 dp_tot df1 df2. So the
+  //density per dp_tot df1 df2 (momenta in GeV/c) is
+  //    rho * 8 pi^2 * p1 p2 p3 * p_tot^2,
+  //which vanishes at the edges of the ternary triangle and integrates to the
+  //same 1/3 as get_rho. (Ternary.cc's (X,Y) plotting coordinates have
+  //df1 df2 = (sqrt(3)/8) dX dY.)
+  double J = 8 * M_PI * M_PI * p_1 * p_2 * p_3 * p_tot * p_tot;
   
   if((k_cm>10) || (k_rel>10)){
     return 0;
