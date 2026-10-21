@@ -116,7 +116,7 @@ int main(int argc, char **argv)
   bool sigCMSet = false, q2Set = false, kFSet = false, estarSet = false,
        kcutSet = false, kFfgSet = false, useCM = true, doRad = false,
        doCoul = false, prelIS = false, verbose = false, checkOnly = false,
-       nnSet = false;
+       nnSet = false, onsetSet = false;
 
   enum { kSigmaCM = 1000, kQ2, kThetaE, kKF, kNoCM, kNN, kEstar, kKcut,
          kOnset, kPrelIS, kFermiGas, kKFfg, kRad, kCoulomb, kPhaseSpace, kCheck };
@@ -188,7 +188,7 @@ int main(int argc, char **argv)
       case kNN: nnName = optarg; nnSet = true; break;
       case kEstar: estar = atof(optarg); estarSet = true; break;
       case kKcut: kcut = atof(optarg); kcutSet = true; break;
-      case kOnset: onset = optarg; break;
+      case kOnset: onset = optarg; onsetSet = true; break;
       case kPrelIS: prelIS = true; break;
       case kFermiGas: fermiGas = optarg; break;
       case kKFfg: kFfg = atof(optarg); kFfgSet = true; break;
@@ -220,11 +220,15 @@ int main(int argc, char **argv)
   if (model == "3N" && (!nnName.empty() && nnName != "AV18"))
     fail("--nn applies to 2N; the 3N wave function is chosen with --wave-function");
   // The mean-field model has no pair: no contacts (--nn), no pair CM motion
-  // (--sigma-cm), and the A-1 residual is left in its ground state (--estar).
+  // (--sigma-cm), no relative momentum (--kcut, --onset, --prel-is), and the
+  // A-1 residual is left in its ground state (--estar).
   if (model == "MF") {
     if (nnSet) fail("--nn applies to 2N, not MF (the mean-field weight has no NN contacts)");
     if (sigCMSet) fail("--sigma-cm applies to 3N/2N, not MF (no SRC-cluster CM motion)");
     if (estarSet) fail("--estar applies to 2N, not MF (the A-1 residual is left in its ground state)");
+    if (kcutSet) fail("--kcut applies to 2N, not MF (no SRC pair, so no relative-momentum cutoff)");
+    if (onsetSet) fail("--onset applies to 2N, not MF (the SRC onset is a property of the pair)");
+    if (prelIS) fail("--prel-is applies to 2N, not MF (no |p_rel| to importance-sample)");
   }
   if (!ok) { cerr << "(gcf_generate --help for usage)\n"; return 1; }
   if (!output.empty()) output = AbsolutePath(output);
