@@ -51,6 +51,9 @@ class Opt:
     help: str = ""
     label: str = ""
     choices: Optional[List[Any]] = None
+    # Models the option applies to; gcf_generate rejects it for the others with
+    # the same table (kModelOptions in gcf_generate.cc), and
+    # src/programs/gcf_stages/test_model_options.py checks the two agree.
     models: List[str] = field(default_factory=lambda: list(MODELS))
     invert: bool = False         # bool flag that is passed when the value is False
     unit: str = ""
@@ -85,7 +88,7 @@ GENERATE = [
              "sqrt(3/5) k_F unless sigma_CM is given.", advanced=True),
     Opt("cm", "bool", "--no-cm", True, models=["3N"], invert=True,
         label="CM motion of the triplet", advanced=True),
-    # 2N / MF
+    # 2N
     Opt("nn", "str", "--nn", None, models=["2N"], label="NN interaction",
         choices=NN_INTERACTIONS,
         help="NN interaction behind the pair wave function and contacts (default AV18)."),
@@ -97,11 +100,13 @@ GENERATE = [
         label="SRC onset", help="fixed: k_rel > cutoff. local: k_rel > k_F(r) at the vertex.", advanced=True),
     Opt("prel_is", "bool", "--prel-is", False, models=["2N"],
         label="Importance-sample |p_rel|", help="Lower weight variance; same expectation values.", advanced=True),
+    # MF
     Opt("fermi_gas", "str", "--fermi-gas", "global", choices=["global", "local"],
         models=["MF"], label="Fermi gas",
         help="global: one Fermi momentum for the whole nucleus. local: k_F(r) from the density."),
     Opt("kF_fg", "float", "--kF-fg", None, models=["MF"], label="Global Fermi momentum",
         unit="GeV/c", help="Default 0.25.", advanced=True),
+    # 2N and MF
     Opt("rad", "bool", "--rad", False, models=["2N", "MF"], label="Radiation (peaking approx.)", advanced=True),
     Opt("coulomb", "bool", "--coulomb", False, models=["2N", "MF"], label="Coulomb correction",
         help="Applied at generation, i.e. before FSI.", advanced=True),
