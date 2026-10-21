@@ -30,9 +30,13 @@
 \texttt{genQE\_FSI} wraps the two-nucleon GCF quasi-elastic generator
 (\texttt{genQE}) with a \textbf{Final State Interaction (FSI)} layer.
 After the GCF vertex produces a correlated nucleon pair, both the
-struck (``lead'') and partner (``recoil'') nucleons are independently
-transported through the residual nucleus using GENIE's
-\textbf{Intranuke2018} intranuclear cascade (INC).
+struck (``lead'') and partner (``recoil'') nucleons are transported
+through the residual nucleus using GENIE's
+\textbf{Intranuke2018} intranuclear cascade (INC).  By default both
+nucleons go into one GENIE event record, in random order, so that
+absorption by one depletes the remnant seen by the other;
+\texttt{SetIndependentFSI()} instead gives each nucleon its own record
+and an undepleted remnant.
 
 The reaction is
 \begin{equation}
@@ -90,19 +94,27 @@ single-nucleon density using:
 
 \paragraph{Woods--Saxon (A $>$ 20).}
 \begin{equation}
-  \rho_{\text{WS}}(r) = \frac{\rho_{0}}{1 + \exp\!\bigl[(r - R)/a\bigr]},
+  \rho_{\text{WS}}(r) = \frac{\rho_{0}}{1 + \exp\!\bigl[(r - c)/z\bigr]},
   \qquad
-  R = r_{0}\,A^{1/3},\quad a \approx 0.545\fm,
+  \rho_{0} = \frac{3}{4\pi c^{3}}\,\frac{1}{1 + (\pi z/c)^{2}},
 \end{equation}
-with $r_{0} \approx 1.07\fm$ and $\rho_{0}$ set by normalization to
-$\rho_{\text{normal}} = 0.17\fm^{-3}$.
+with $c = A^{0.35}\fm$ and $z = 0.54\fm$, except for tabulated values for
+Al, Si, Ar, Fe and Pb (e.g.\ Fe: $c = 4.10\fm$, $z = 0.56\fm$).  The
+density is normalized to one, $\int\rho\,d^{3}r = 1$; multiply by $A$
+for the number density.
 
-\paragraph{Modified Gaussian ($4 < A \le 20$).}
+\paragraph{Modified harmonic oscillator ($4 < A \le 20$).}
 \begin{equation}
-  \rho_{\text{G}}(r) = \rho_{0}\,
-    \exp\!\left[-\left(\frac{r}{R}\right)^{2}\right],
-  \qquad R = r_{0}\,A^{1/3}.
+  \rho_{\text{MHO}}(r) = \rho_{0}\,
+    \left(1 + \alpha\,\frac{r^{2}}{a^{2}}\right)
+    \exp\!\left[-\frac{r^{2}}{a^{2}}\right],
+  \qquad
+  \rho_{0} = \frac{1}{(5.568 + 8.353\,\alpha)\,a^{3}},
 \end{equation}
+also normalized to one, with fixed $a$ and $\alpha$ per nucleus
+(${}^{12}$C: $a = 1.69\fm$, $\alpha = 1.08$; untabulated nuclei
+$a = 1.75\fm$, $\alpha = 0.12A - 0.4$).  For $A \le 4$ the same form is
+used with $a = 1.9/\sqrt{2}\fm$ and $\alpha = 0$.
 
 Parameters are fitted to electron-scattering charge-density data
 (de Vries \textit{et al.}, At.\ Data Nucl.\ Data Tables \textbf{36}, 1987).
@@ -142,7 +154,8 @@ cross sections.
 \label{sec:evrec}
 
 GENIE's cascade operates on a \texttt{GHepRecord} (event record).  We
-construct a minimal record to transport a single nucleon:
+construct a minimal record holding the nucleons to transport (both pair
+nucleons in the default shared mode, one in independent mode):
 
 \begin{center}
 \begin{tabular}{clll}
@@ -155,8 +168,8 @@ Slot & PDG & Status & Purpose \\
     Target; used by \texttt{SetTrackingRadius} \\
 2 & Nucleus ($A$,$Z$) & \texttt{kIStStableFinalState} &
     Remnant nucleus \\
-3 & Nucleon & \texttt{kIStHadronInTheNucleus} &
-    Particle to transport; carries sampled position \\
+3+ & Nucleon & \texttt{kIStHadronInTheNucleus} &
+    To transport; at the sampled position \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -217,15 +230,17 @@ size of the interaction region:
 \begin{equation}
   \rho_{\text{eff}}(r) = A\;\rho\!\left(r,\;A,\;\text{ring}\right),
   \qquad
-  \text{ring} = n \times \frac{\hbar c}{p},
+  \text{ring} = n \times \frac{hc}{p},
 \end{equation}
-where $p$ is the hadron's momentum and $n$ depends on $A$ and particle
-type:
+where $hc/p$ (with $hc = 1.240\GeV\fm$) is the hadron's de Broglie
+wavelength, halved for $A \le 20$, and $n$ depends on particle type:
 \begin{itemize}[nosep]
-  \item Pions: $n = \delta R_{\pi}$ (for $A > 20$, doubled for light nuclei)
-  \item Nucleons: $n = \delta R_{N}$ (similar)
+  \item Pions: $n = \delta R_{\pi}$
+  \item Nucleons: $n = \delta R_{N}$
 \end{itemize}
-Default values: $\delta R_{\pi} \approx \delta R_{N} \approx 1.5$.
+The project XMLs set $\delta R_{\pi} = \delta R_{N} = 0$
+(\texttt{HNINUKE-DelR*}, \texttt{HAINUKE-DelR*}), so the ring
+correction is off and the bare density is used.
 
 \subsection{Total cross section}
 
@@ -269,9 +284,9 @@ where $f_{\text{PP}} \in [0.3,\,0.8]$ typically, accounting for:
 The fraction of NN scattering final states that are \emph{above} the local
 Fermi surface.  The local Fermi momentum is
 \begin{equation}
-  k_{F,p} = \left(\frac{3\pi^{2}\,\rho\,Z}{A}\right)^{\!1/3}\!\!\frac{1}{\hbar c},
+  k_{F,p} = \left(\frac{3\pi^{2}\,\rho\,Z}{A}\right)^{\!1/3}\!\!\hbar c,
   \qquad
-  k_{F,n} = \left(\frac{3\pi^{2}\,\rho\,(A-Z)}{A}\right)^{\!1/3}\!\!\frac{1}{\hbar c}.
+  k_{F,n} = \left(\frac{3\pi^{2}\,\rho\,(A-Z)}{A}\right)^{\!1/3}\!\!\hbar c.
 \end{equation}
 
 \paragraph{In-medium effective mass.}
@@ -328,9 +343,16 @@ applied:
   \item Boost back to the lab frame.
 \end{enumerate}
 
-The struck nucleon's Fermi momentum is sampled from the local Fermi gas
-(when \texttt{fDoFermi} = true, default).  The remnant nucleus 4-momentum
-is updated accordingly.
+The struck nucleon's Fermi momentum is sampled from the cascade's nuclear
+model (when \texttt{fDoFermi} = true, default), \texttt{genie::LocalFGM}
+in the project XMLs.  Intranuke draws the target nucleon with
+\texttt{GenerateNucleon(target)}, without a radius, which
+\texttt{LocalFGM} evaluates at $r = 0$, so every
+target nucleon is drawn with the central $k_{F}$.  The remnant nucleus
+4-momentum is updated accordingly.  This NN collision is not
+Pauli-blocked: in this GENIE version the block in
+\texttt{TwoBodyCollision} is commented out
+(\texttt{INukeUtils2018.cxx}, lines 826--832; issue \#10).
 
 \subsection{Charge exchange (\texttt{kIHNFtCEx})}
 
@@ -497,24 +519,28 @@ The fate fractions are:
 \section{Post-FSI Processing}
 %======================================================================
 
-\subsection{Nucleon selection}
+\subsection{Final-state particle list}
 
-After GENIE's \texttt{ProcessEventRecord()} returns, the stable
-descendants of the transported nucleon (slot~3) are examined.  The
-\textbf{highest-energy nucleon} among them is selected as the outgoing
-lead (or recoil) nucleon.  Its PDG code may have changed (charge
-exchange), and its momentum is modified by the cascade.
-
-\subsection{Secondary collection}
-
-All other stable descendants are stored as \texttt{FSISecondary} objects,
-tagged with:
+After GENIE's \texttt{ProcessEventRecord()} returns, every stable
+final-state particle except the remnant ion and GENIE pseudo-particles is
+copied verbatim into a flat list of \texttt{FSIParticle} objects
+(\texttt{GetFinalStateParticles()}), tagged with:
 \begin{itemize}[nosep]
-  \item \texttt{parentRole}: 0 (from lead transport) or 1 (from recoil)
-  \item \texttt{pdg}: particle type
-  \item \texttt{p4}: 4-momentum
-  \item \texttt{rescatterCode}: GENIE's internal fate code (for reweighting)
+  \item \texttt{pdg}, \texttt{p4}: particle type and 4-momentum
+  \item \texttt{parentRole}: 0 or 1 for descendants of the generated lead
+        or recoil (a knocked-out medium nucleon inherits the role of the
+        nucleon that knocked it out)
+  \item \texttt{rescatterCode}: the GENIE fate of the input nucleon it
+        descends from; 1 means that nucleon left without interacting,
+        $-1$ that the cascade did not run
+  \item \texttt{generation}: mother-chain depth from the input nucleon,
+        $\ge 1$ for every cascade output
 \end{itemize}
+No particle is selected as the outgoing lead or recoil: that is a
+detection-level choice made in the analysis from types and momenta.  The
+generated (pre-FSI) momenta are returned unchanged through the
+\texttt{generate\_event} arguments, and the event weight is never changed
+by FSI.  An absorbed nucleon simply does not appear in the list.
 
 \subsection{Residual nucleus}
 
@@ -524,33 +550,17 @@ pair from the full nucleus:
   Z_{\text{res}} = Z - n_{p}, \qquad
   A_{\text{res}} = A - 2,
 \end{equation}
-where $n_{p}$ is the number of protons in the pair.  For ultra-light
-residuals ($A_{\text{res}} < 3$), the full nucleus is used instead to
-avoid pathological density profiles.
+where $n_{p}$ is the number of protons in the pair.  For
+$A_{\text{res}} < 3$ FSI is skipped and the generated nucleons are
+returned unchanged; for $3 \le A_{\text{res}} < 7$ the cascade runs with
+a one-time warning, since GENIE is validated for $A > 6$.
 
-\subsection{Pauli blocking (post-FSI)}
+\subsection{Pauli blocking}
 
-After both nucleons have been transported, a final Pauli-blocking check
-is applied:
-\begin{equation}
-  \text{if}\quad |\vect{p}_{\text{lead}}'| < k_{F}
-  \quad\text{or}\quad |\vect{p}_{\text{rec}}'| < k_{F},
-  \quad\Longrightarrow\quad w = 0.
-\end{equation}
-Default Fermi momentum: $k_{F} = 0.220\GeV/c$ (tunable via
-\texttt{SetFSITuning}).
-
-\subsection{Event classification}
-
-Each event is classified by:
-\begin{itemize}[nosep]
-  \item \textbf{Charge exchange}: lead or recoil changed PDG
-        ($p \leftrightarrow n$)
-  \item \textbf{Elastic-like}: momentum changed, no charge exchange,
-        no non-nucleon secondaries produced
-  \item \textbf{Pion counts}: $n_{\pi^{+}}$, $n_{\pi^{-}}$, $n_{\pi^{0}}$
-        tallied separately for lead and recoil transports
-\end{itemize}
+No Pauli veto is applied after the cascade.  Pauli blocking is GENIE's
+own and is partial: absorption and pion production reject and re-sample
+blocked final states, but NN elastic and charge-exchange collisions are
+not blocked in this GENIE version (issue \#10).
 
 %======================================================================
 \section{Full Pipeline Summary}
@@ -565,17 +575,13 @@ For each Monte Carlo trial:
         $P(r) \propto \rho^{2}(r)\,r^{2}$ via rejection sampling.
   \item \textbf{Compute residual nucleus}: $A_{\text{res}} = A - 2$,
         $Z_{\text{res}} = Z - n_{p}$.
-  \item \textbf{Transport lead nucleon}: Build GENIE event record with
-        nucleon at $\vect{x}_{\text{SRC}}$; run
-        \texttt{ProcessEventRecord()}; extract highest-energy nucleon and
-        secondaries.
-  \item \textbf{Transport recoil nucleon}: Same procedure, same starting
-        position, same residual nucleus.
-  \item \textbf{Classify}: Detect charge exchange, elastic-like events,
-        count pions.
-  \item \textbf{Pauli blocking}: Reject event if either final nucleon
-        momentum $< k_{F}$.
-  \item \textbf{Store}: Write event to ROOT tree if $w > 0$.
+  \item \textbf{Transport}: Build one GENIE event record with both
+        nucleons at $\vect{x}_{\text{SRC}}$, in random order (or one record
+        per nucleon in independent mode); run
+        \texttt{ProcessEventRecord()}; copy the stable final state into
+        the particle list.  Skipped if $A_{\text{res}} < 3$.
+  \item \textbf{Store}: Write event to ROOT tree if $w > 0$ ($w = 0$
+        only for a kinematic rejection at the vertex).
 \end{enumerate}
 
 %======================================================================
@@ -589,12 +595,12 @@ Parameter & Default & Setter & Description \\
 \midrule
 FSI model & hN & \texttt{SetFSIModel(kHN2018)} & hN or hA cascade \\
 FSI on/off & on & \texttt{EnableFSI(true)} & Bypass cascade \\
-$k_{F}$ & 220 MeV/$c$ & \texttt{SetFSITuning(220)} & Pauli blocking threshold \\
+Transport & shared & \texttt{SetIndependentFSI()} & One record or one per nucleon \\
 $\delta r$ & 0.05 fm & (GENIE internal) & Cascade step size \\
 $R_{0}$ & 1.4 fm & (GENIE internal) & Nuclear radius coefficient \\
 $f_{NR}$ & 3.0 & (GENIE internal) & Tracking radius multiplier \\
-$\delta R_{\pi}$ & ${\sim}1.5$ & (GENIE config) & Pion de Broglie ring \\
-$\delta R_{N}$ & ${\sim}1.5$ & (GENIE config) & Nucleon de Broglie ring \\
+$\delta R_{\pi}$ & 0 & \texttt{*INUKE-DelRPion} & Pion de Broglie ring \\
+$\delta R_{N}$ & 0 & \texttt{*INUKE-DelRNucleon} & Nucleon de Broglie ring \\
 NN medium corr. & on & \texttt{INUKE-XsecNNCorr} & Pandharipande--Pieper \\
 Oset model & on & \texttt{HNINUKE-UseOset} & Low-energy pion cross sections \\
 \bottomrule
@@ -630,7 +636,8 @@ GENIE configuration is loaded from XML files in\\
         ``Generalized nuclear contacts and momentum distributions,''
         Phys.\ Rev.\ C \textbf{92}, 054311 (2015).
   \item R.~Cruz-Torres \textit{et al.},
-        ``Short-range correlations and the nuclear contact formalism,''
+        ``Short range correlations and the isospin dependence of nuclear
+        correlation functions,''
         Phys.\ Lett.\ B \textbf{785}, 304 (2018).
 \end{enumerate}
 
