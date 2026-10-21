@@ -234,6 +234,7 @@ def main():
     events = []
     balance = 0.0
     skipped_remnant = {}
+    d_above_pn = 0  # deuteron remnants (4He pn pairs) given a mass above the p + n threshold by E* (-M, -E)
     if kind == "genQE":
         a = {b: t[b].array(library="np", entry_start=sl.start, entry_stop=sl.stop)
              for b in ("pLead", "pRec", "pAm2", "lead_type", "rec_type")}
@@ -262,6 +263,7 @@ def main():
                         skipped_remnant[key] = skipped_remnant.get(key, 0) + 1
                 else:
                     p, m = a["pAm2"][i], float(m_am2[i])
+                    d_above_pn += (z2, a2) == (1, 2) and m > M_P + M_N
                     parts.append((pdg, *p, math.sqrt(m * m + p @ p), m))
             events.append(parts)
     elif kind == "genDIS":
@@ -284,7 +286,9 @@ def main():
                         skipped_remnant[key] = skipped_remnant.get(key, 0) + 1
                 else:
                     p2, e2 = a["pAm2"][i], float(a["EAm2"][i])
-                    parts.append((rpdg, *p2, e2, math.sqrt(max(e2 * e2 - p2 @ p2, 0.0))))
+                    m2 = math.sqrt(max(e2 * e2 - p2 @ p2, 0.0))
+                    d_above_pn += (z2, a2) == (1, 2) and m2 > M_P + M_N
+                    parts.append((rpdg, *p2, e2, m2))
             events.append(parts)
     else:
         b = {n: t[n].array(library="np", entry_start=sl.start, entry_stop=sl.stop)
@@ -339,6 +343,7 @@ def main():
         "remnant": None if kind not in ("genQE", "genDIS") or args.no_remnant else "A-2 nucleus with generator mass (incl. E*)",
         "struck_system": "not written (genDIS hadronic system is unhadronized)" if kind == "genDIS" else None,
         "remnant_skipped_unbound": skipped_remnant,
+        "deuteron_remnants_above_pn_threshold": d_above_pn,
         "particles_written_by_pdg": {str(p): n for p, n in sorted(n_part.items())},
         "max_rest_frame_4momentum_imbalance_GeV": balance if kind == "genQE" and "mAm2" in names else None,
     }
@@ -350,6 +355,9 @@ def main():
           f"(E_IRF = {e_run:.3f} GeV, gamma = {frame.g:.3f}, sigma = {sigma})")
     if skipped_remnant:
         print(f"  unbound A-2 remnants not written: {skipped_remnant}")
+    if d_above_pn:
+        print(f"  warning: {d_above_pn} deuteron remnants have a mass above m_p + m_n (E* from -M or -E on 4He); "
+              "they are written as deuterons with that mass", file=sys.stderr)
 
 
 if __name__ == "__main__":
