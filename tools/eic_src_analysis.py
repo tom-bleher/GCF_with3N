@@ -385,9 +385,15 @@ def load(dirs):
 
 
 def has_fsi(run):
-    """True for a GENIE FSI run (genQE_FSI or genQE_3N_FSI without -n), from its run.json."""
+    """True for a GENIE FSI run (genQE_FSI or genQE_3N_FSI without -n), from its run.json; None when the
+    run directory has no run.json, so the caller can refuse to guess."""
     rj = Path(run) / "run.json"
-    gen = json.loads(rj.read_text()).get("generator", ["genQE"]) if rj.exists() else ["genQE"]
+    if not rj.exists():
+        return None
+    meta = json.loads(rj.read_text())
+    if "generator" not in meta:  # the first production batch predates the key; all of it is genQE (PWIA)
+        print(f"warning: {rj} has no 'generator' entry; taking it as a genQE (PWIA) run", file=sys.stderr)
+    gen = meta.get("generator", ["genQE"])
     return gen[0] in ("genQE_FSI", "genQE_3N_FSI") and "-n" not in gen[1:]
 
 
@@ -424,7 +430,13 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
     # the flat transparency stands in for FSI in PWIA runs; GENIE FSI runs already absorb nucleons
     # event by event, so they take 1 unless --transparency says otherwise
     if transparency is None:
-        fsi = {has_fsi(m_["run"]) for _, metas in data.values() for m_ in metas}
+        # from the directories given on the command line, not the paths stored in the npz at extract time
+        fsi = {r: has_fsi(r) for dirs in settings.values() for r in dirs}
+        unknown = [r for r, f in fsi.items() if f is None]
+        if unknown:
+            sys.exit("plots: no run.json in " + ", ".join(unknown) + "; cannot tell GENIE FSI (transparency 1) "
+                     "from PWIA (0.5) runs; pass --transparency")
+        fsi = set(fsi.values())
         if len(fsi) > 1:
             sys.exit("plots: GENIE FSI and PWIA runs need different transparencies; pass --transparency")
         transparency, why = (1.0, "GENIE FSI runs") if fsi == {True} else (0.5, "PWIA runs, as in PRC 105, 034001")
@@ -1049,6 +1061,8 @@ def band(settings, outdir, lumi_nb_inv, transparency, n_rep, seed):
         d, metas = load(dirs)
         if any(m_.get("kind", "2N") != "2N" for m_ in metas) or metas[0]["beams"]["ion"] != "C12":
             sys.exit("band: 12C SRC-pair (genQE) runs only")
+        if any(has_fsi(r) for r in dirs):
+            sys.exit("band: PWIA runs only (the reweighting needs pRel; GENIE FSI runs take no flat transparency)")
         k = np.concatenate([np.linalg.norm(uproot.open(Path(r) / "gen.root")["genT"]["pRel"].array(library="np")
                                            [np.load(Path(r) / "analysis_events.npz")["num"]], axis=1) for r in dirs])
         B = contact_basis(d, k)
