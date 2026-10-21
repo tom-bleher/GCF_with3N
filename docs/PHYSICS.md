@@ -67,10 +67,10 @@ off-shell prescriptions:
 
 Form factors are evaluated at the physical Q² (de Forest's and SIMC's choice;
 GENIE/Wright evaluate them at Q̄²). For a free nucleon at rest all three
-options coincide; this is the check used in #32, which found and fixed three
-errors in the coded cc1/cc2 expressions (metric sign, a parenthesis in W_C,
-the longitudinal factor). Until that fix is merged, the coded cc2 is wrong by
-orders of magnitude and cc1 by 5–30 %.
+options coincide; this is the check used in #32, which found three errors in
+the coded cc1/cc2 expressions (metric sign, a parenthesis in W_C, the
+longitudinal factor). They were fixed in #33; the coded cc1 and cc2 now agree
+with an independent Dirac-spinor evaluation of the same currents.
 
 ## 2N: struck nucleon from an SRC pair
 
@@ -86,8 +86,16 @@ nuclear input in `src/libraries/nucleus/gcfSRC.cc`, `gcfNucleus.cc`.
   momentum k_F(r) at the pair's position with `onset = local`) and 1 GeV/c,
   and isotropic direction;
 - S_NN(k) = Σ C_NN^(l) |φ_NN^(l)(k)|², the contact-weighted universal
-  functions tabulated per NN interaction (AV18 by default; N2LO, N3LO, AV4,
-  NV available). The contacts are the "Scale and Scheme" k-space values.
+  functions tabulated per NN interaction (AV18 by default; AV4′ and N2LO at
+  1.0 and 1.2 fm for most of the tabulated nuclei; NV2_1a only for d, ³He and
+  ⁴He; N3LO_600 has universal functions but no contacts for any nucleus, so it
+  exits with code −2). The contacts (`gcfSRC::set_Contacts`) are taken from
+  the first source that has the nucleus and interaction: the "Scale and
+  Scheme" k-space values (AV18: d, ³H, ³He, ⁴He, ⁶Li, ¹²C), then its r-space
+  values (AV18: ¹⁶O, ⁴⁰Ca, ⁴⁰Ar), then ratios fitted to EG2 data (Al, Fe, Pb;
+  see #64 for their normalization). The NV2_1a set also prints "from the
+  Scale and Scheme paper", but that paper covers only AV18+UX, AV4′+UIXc and
+  N2LO (1.0, 1.2 fm), so its source is not documented.
 
 The struck nucleon has **p**₁ = **P**_cm/2 + **k**, its partner **p**₂ =
 **P**_cm/2 − **k**; the A−2 residual recoils with −**P**_cm and mass
@@ -121,7 +129,8 @@ light-cone variables (`-l`); a deuteron mode (A = 2).
 
 `src/programs/genQE_3N/QEGenerator_3N.cc`, density tables in `genQE_3N/array/`.
 
-**Initial state.** Three nucleons (ppn or pnn) whose internal momenta follow
+**Initial state.** Three nucleons, always a ppn triplet (which of the three
+is the neutron is chosen at random, weight × 3), whose internal momenta follow
 the three-body density ρ(p_a, p_b, θ_ab) of **³He**, computed from Faddeev
 wave functions for several interactions (AV18, AV18+UIX, AV18+TM, CD-Bonn,
 CD-Bonn+TM; `-pD` variants keep only the deuteron-channel part). Here
@@ -159,20 +168,30 @@ either a global one (|p| uniform in a sphere of radius k_F = 0.25 GeV/c) or a
 local one (`--fermi-gas local`: position from the one-body density, then |p|
 from the local Fermi sphere with k_F(r) ∝ ρ(r)^{1/3}, as in GENIE's
 LocalFGM). The A−1 residual recoils with −**p**; there is no correlated
-partner. This sample is meant to complement the SRC sample: with the local
-onset the two tile the momentum distribution without gap or overlap.
+partner. This sample is meant to complement the SRC sample. With the local
+onset the SRC branch tests the relative momentum, k > k_F(r), while the
+struck nucleon carries **p**₁ = **P**_cm/2 + **k**; the MF branch has
+|**p**| < k_F(r). In struck-nucleon momentum the two therefore overlap near
+k_F rather than tiling it exactly (`QEGeneratorFSI::SetSrcRequireP1`, off by
+default, additionally requires |**p**₁| > k_F(r)).
 
-Known: the MF weight is normalized per nucleon and divided by (2π)³ a second
-time, so it is not on the same absolute scale as the SRC weight (#34); the
-samples can be compared only after normalizing each.
+The MF weight is normalized per nucleon and multiplied by N_q (Z for a
+struck proton, A−Z for a neutron), so it reads "nucleons × density × cross
+section" per attempt like the SRC weight ("pairs × density × cross section").
+This replaced the earlier extra 1/(2π)³ (#34, fixed in #41).
 
 ## Event weights and normalization
 
-Every generator keeps producing until the requested number of events with
-weight > 0 has been written, and counts every attempt in `hAttempts`. The
-quantity to compare between samples is the weighted yield per attempt,
-Σw / attempts (printed by `gcf_generate`, shown by `gcf quicklook`). Events
-rejected at generation time (zero weight: kinematic cuts, k < k_F, Q² window)
+`gcf_generate`, `genQE_3N` and `genQE_3N_FSI` keep producing until the
+requested number of events with weight > 0 has been written, and count every
+attempt in `hAttempts`; `genQE` and `genQE_FSI` (from `genQE_FSI/`) and
+`genDIS` make exactly the requested number of attempts and write that number
+to `hAttempts`. `genCCQE`, `genElectro`, `genPhoto`, `genIon`, `sfSampler` and
+the older `genQE/genQE` write no `hAttempts`: they make the requested number
+of attempts and keep only weight > 0, so the attempt count is the
+command-line event count. The quantity to compare between samples is the
+weighted yield per attempt, Σw / attempts (printed by `gcf_generate`, shown
+by `gcf quicklook`). Events rejected at generation time (zero weight: kinematic cuts, k < k_F, Q² window)
 are part of the attempts, so cuts applied at generation and cuts applied later
 give the same normalization. Weights vary over orders of magnitude, so the
 effective sample size N_eff = (Σw)²/Σw² matters more than the event count.
@@ -195,9 +214,12 @@ cascade (vendored GENIE R-3_06_02):
   collisions, not as a separate fate.
 - **Medium:** the residual nucleus, A minus the knocked-out nucleons and Z
   minus the knocked-out protons (A−2, A−3 or A−1). The cascade is skipped if
-  the residual has A < 3. GENIE's cascade nucleons are drawn from a local
-  Fermi gas (project override `config/genie_override/*.xml`:
-  `NuclearModel = LocalFGM`), consistent with the generator's local Fermi gas.
+  the residual has A < 3. GENIE's cascade target nucleons are drawn from
+  `LocalFGM` (project override `config/genie_override/*.xml`), but the
+  cascade calls `GenerateNucleon(target)`, which evaluates it at radius 0
+  (`LocalFGM.h:50-51`): every target nucleon gets the k_F of the nuclear
+  centre, not the k_F(r) at the collision point that the generator's local
+  Fermi gas uses.
 - **Starting point:** all nucleons of the cluster start from one point,
   drawn from ρ(r)ⁿ r² with ρ the one-body density of the *full* target and
   n = 1 (single nucleon), 2 (pair; configurable, Wright uses 1) or 3
@@ -241,5 +263,5 @@ cascade (vendored GENIE R-3_06_02):
   warning. The cascade medium is GENIE's generic density for the residual's
   A, while the vertex is drawn from the full target's density.
 - Open physics questions are tracked as issues on the fork: #9 (a Jacobian in
-  the 3N plotting tools), #10 (Pauli blocking), #34 (MF normalization), #35
-  (Coulomb with FSI), and the conventions noted in #32.
+  the 3N plotting tools), #10 (Pauli blocking), #35 (Coulomb with FSI), #64
+  (EG2 contact normalization), and the conventions noted in #32.
