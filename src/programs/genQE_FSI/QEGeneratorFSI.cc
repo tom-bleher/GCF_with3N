@@ -63,7 +63,7 @@ void QEGeneratorFSI::CoulombCorrectFinalState(double deltaE)
   for (FSIParticle &part : fParticles) {
     const TParticlePDG *pd = TDatabasePDG::Instance()->GetParticle(part.pdg);
     const double q = pd ? pd->Charge() / 3. : 0.;   // TParticlePDG: units of |e|/3
-    if (q < 0. && part.p4.E() - part.p4.M() <= -q * deltaE) continue;
+    if (q < 0. && part.p4.E() - part.p4.M() <= -q * deltaE) { ++fNCoulombDropped; continue; }
     if (q != 0.) coulombCorrection(part.p4, q * deltaE);
     kept.push_back(part);
   }
