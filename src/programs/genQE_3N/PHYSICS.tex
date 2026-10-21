@@ -419,15 +419,21 @@ and $dp_{1}\,dp_{2}\,dp_{3} = p_{\text{tot}}^{2}\;dp_{\text{tot}}\,df_{1}\,df_{2
 so the density per $dp_{\text{tot}}\,df_{1}\,df_{2}$ is
 \begin{equation}
   \frac{dN}{dp_{\text{tot}}\,df_{1}\,df_{2}}
-  \;\propto\; p_{1}\,p_{2}\,p_{3}\,p_{\text{tot}}^{2}\;\rho_{\text{table}},
+  \;=\; 8\pi^{2}\,p_{1}\,p_{2}\,p_{3}\,p_{\text{tot}}^{2}\;\rho_{\text{table}},
 \end{equation}
-up to the constant area factor of the ternary coordinates; it vanishes
-at the edges of the ternary plot.
-\texttt{QEGenerator\_3N::get\_rho\_ptot\_f1f2f3} currently uses the
-reciprocal, $J = (8/\sqrt{3})/(p_{1}\,p_{2}\,p_{3}\,p_{\text{tot}}^{2})$,
-which is wrong (issue \#9).  Event generation does not use it (it calls
-\texttt{get\_rho}); only the ternary and $\theta$-plot diagnostics
-(\texttt{Ternary.cc}, \texttt{analysis/theta\_plot*.cpp}) do.
+with no further constant, on the domain $f_{i} \le 1/2$ (triangle
+inequality); it vanishes at the edges of the ternary plot.  This is what
+\texttt{QEGenerator\_3N::get\_rho\_ptot\_f1f2f3} returns once PR~\#91
+(issue~\#9) is merged.  Before that fix the function used the reciprocal,
+$J = (8/\sqrt{3})/(p_{1}\,p_{2}\,p_{3}\,p_{\text{tot}}^{2})$, which
+diverges at the edges ($8/\sqrt{3}$ is the inverse of the area factor of
+the ternary plot coordinates, so the whole factor was inverted).  With
+\#91 the $p_{\text{miss}}$ maps in \texttt{Ternary.cc} divide by $f_{1}$
+($dp_{\text{tot}} = dp_{\text{miss}}/f_{1}$) and
+\texttt{analysis/theta\_plot*.cpp}, which bin on a uniform
+$(k_{1},k_{2},k_{3})$ grid, divide by $p_{\text{tot}}^{2}$.  Event
+generation does not use the function (it calls \texttt{get\_rho}); only
+these diagnostics do.
 
 %======================================================================
 \section{Differences from the 2N Generator}
