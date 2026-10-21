@@ -125,8 +125,9 @@ values, far lower variance: N_eff/N goes from ~2.5 % to order 1).
 **Options.** Peaking-approximation radiative correction (`-O`); Coulomb
 correction of the electron and proton energies by the nucleus' Coulomb
 potential (`-C`; with FSI, #117 also shifts every charged particle of the
-post-FSI list by its charge times ΔE_C, while the split pipeline
-`gcf_generate --coulomb` → `gcf_fsi` corrects only before the cascade, #118);
+post-FSI list by its charge times ΔE_C; the split pipeline
+`gcf_generate --coulomb` → `gcf_fsi` corrects the hadrons before the cascade
+until #122 moves that shift after it, #118);
 randomized nuclear parameters for systematics (`-r`);
 light-cone variables (`-l`); a deuteron mode (A = 2).
 
@@ -258,7 +259,7 @@ cascade (vendored GENIE R-3_06_02):
 - **Known issues fixed on branches:** an unbounded retry inside GENIE that
   overflowed the stack for nucleons left with no allowed fate (#1), and the
   Coulomb correction not being applied to the post-FSI list (#35, fixed for
-  `genQE_FSI -C` in #117; the split pipeline is #118).
+  `genQE_FSI -C` in #117 and for the split pipeline in #122, #118).
 
 ## Assumptions and known limitations
 
@@ -274,7 +275,7 @@ cascade (vendored GENIE R-3_06_02):
   warning. The cascade medium is GENIE's generic density for the residual's
   A, while the vertex is drawn from the full target's density.
 - Open physics questions are tracked as issues on the fork: #10 (Pauli
-  blocking), #118 (Coulomb correction in the split pipeline), and the
-  conventions noted in #32. #9 (a Jacobian in the 3N plotting tools), #35
-  (Coulomb with FSI) and #64 (EG2 contact normalization) have fixes in PRs
-  #91, #117 and #89.
+  blocking) and the conventions noted in #32. #9 (a Jacobian in the 3N
+  plotting tools), #35 (Coulomb with FSI), #64 (EG2 contact normalization)
+  and #118 (Coulomb in the split pipeline) have fixes in PRs #91, #117, #89
+  and #122.
