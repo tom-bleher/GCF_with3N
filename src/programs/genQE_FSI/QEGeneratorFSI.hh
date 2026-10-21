@@ -105,8 +105,9 @@ class QEGeneratorFSI: public gcfGenerator
   // kLocalKF: k_rel > k_F(r), the local Fermi momentum at the sampled pair
   //   vertex. This is N. Wright's convention (GCF_GENIE, LocalFGM::ProbDistro:
   //   flat Fermi gas below k_F(r), AV18 universal function above), and it makes
-  //   the SRC and mean-field samples exactly complementary -- together they
-  //   tile the whole momentum distribution with no gap and no overlap.
+  //   the SRC and mean-field samples complementary in k_rel. In struck-nucleon
+  //   momentum p1 = P_cm/2 + k_rel they overlap near k_F(r) unless
+  //   SetSrcRequireP1 (off by default) also requires |p1| > k_F(r).
   //   Caveat: k_F(r) runs down to ~0.08 GeV/c at large radius, well below the
   //   ~0.3 GeV/c where the GCF is validated against ab-initio calculations.
   enum SrcOnset { kFixedKF, kLocalKF };
