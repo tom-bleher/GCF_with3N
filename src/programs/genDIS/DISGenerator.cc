@@ -85,6 +85,8 @@ void DISGenerator::generate_event(double &weight, int &lead_type, int &rec_type,
   // Constructing 4-momenta
   double pAm2_plus = mbar*alphaAm2;
   double pAm2_minus = (vAm2_perp.Mod2() + sq(mAm2))/pAm2_plus;
+  if (mAm2 == 0)
+    pAm2_minus = 0.;
   double EAm2 = 0.5*(pAm2_plus + pAm2_minus);
   double pAm2z = 0.5*(pAm2_plus - pAm2_minus);
   vAm2_target.SetXYZT(vAm2_perp.X(),vAm2_perp.Y(),pAm2z,EAm2);
