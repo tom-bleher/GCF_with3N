@@ -87,7 +87,11 @@ while for $pn$ pairs it is
 
 The universal functions $\varphi^{2}(k)$ are tabulated in 100 bins
 covering $k \in [0,\,10]\fm^{-1}$ with $\Delta k = 0.1\fm^{-1}$ and
-linearly interpolated at runtime.
+linearly interpolated at runtime.  Below the first table point,
+$k < 0.1\fm^{-1}$ (normally reached only for the deuteron), PR~\#109
+extends the table with a Hulth\'en shape matched at $0.1\fm^{-1}$; before
+that fix the code ramped linearly to zero there and left out the table
+normalization (issue~\#13).
 
 \subsection{Available NN interactions}
 
@@ -128,7 +132,9 @@ AV18, $^{12}$C ($k$-space) are
 \end{equation}
 for comparison, the $r$-space set is $C_{pp0}=C_{nn0}=C_{pn0}\approx 4.30$,
 $C_{pn1}\approx 78.8$, and the EG2 set is $C_{pp0}=C_{nn0}=C_{pn0}\approx 1.07$,
-$C_{pn1}=16$.
+$C_{pn1}=16$ per $A/2$, i.e.\ $6.4$ and $96$ for $^{12}$C once the EG2 set
+carries the factor $A/2$ that the other sets have (PR~\#89, issue~\#64;
+before that fix the code used the per-$A/2$ numbers directly).
 The $pn1$ (deuteron-like) channel dominates by roughly an order of magnitude.
 
 %======================================================================
