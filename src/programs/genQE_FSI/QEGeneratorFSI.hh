@@ -210,10 +210,13 @@ class QEGeneratorFSI: public gcfGenerator
   void build_local_onset_vertex_table(int lead_type, int rec_type);
   TLorentzVector sample_local_onset_vertex(int lead_type, int rec_type,
                                            double &kF_r, double &I_src_r);
-  bool   fLocalVtx_built[3] = {false, false, false};
-  double fLocalVtx_rmax[3]  = {0., 0., 0.};   // fm
-  double fLocalVtx_fmax[3]  = {0., 0., 0.};   // max of rho^n r^2 I_SRC(r)
-  double fLocalVtx_meanI[3] = {0., 0., 0.};   // <I_SRC> over rho^n r^2
+  // Tables indexed by local_vtx_slot: 0 = pp, 1 = nn, 2 = pn (lead p),
+  // 3 = np (lead n).
+  int local_vtx_slot(int lead_type, int rec_type) const;
+  bool   fLocalVtx_built[4] = {false, false, false, false};
+  double fLocalVtx_rmax[4]  = {0., 0., 0., 0.};   // fm
+  double fLocalVtx_fmax[4]  = {0., 0., 0., 0.};   // max of rho^n r^2 I_SRC(r)
+  double fLocalVtx_meanI[4] = {0., 0., 0., 0.};   // <I_SRC> over rho^n r^2
 
   // Single-nucleon MF state
   static constexpr int kNoRecoil = 0;  // rec_type sentinel: no recoil nucleon

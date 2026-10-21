@@ -158,9 +158,18 @@ void QEGeneratorFSI::ApplyFSI(int lead_type, int rec_type,
 // constant <I_SRC> and the vertex distribution is the physically correct one
 // for a radius-dependent onset.
 // ---------------------------------------------------------------------------
-void QEGeneratorFSI::build_local_onset_vertex_table(int lead_type, int rec_type)
+// One table per ordered pair: the pair class fixes S(k), and the struck
+// nucleon's species fixes N_q in k_F(r), so pn (lead p, N_q = Z) and np
+// (lead n, N_q = A-Z) need separate tables when N != Z.
+int QEGeneratorFSI::local_vtx_slot(int lead_type, int rec_type) const
 {
   const int cls = is_class(lead_type, rec_type);
+  return (cls == 2 && lead_type != pCode) ? 3 : cls;
+}
+
+void QEGeneratorFSI::build_local_onset_vertex_table(int lead_type, int rec_type)
+{
+  const int cls = local_vtx_slot(lead_type, rec_type);
   if (fLocalVtx_built[cls]) return;
 
   const int    n_rho = fsi::GetSRCVertexRhoPower();
@@ -193,7 +202,7 @@ TLorentzVector QEGeneratorFSI::sample_local_onset_vertex(int lead_type,
                                                         double &kF_r,
                                                         double &I_src_r)
 {
-  const int cls = is_class(lead_type, rec_type);
+  const int cls = local_vtx_slot(lead_type, rec_type);
   build_local_onset_vertex_table(lead_type, rec_type);
 
   const int    n_rho = fsi::GetSRCVertexRhoPower();
@@ -294,7 +303,7 @@ void QEGeneratorFSI::generate_event(double &weight, int &lead_type, int &rec_typ
   // constant <I_SRC>. Net effect: expectation values unchanged, the r-driven
   // weight spread gone.
   if (fSrcOnset == kLocalKF) {
-    weight *= fLocalVtx_meanI[is_class(lead_type, rec_type)] / I_src_r;
+    weight *= fLocalVtx_meanI[local_vtx_slot(lead_type, rec_type)] / I_src_r;
   }
 
   // Optional second test on the struck-nucleon momentum AFTER the c.m. motion
