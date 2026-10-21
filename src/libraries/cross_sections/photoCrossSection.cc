@@ -151,10 +151,14 @@ double photoCrossSection::R_Jpsi_p(double QSq)
 
 double photoCrossSection::dipole_F(double t, double tmin, double tmax)
 {
-  double Lambda = 0.71;
-  //double Lambda = 1.14;
+  // |F(t)|^2 with F(t) = 1/(1 - t/mSq)^2, normalized to 1 over [tmax, tmin].
+  // mSq is the dipole mass squared in GeV^2: 0.71 is the proton dipole of
+  // Lomnitz & Klein, arXiv:1803.06420 eq. (15); 1.14 is the Frankfurt-Strikman
+  // two-gluon value.
+  double mSq = 0.71;
+  //double mSq = 1.14;
 
-  return pow(sq(Lambda) - t,-4.) * 3./(pow(sq(Lambda) - tmin,-3.) - pow(sq(Lambda) - tmax,-3.));
+  return pow(mSq - t,-4.) * 3./(pow(mSq - tmin,-3.) - pow(mSq - tmax,-3.));
 }
 
 double photoCrossSection::sigma_deltapp_pim(double s, double cosThetaCM)
