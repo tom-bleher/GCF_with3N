@@ -139,9 +139,11 @@ void QEGeneratorFSI::ApplyFSI(int lead_type, int rec_type,
   // cascade could not run at all, keep the generated nucleons.
   if (ran) fParticles = particles;
 
-  // No post-cascade Pauli veto: GENIE's cascade already Pauli-blocks each
-  // collision internally (blocked outcomes are rerolled), so the final
-  // state needs no further momentum cut. Matches the 3N generator.
+  // No post-cascade Pauli veto; matches the 3N generator. Pauli blocking is
+  // GENIE's own, and it is partial: absorption and pion production reroll
+  // blocked final states, but the NN elastic / charge-exchange block in
+  // TwoBodyCollision is commented out (INukeUtils2018.cxx:826-832), so NN
+  // rescattering is not Pauli-blocked (#10).
 #endif
 }
 
@@ -552,11 +554,12 @@ double QEGeneratorFSI::eval_n_FG(double p) const
 // ---------------------------------------------------------------------------
 // build_local_FG_table — tabulate the local-Fermi-gas momentum distribution
 //   n(p) = (1/N) int d^3r Theta(kF(r) - p),  kF(r) = (3 pi^2 (A/2) rho(r))^{1/3}
-// (per-isospin kF for a symmetric nucleus: GENIE's rho is normalised to 1,
-// so the species-q nucleon density is N_q rho ~ (A/2) rho -- the same
-// convention as fsi::LocalFermiMomentum used by the event sampler).
-// with rho from GENIE's density model, normalised so int n d^3p = 1. Cached
-// per nucleus; the momentum ceiling is kF at central density.
+// with rho from GENIE's density model (normalised to 1), normalised so
+// int n d^3p = 1. Cached per nucleus; the momentum ceiling is kF at central
+// density. The table uses the isospin-averaged A/2. The event sampler
+// (sample_FG_momentum, via fsi::LocalFermiMomentum) uses N_q = Z or N, so
+// the two agree only for N = Z. Only eval_n_FG / get_n_FG read this table,
+// and nothing calls those.
 void QEGeneratorFSI::build_local_FG_table()
 {
   const double hbarc = 0.1973269804;   // GeV*fm
@@ -627,8 +630,8 @@ void QEGeneratorFSI::ApplyFSI_single(int lead_type,
     fParticles = particles;
   }
 
-  // No post-cascade Pauli veto here either: GENIE's cascade handles Pauli
-  // blocking internally (see ApplyFSI above).
+  // No post-cascade Pauli veto here either; GENIE's own Pauli blocking does
+  // not cover NN elastic scattering (see ApplyFSI above, #10).
 #endif
 }
 

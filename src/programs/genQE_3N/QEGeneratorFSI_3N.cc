@@ -136,10 +136,12 @@ void QEGeneratorFSI_3N::ApplyFSI(int N1_type, int N2_type, int N3_type,
   // cascade could not run at all, keep the generated nucleons.
   if (ran) fParticles = particles;
 
-  // No post-cascade Pauli veto: GENIE's cascade already Pauli-blocks each
-  // collision internally (blocked outcomes throw INukeException and the
-  // fate/kinematics are rerolled), so the final state needs no further
-  // momentum cut.
+  // No post-cascade Pauli veto. Pauli blocking is GENIE's own, and it is
+  // partial: absorption and pion production throw INukeException on a
+  // blocked final state and the fate/kinematics are rerolled, but the NN
+  // elastic / charge-exchange block in TwoBodyCollision is commented out
+  // (INukeUtils2018.cxx:826-832), so NN rescattering is not Pauli-blocked
+  // (#10).
 #else
   (void)v1; (void)v2; (void)v3;
 #endif

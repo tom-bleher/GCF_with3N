@@ -680,8 +680,10 @@ def flatlist_resolve(d, acc, ebeam, include_neutrons=False, chunk=2_000_000,
     Also records, for the chosen lead and recoil, the provenance columns
     lead_role / rec_role (part_parentRole: 0 = descends from the generated
     struck nucleon, 1 = from the generated partner) and lead_gen / rec_gen
-    (part_generation: 0 = IS that nucleon, untouched by the cascade; >0 = an
-    FSI product). These drive the candidate-origin diagnostic.
+    (part_generation: mother-chain depth from the generated nucleon; >= 1
+    for every cascade output, including a nucleon that left untouched, and
+    0 only when the cascade did not run. Use part_rescatterCode == 1 to find
+    untouched nucleons). These drive the candidate-origin diagnostic.
 
     Diagnostics d["n_lead_cand"] / d["n_recoil_cand"] count accepted
     candidates. Processed in chunks of `chunk` events to bound peak memory.

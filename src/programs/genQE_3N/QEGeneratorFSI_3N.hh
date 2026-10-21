@@ -12,8 +12,9 @@
 // Wraps QEGenerator_3N. After the parent samples the (N1, N2, N3) final state
 // it transports the three outgoing nucleons through GENIE's intranuclear
 // cascade (hN or hA mode), using a single shared SRC-triplet position sampled
-// from rho^3(r). Pauli blocking is handled inside GENIE's cascade (blocked
-// collisions are rerolled); no additional post-FSI momentum cut is applied.
+// from rho^3(r). No post-FSI momentum cut is applied. Pauli blocking is
+// GENIE's own: absorption and pion production reroll blocked final states,
+// but NN elastic scattering is not Pauli-blocked in this GENIE version (#10).
 //
 // The FSI output is purely a particle list (GetFinalStateParticles()): GENIE's
 // stable final state verbatim, with no lead/recoil designation and no

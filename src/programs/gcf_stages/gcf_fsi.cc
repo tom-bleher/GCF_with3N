@@ -62,7 +62,9 @@ void Usage()
     "                           one (default auto: n = 1, 2, 3 for 1, 2, >=3 nucleons)\n"
     "      --channel NAME=F     scale the rate of an interaction channel of the cascade\n"
     "                           by F (0 = switch it off); repeatable. --list-channels\n"
-    "                           shows the names and which model each applies to\n"
+    "                           shows the names and which model each applies to.\n"
+    "                           The .mfp channels scale the mean free path instead:\n"
+    "                           F = 0 makes every hadron interact at its first step\n"
     "      --list-channels      print the channels and exit\n"
     "      --keep REGEX         input branches to copy (default: all)\n"
     "      --overwrite          replace FSI branches already in the input\n"
@@ -78,8 +80,10 @@ void Usage()
 // cascade multiplies the channel's fate fraction by the factor and
 // renormalizes, so 0 switches the channel off. (hN's nucleon elastic /
 // inelastic and pion inelastic factors are a local GENIE patch; the others
-// are stock GENIE parameters.) The mean-free-path entries scale the
-// interaction probability per step rather than a branching fraction.
+// are stock GENIE parameters.) The mean-free-path entries are not a
+// branching fraction: they scale the mean free path itself (L *= F in
+// Intranuke2018::GenerateStep), so F > 1 makes the medium more transparent
+// and F = 0 makes the hadron interact at its first step.
 struct Channel {
   const char *name;
   const char *help;

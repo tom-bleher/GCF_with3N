@@ -356,9 +356,10 @@ int main(int argc, char **argv) {
             myGen->generate_event_MF(weight, lead_type, rec_type, v_k_target, v_Lead_target, v_Rec_target, v_Am2_target);
         else
             myGen->generate_event(weight, lead_type, rec_type, v_k_target, v_Lead_target, v_Rec_target, v_Am2_target);
-        // Skip rejected events. FSI never zeroes the weight (the cascade
-        // Pauli-blocks internally, and absorption keeps the primary GCF
-        // weight, flagged via leadAbsorbed/recAbsorbed), so weight<=0 always
+        // Skip rejected events. FSI never zeroes the weight (there is no
+        // post-cascade Pauli veto, and an absorbed nucleon keeps the primary
+        // GCF weight; it is simply missing from the final state), so weight<=0
+        // always
         // means a primary kinematic rejection.
         if (weight <= 0.0) { events_zero_weight++; continue; }
 

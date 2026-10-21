@@ -165,7 +165,12 @@ def analyse(path, label, max_events, nbins_ang=45):
         # (1) actual GCF pairs: the true SRC partner, when it is not the lead
         if "SRC" in label.upper() or "GCF" in label.upper():
             # exclude the lead itself: in ~1/6 of events the SRC partner IS the
-            # highest-momentum proton, i.e. it was detected as the lead
+            # highest-momentum proton, i.e. it was detected as the lead.
+            # generation == 1 does NOT mean "untouched": every cascade output
+            # is at depth >= 1, and in hA a rescattered recoil or a nucleon it
+            # knocked out is also at depth 1 with role 1. So "gcf_true" also
+            # holds those; rescatterCode == 1 would isolate the untouched
+            # partner.
             true_rec = is_p & (a.part_generation == 1) & (a.part_parentRole == 1) & (idx != lead_idx)
             tr = p3[true_rec]
             ev2 = np.where(src & (ak.to_numpy(ak.sum(true_rec, axis=1)) > 0))[0]

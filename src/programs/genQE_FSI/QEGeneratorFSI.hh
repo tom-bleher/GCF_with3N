@@ -26,8 +26,9 @@
 // no absorption special-casing. The generated (pre-FSI) nucleons are
 // returned through the generate_event out-parameters unchanged. Which
 // final-state particle is "lead" or "recoil" is a detection-level choice
-// made downstream from types and momenta alone. Pauli blocking is handled
-// inside GENIE's cascade; no additional momentum cut is applied here.
+// made downstream from types and momenta alone. No momentum cut is applied
+// here; Pauli blocking is GENIE's own and does not cover NN elastic
+// scattering in this GENIE version (#10).
 
 class QEGeneratorFSI: public gcfGenerator
 {

@@ -344,7 +344,7 @@ bool ApplyGenieFSI(int A_residual, int Z_residual,
 
     int role = -1;
     int fate = -1;
-    int depth = 0;               // 0 = this particle IS the transported input
+    int depth = 0;               // steps up the mother chain to an input slot
     int cur = idx;
     while (cur >= 0) {
       if (cur >= first_hadron_slot && cur <= last_hadron_slot) {
@@ -353,8 +353,10 @@ bool ApplyGenieFSI(int A_residual, int Z_residual,
         // (HAIntranuke2018.cxx:152, HNIntranuke2018.cxx:155), i.e. on the
         // INCIDENT particle -- never on the stable final state itself.
         // Reading sp->RescatterCode() therefore always returned -1. Take it
-        // from the transported input slot this particle descends from:
-        // -1 there means that nucleon never interacted.
+        // from the transported input slot this particle descends from.
+        // A nucleon that left without interacting has fate 1 (no
+        // interaction, set in Intranuke2018::TransportHadrons); -1 means the
+        // input was never stepped.
         genie::GHepParticle* anc = evrec.Particle(cur);
         if (anc) fate = anc->RescatterCode();
         break;
@@ -369,8 +371,15 @@ bool ApplyGenieFSI(int A_residual, int Z_residual,
     part.pdg = pdg;
     part.p4 = *(sp->P4());
     part.rescatterCode = fate;
-    // 0 = this particle IS the transported input nucleon, unchanged by the
-    // cascade; >0 = it is a descendant, i.e. an FSI product.
+    // Mother-chain depth from the input slot. Intranuke rescatters a clone
+    // whose FirstMother is the input slot, so every cascade output, an
+    // unscattered nucleon included, has depth >= 1. The products of a
+    // collision take the input slot as mother too (INukeUtils2018.cxx:848,
+    // HNIntranuke2018.cxx:656): in hA they are final at depth 1, so a
+    // rescattered or knocked-out nucleon is also at depth 1; in hN they are
+    // stepped again and end up deeper. Use rescatterCode == 1, not
+    // generation, to find nucleons that left unchanged; 0 occurs only for
+    // the pass-through branch above.
     part.generation = depth;
     part.parentRole = role;
     particles.push_back(part);
