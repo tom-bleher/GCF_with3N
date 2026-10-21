@@ -92,8 +92,10 @@ nuclear input in `src/libraries/nucleus/gcfSRC.cc`, `gcfNucleus.cc`.
   exits with code −2). The contacts (`gcfSRC::set_Contacts`) are taken from
   the first source that has the nucleus and interaction: the "Scale and
   Scheme" k-space values (AV18: d, ³H, ³He, ⁴He, ⁶Li, ¹²C), then its r-space
-  values (AV18: ¹⁶O, ⁴⁰Ca, ⁴⁰Ar), then ratios fitted to EG2 data (Al, Fe, Pb;
-  see #64 for their normalization). The NV2_1a set also prints "from the
+  values (AV18: ¹⁶O, ⁴⁰Ca, ⁴⁰Ar), then ratios fitted to EG2 data (AV18: Al,
+  Fe, Pb; also ¹²C with N2LO_12). The EG2 contacts are per A/2 and get the
+  factor A/2 the other sets carry once #89 is merged; before that their yields
+  are low by A/2 (#64). The NV2_1a set also prints "from the
   Scale and Scheme paper", but that paper covers only AV18+UX, AV4′+UIXc and
   N2LO (1.0, 1.2 fm), so its source is not documented.
 
@@ -122,7 +124,10 @@ values, far lower variance: N_eff/N goes from ~2.5 % to order 1).
 
 **Options.** Peaking-approximation radiative correction (`-O`); Coulomb
 correction of the electron and proton energies by the nucleus' Coulomb
-potential (`-C`); randomized nuclear parameters for systematics (`-r`);
+potential (`-C`; with FSI, #117 also shifts every charged particle of the
+post-FSI list by its charge times ΔE_C, while the split pipeline
+`gcf_generate --coulomb` → `gcf_fsi` corrects only before the cascade, #118);
+randomized nuclear parameters for systematics (`-r`);
 light-cone variables (`-l`); a deuteron mode (A = 2).
 
 ## 3N: struck nucleon from an SRC triplet
@@ -167,8 +172,11 @@ sampling over a density spanning many decades makes the weights very uneven
 either a global one (|p| uniform in a sphere of radius k_F = 0.25 GeV/c) or a
 local one (`--fermi-gas local`: position from the one-body density, then |p|
 from the local Fermi sphere with k_F(r) ∝ ρ(r)^{1/3}, as in GENIE's
-LocalFGM). The A−1 residual recoils with −**p**; there is no correlated
-partner. This sample is meant to complement the SRC sample. With the local
+LocalFGM). The A−1 residual recoils with −**p**, in its ground state; there
+is no correlated partner. Only ¹²C has A−1 masses, so MF runs on ¹²C only;
+with #115, `gcf_generate --model MF` rejects other targets and the 2N-only
+options (`--nn`, `--estar`, `--sigma-cm`, `--kcut`, `--onset`, `--prel-is`).
+This sample is meant to complement the SRC sample. With the local
 onset the SRC branch tests the relative momentum, k > k_F(r), while the
 struck nucleon carries **p**₁ = **P**_cm/2 + **k**; the MF branch has
 |**p**| < k_F(r). In struck-nucleon momentum the two therefore overlap near
@@ -244,10 +252,13 @@ cascade (vendored GENIE R-3_06_02):
   the cascade is off (#10).
 - **Channels:** the rate of each fate can be scaled or switched off
   (`gcf_fsi --channel`, `[fsi] off`), through GENIE's own per-channel
-  factors, for studies of which interaction does what.
+  factors, for studies of which interaction does what. With `GXMLPATH`
+  unset, `--channel` takes effect only once #98 is merged; before it the
+  baseline override shadowed the channel files (#78).
 - **Known issues fixed on branches:** an unbounded retry inside GENIE that
   overflowed the stack for nucleons left with no allowed fate (#1), and the
-  Coulomb correction not being applied to the post-FSI list (#35).
+  Coulomb correction not being applied to the post-FSI list (#35, fixed for
+  `genQE_FSI -C` in #117; the split pipeline is #118).
 
 ## Assumptions and known limitations
 
@@ -262,6 +273,8 @@ cascade (vendored GENIE R-3_06_02):
 - GENIE INTRANUKE is validated for A > 6; light residuals (A_res < 7) get a
   warning. The cascade medium is GENIE's generic density for the residual's
   A, while the vertex is drawn from the full target's density.
-- Open physics questions are tracked as issues on the fork: #9 (a Jacobian in
-  the 3N plotting tools), #10 (Pauli blocking), #35 (Coulomb with FSI), #64
-  (EG2 contact normalization), and the conventions noted in #32.
+- Open physics questions are tracked as issues on the fork: #10 (Pauli
+  blocking), #118 (Coulomb correction in the split pipeline), and the
+  conventions noted in #32. #9 (a Jacobian in the 3N plotting tools), #35
+  (Coulomb with FSI) and #64 (EG2 contact normalization) have fixes in PRs
+  #91, #117 and #89.
