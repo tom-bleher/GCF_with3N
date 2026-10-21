@@ -185,14 +185,14 @@ double eNCrossSection::GEp(double QSq)
   return 0.;
 }
 
-double eNCrossSection::GEn(double QSq) // This will use the Galster parameterization
+double eNCrossSection::GEn(double QSq) // dipole and kelly use the Galster form; ye is its own z expansion
 {
   double tau = QSq/(4.*mN*mN);
 
   switch (myModel)
     {
     case dipole:
-      return mu_n * tau / (1. + 5.6 * tau) * Gdipole(QSq); // the original Galster numbers
+      return -mu_n * tau / (1. + 5.6 * tau) * Gdipole(QSq); // the original Galster numbers
     case kelly:
       return 1.70 * tau / (1. + 3.3 * tau) * Gdipole(QSq); // params from Kelly paper
     case ye:
@@ -213,7 +213,7 @@ double eNCrossSection::GMp(double QSq)
     case kelly:
       return mu_p * Gkelly(QSq,0.12,10.97,18.86,6.55);
     case ye:
-      return Gye(QSq,params_ye_GMp);
+      return mu_p * Gye(QSq,params_ye_GMp); // Ye et al. fit G_M/mu_p
     default:
       std::cerr << "Error in GMp: invalid form factor model!\n";
       exit(-1);
@@ -230,7 +230,7 @@ double eNCrossSection::GMn(double QSq)
     case kelly:
       return mu_n * Gkelly(QSq,2.33,14.72,24.20,84.1);
     case ye:
-      return Gye(QSq,params_ye_GMn);
+      return mu_n * Gye(QSq,params_ye_GMn); // Ye et al. fit G_M/mu_n
     default:
       std::cerr << "Error in GMn: invalid form factor model!\n";
       exit(-1);
