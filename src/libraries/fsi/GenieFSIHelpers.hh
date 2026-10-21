@@ -3,6 +3,8 @@
 
 #include "TLorentzVector.h"
 #include "TRandom3.h"
+#include <ostream>
+#include <string>
 #include <vector>
 
 // FSI model selection for GENIE intranuclear cascade.
@@ -48,10 +50,26 @@ struct FSIInputNucleon {
 
 namespace fsi {
 
-// Set GXMLPATH so GENIE can locate ModelConfiguration.xml /
-// TuneGeneratorList.xml when the user has not sourced GENIE setup scripts.
-// Idempotent; safe to call multiple times.
-void ResolveGenieXMLPath();
+// The project's GENIE override directory in use: $GENIE_OVERRIDE_DIR if set
+// (the run scripts use it to select e.g. config/genie_override_srctail),
+// else the compile-time default config/genie_override.
+std::string GenieOverrideDir();
+
+// Set GXMLPATH, in this order: the user's own GXMLPATH entries (in their
+// order), GenieOverrideDir(), $GENIE/config/G18_10a, $GENIE/config. Entries
+// naming one of the last three, in any spelling, are moved to their slot
+// and duplicates dropped, so a user directory always wins over the project
+// override and the override over GENIE's defaults. Returns the new
+// GXMLPATH. Idempotent; safe to call multiple times.
+std::string ResolveGenieXMLPath();
+
+// The first GXMLPATH directory holding `file` (the copy GENIE reads), or ""
+// if none.
+std::string FindOnGenieXMLPath(const std::string &file);
+
+// Log GXMLPATH and where the Intranuke and Messenger XML files come from,
+// with the cascade-target NuclearModel each Intranuke file sets.
+void PrintGenieXMLConfig(std::ostream &os);
 
 // One-body nucleon number density rho(r) [fm^-3] at radius r [fm] for nucleus
 // A, from GENIE's nuclear density model. Returns -1 if FSI/GENIE is not

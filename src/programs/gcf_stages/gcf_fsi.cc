@@ -112,16 +112,19 @@ void ListChannels()
          "is not a separate fate in that cascade model.\n");
 }
 
-// Write <dir>/{HN,HA}Intranuke2018.xml: the project's override files with the
-// requested parameters set in the "Default" parameter set. Returns false
-// with a message on failure.
-bool WriteOverride(const string &dir, const string &srcDir, FSIModel model,
+// Write <dir>/{HN,HA}Intranuke2018.xml: copies of the files GENIE would
+// otherwise read (the first on the resolved GXMLPATH, so a variant such as
+// genie_override_srctail keeps its medium) with the requested parameters set
+// in the "Default" parameter set. Returns false with a message on failure.
+bool WriteOverride(const string &dir, FSIModel model,
                    const map<string, string> &params, bool quietCascade, string &err)
 {
   if (mkdir(dir.c_str(), 0775) != 0 && errno != EEXIST) {
     err = "cannot create " + dir; return false;
   }
   for (const char *base : {"HNIntranuke2018.xml", "HAIntranuke2018.xml"}) {
+    const string srcDir = fsi::FindOnGenieXMLPath(base);
+    if (srcDir.empty()) { err = string("no ") + base + " on GXMLPATH"; return false; }
     ifstream in(srcDir + "/" + base);
     if (!in) { err = "cannot read " + srcDir + "/" + base; return false; }
     const bool edit = (model == kHN2018) == (string(base) == "HNIntranuke2018.xml");
@@ -156,8 +159,10 @@ bool WriteOverride(const string &dir, const string &srcDir, FSIModel model,
   // With a channel switched off, hadrons left without any allowed fate make
   // INTRANUKE log "Couldn't select a fate" at ERROR level for every such
   // step: expected here, and enough to flood a log. Raise the two cascade
-  // streams to FATAL in a copy of the project's Messenger.xml.
+  // streams to FATAL in a copy of the Messenger.xml in use.
   if (quietCascade) {
+    const string srcDir = fsi::FindOnGenieXMLPath("Messenger.xml");
+    if (srcDir.empty()) { err = "no Messenger.xml on GXMLPATH"; return false; }
     ifstream in(srcDir + "/Messenger.xml");
     if (!in) { err = "cannot read " + srcDir + "/Messenger.xml"; return false; }
     ofstream out(dir + "/Messenger.xml");
@@ -344,8 +349,10 @@ int main(int argc, char **argv)
   runner.mode = independent ? fsi::kIndependent : fsi::kSharedRemnant;
   if (runner.vertexPower == 2) fsi::SetSRCVertexRhoPower(2);
   // Channel settings go into a private GENIE override directory, first on
-  // GXMLPATH, so GENIE reads the modified HN/HAIntranuke2018.xml. The
-  // project's own override directory stays next so nothing else changes.
+  // GXMLPATH, so GENIE reads the modified HN/HAIntranuke2018.xml. Its files
+  // are copies of the ones the resolved path would otherwise give, and that
+  // path stays behind it, so nothing else changes.
+  const string resolvedPath = fsi::ResolveGenieXMLPath();
   string overrideDir;
   if (!overrideParams.empty()) {
     overrideDir = output + ".genie_override";
@@ -355,14 +362,13 @@ int main(int argc, char **argv)
       cout << "Note: with a channel switched off, GENIE's per-step 'Couldn't select a fate' "
               "messages are expected and are suppressed (cascade log streams set to FATAL).\n";
     string err;
-    if (!WriteOverride(overrideDir, GENIE_OVERRIDE_DIR, runner.model, overrideParams, anyOff, err)) {
+    if (!WriteOverride(overrideDir, runner.model, overrideParams, anyOff, err)) {
       cerr << "Error: " << err << "\n"; return 1;
     }
-    const char *old = getenv("GXMLPATH");
-    string path = overrideDir + ":" + string(GENIE_OVERRIDE_DIR) + (old && *old ? ":" + string(old) : "");
-    setenv("GXMLPATH", path.c_str(), 1);
+    setenv("GXMLPATH", (overrideDir + ":" + resolvedPath).c_str(), 1);
+    fsi::ResolveGenieXMLPath();
   }
-  fsi::ResolveGenieXMLPath();
+  if (!countOnly) fsi::PrintGenieXMLConfig(cout);
 
   if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
   cout << "Random seed: " << seed << "\n";
