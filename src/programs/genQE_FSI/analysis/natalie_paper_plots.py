@@ -422,7 +422,55 @@ def _free_raw_columns(d):
     return d
 
 
-def wright_resolve(d, acc, ebeam, seed=None, chunk=2_000_000, phi_rot=True):
+def _wright_detected_pair(p_ok, pmag, ok, wmap, rows, m, rng, out, lo):
+    """wright_resolve on the detected proton list: lead = highest-|p| accepted
+    proton (effective 1628-1640), then her recoil-candidate rules and lottery.
+    Writes out["ncand"] and out["drop"] for this chunk."""
+    # --- lead: highest-|p| accepted proton (effective 1628-1640) -----
+    lead_idx = np.argmax(p_ok, axis=1)
+    has_lead = p_ok[rows, lead_idx] > 0.0
+    out["drop"][lo:lo + m] |= ~has_lead        # her no_lead++ / continue
+
+    # --- recoil candidates (1652-1687) ------------------------------
+    others = ok.copy(); others[rows, lead_idx] = False
+    above = others & (pmag > SRC_CUTS["precoil_min"])
+    n_above = above.sum(axis=1)
+    pool = np.where(n_above[:, None] > 0, above, others)   # her fallback
+    ncand = pool.sum(axis=1)
+    out["ncand"][lo:lo + m] = ncand
+
+    rec_idx = np.full(m, -1, np.int64)
+    use_rec_acc = np.zeros(m, bool)
+
+    one = ncand == 1
+    if one.any():
+        rec_idx[one] = np.argmax(pool[one], axis=1)
+        use_rec_acc[one] = True                # 1691: weight only here
+
+    # 2 or 3 candidates -> her assign_recoil lottery (540-623, 1695-1731)
+    for k in (2, 3):
+        sel = ncand == k
+        if not sel.any():
+            continue
+        idx = np.argsort(~pool[sel], axis=1)[:, :k]        # candidate slots
+        probs = np.take_along_axis(wmap[sel], idx, axis=1) # her map values
+        hit = rng.random(probs.shape) < np.clip(probs, 0, 1)
+        nhit = hit.sum(axis=1)
+        rowsel = np.where(sel)[0]
+        multi = nhit >= 2
+        out["drop"][lo + rowsel[multi]] = True             # 1728-1731
+        single = nhit == 1
+        if single.any():
+            pick = np.argmax(hit[single], axis=1)
+            rec_idx[rowsel[single]] = idx[single, pick]
+        # nhit == 0 -> no recoil, event stays (e,e'p)
+
+    # 4+ candidates: her dispatch is commented out -> no recoil assigned.
+    return lead_idx, has_lead, rec_idx, use_rec_acc
+
+
+def wright_resolve(d, acc, ebeam, seed=None, chunk=2_000_000, phi_rot=True,
+                   truth_pair=False):
     """Event building following N. Wright's analysis macro exactly.
 
     This is a SECOND, selectable convention -- flatlist_resolve is untouched
@@ -462,6 +510,20 @@ def wright_resolve(d, acc, ebeam, seed=None, chunk=2_000_000, phi_rot=True):
                    the fiducials and the map gate (phi_rot). The lead weight
                    (1853) and the lottery (1697-1709) read the map at the
                    UNSMEARED, UNROTATED momentum instead -- reproduced as is.
+
+    truth_pair=True is for the PWIA sample that carries the T+SCX curves. Her
+    T+SCX is built from the GENERATED pair, not the detected final state:
+    genie_gcf_loop.C:1784 (selected_nucleons = initial_state_particles when
+    FSI is off) followed by do_SXC (1859), and gcf_generator_analysis_EM.cpp
+    (cx = true: lead/recoil = the generator's pLead/pRec with lead_type/
+    rec_type, both isospins, each leg through the PROTON fiducial, weights
+    do_SXC_PP/do_SXC_PN). So in this mode the lead is the struck nucleon
+    (part_parentRole 0) and the recoil its partner (role 1), protons AND
+    neutrons, each smeared and gated as a proton; there is no recoil lottery.
+    The measured-channel selections still demand protons (PWIA curve), while
+    tscx_weight_eep/eepp turn the generated isospins into the (n,p)/(p,n)
+    feed-in terms of Eq. 3. With truth_pair=False (the default, used for the
+    FSI samples) the candidate list is protons only, as above.
 
     Sets the same columns as flatlist_resolve, plus d["wright_drop"] marking
     events her code discards.
@@ -512,7 +574,9 @@ def wright_resolve(d, acc, ebeam, seed=None, chunk=2_000_000, phi_rot=True):
 
         # --- proton list: smear, fiducial, non-zero map (1503-1521) ------
         e3 = d["electron"][lo:hi, :3].copy()
-        is_p = (pdg == PROTON)
+        is_nuc = (pdg == PROTON) | (pdg == NEUTRON)
+        # T+SCX (truth_pair): both isospins, each leg gated as a proton.
+        is_p = is_nuc if truth_pair else (pdg == PROTON)
         if acc is not None:
             ex, ey, ez, _ = acc.smear_mag(e3[:, 0], e3[:, 1], e3[:, 2],
                                           RESO_ELECTRON)
@@ -547,46 +611,21 @@ def wright_resolve(d, acc, ebeam, seed=None, chunk=2_000_000, phi_rot=True):
         pmag = np.sqrt((cand ** 2).sum(axis=2))
         p_ok = np.where(ok, pmag, -1.0)
 
-        # --- lead: highest-|p| accepted proton (effective 1628-1640) -----
-        lead_idx = np.argmax(p_ok, axis=1)
-        has_lead = p_ok[rows, lead_idx] > 0.0
-        out["drop"][lo:hi] |= ~has_lead            # her no_lead++ / continue
-
-        # --- recoil candidates (1652-1687) ------------------------------
-        others = ok.copy(); others[rows, lead_idx] = False
-        above = others & (pmag > SRC_CUTS["precoil_min"])
-        n_above = above.sum(axis=1)
-        pool = np.where(n_above[:, None] > 0, above, others)   # her fallback
-        ncand = pool.sum(axis=1)
-        out["ncand"][lo:hi] = ncand
-
-        rec_idx = np.full(m, -1, np.int64)
-        use_rec_acc = np.zeros(m, bool)
-
-        one = ncand == 1
-        if one.any():
-            rec_idx[one] = np.argmax(pool[one], axis=1)
-            use_rec_acc[one] = True                # 1691: weight only here
-
-        # 2 or 3 candidates -> her assign_recoil lottery (540-623, 1695-1731)
-        for k in (2, 3):
-            sel = ncand == k
-            if not sel.any():
-                continue
-            idx = np.argsort(~pool[sel], axis=1)[:, :k]        # candidate slots
-            probs = np.take_along_axis(wmap[sel], idx, axis=1) # her map values
-            hit = rng.random(probs.shape) < np.clip(probs, 0, 1)
-            nhit = hit.sum(axis=1)
-            rowsel = np.where(sel)[0]
-            multi = nhit >= 2
-            out["drop"][lo + rowsel[multi]] = True             # 1728-1731
-            single = nhit == 1
-            if single.any():
-                pick = np.argmax(hit[single], axis=1)
-                rec_idx[rowsel[single]] = idx[single, pick]
-            # nhit == 0 -> no recoil, event stays (e,e'p)
-
-        # 4+ candidates: her dispatch is commented out -> no recoil assigned.
+        if truth_pair:
+            # --- generated pair: lead = struck nucleon, recoil = partner ---
+            is_l = is_nuc & (crole == 0)
+            is_r = is_nuc & (crole == 1)
+            lead_idx = np.argmax(is_l, axis=1)
+            has_lead = is_l[rows, lead_idx] & ok[rows, lead_idx]
+            out["drop"][lo:hi] |= ~has_lead
+            r_idx = np.argmax(is_r, axis=1)
+            has_rec = is_r[rows, r_idx] & ok[rows, r_idx]
+            out["ncand"][lo:hi] = has_rec.astype(np.int64)
+            rec_idx = np.where(has_rec, r_idx, -1)
+            use_rec_acc = has_rec                  # EM macro: weight*=map(vRec)
+        else:
+            lead_idx, has_lead, rec_idx, use_rec_acc = _wright_detected_pair(
+                p_ok, pmag, ok, wmap, rows, m, rng, out, lo)
 
         has_rec = rec_idx >= 0
         ri = np.where(has_rec, rec_idx, 0)
@@ -2673,8 +2712,11 @@ def main():
                   f"Sigma_w={meta.get('total_weight')}")
         d["_meta"] = meta
         if args.convention == "wright":
+            # include_neutrons marks the PWIA sample, whose T+SCX curves
+            # Wright builds from the generated pair (both isospins).
             wright_resolve(d, acc, args.ebeam, seed=args.seed,
-                           phi_rot=(args.acc_phi_rotation == 180))
+                           phi_rot=(args.acc_phi_rotation == 180),
+                           truth_pair=include_neutrons)
             nd = int(d["wright_drop"].sum())
             print(f"    [wright] discarded {nd} of {len(d['weight'])} events "
                   f"({100*nd/len(d['weight']):.1f}%) via absorption veto / "
