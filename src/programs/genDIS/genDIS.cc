@@ -32,6 +32,7 @@ void Usage()
        << "Optional flags:\n"
        << "-v: Verbose\n"
        << "-P: Use text file to specify phase space\n"
+       << "-E: Specify E* [GeV]\n"
        << "-M: Use randomized E* according to Barack's values\n"
        << "-O: Turn on peaking radiation\n"
        << "-S: Random seed (positive integer; default 0 = random, printed at start)\n"
