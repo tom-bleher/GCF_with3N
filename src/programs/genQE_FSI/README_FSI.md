@@ -14,7 +14,7 @@ e + A  -->  e' + N_lead + N_recoil + (A-2) residual
               N'_lead     N'_recoil  (+secondaries: pions, knocked-out nucleons, ...)
 ```
 
-The GCF generator produces an SRC nucleon pair (lead + recoil) with correlated momenta from a contact-formalism wavefunction. Each nucleon then propagates through the (A-2) residual nucleus via GENIE's INTRANUKE cascade, which can elastically scatter, charge-exchange (p <-> n), produce pions, or absorb the nucleon. Pauli blocking rejects events where the final nucleon momentum falls below the Fermi surface.
+The GCF generator produces an SRC nucleon pair (lead + recoil) with correlated momenta from a contact-formalism wavefunction. Both nucleons then propagate through the (A-2) residual nucleus via GENIE's INTRANUKE cascade, which can elastically scatter, charge-exchange (p <-> n), produce pions, or absorb the nucleon. By default they share one GENIE record, in random order, so absorption by one depletes the remnant the other sees (`SetIndependentFSI()` gives each its own record). The output is GENIE's stable final state as a flat particle list; FSI never changes the event weight, and there is no post-cascade Pauli veto (GENIE does not Pauli-block NN elastic scattering in this version, #10).
 
 ### FSI Models
 
@@ -135,8 +135,6 @@ cd src/programs/genQE_FSI
 ```bash
 export GENIE="$(pwd)/Generator-R-3_06_02"
 export GXMLPATH="$(pwd)/config/genie_override:$GENIE/config/G18_10a:$GENIE/config"
-export GMSGCONF="$(pwd)/config/quiet_messenger.xml"
-
 ./build/SRC_analysis_2N <nEvents> [doFSI] [model]
 ```
 
@@ -156,8 +154,6 @@ For custom targets, beam energies, and ROOT tree output:
 ```bash
 export GENIE="$(pwd)/Generator-R-3_06_02"
 export GXMLPATH="$(pwd)/config/genie_override:$GENIE/config/G18_10a:$GENIE/config"
-export GMSGCONF="$(pwd)/config/quiet_messenger.xml"
-
 ./build/genQE_FSI <Z> <N> <Ebeam_GeV> <output.root> <nEvents> [flags]
 ```
 
@@ -188,12 +184,17 @@ Example (carbon-12, 4.5 GeV, 500k events):
 | `lead_type` | `Int_t` | PDG-like code for lead nucleon (2212=p, 2112=n) |
 | `rec_type` | `Int_t` | PDG-like code for recoil nucleon |
 | `pe[3]` | `Double_t` | Scattered electron 3-momentum [GeV/c] |
-| `pLead[3]` | `Double_t` | Lead nucleon 3-momentum after FSI [GeV/c] |
-| `pRec[3]` | `Double_t` | Recoil nucleon 3-momentum after FSI [GeV/c] |
+| `pLead[3]` | `Double_t` | Generated (pre-FSI) lead nucleon 3-momentum [GeV/c] |
+| `pRec[3]` | `Double_t` | Generated (pre-FSI) recoil nucleon 3-momentum [GeV/c] |
 | `pAm2[3]` | `Double_t` | (A-2) residual momentum [GeV/c] |
 | `pRel[3]` | `Double_t` | Pair relative momentum [GeV/c] |
 | `q[3]` | `Double_t` | Virtual photon 3-momentum [GeV/c] |
-| `weight` | `Double_t` | Event weight (0 if absorbed/Pauli-blocked) |
+| `doFSI` | `Int_t` | 1 if FSI was enabled |
+| `weight` | `Double_t` | Event weight. FSI never changes it; only events with weight > 0 are written |
+| `nPart` | `Int_t` | Number of post-FSI final-state particles |
+| `part_pdg`, `part_px`, `part_py`, `part_pz`, `part_E` | `vector` | Post-FSI final state (GENIE's stable particles; the generated nucleons when FSI is off or skipped) |
+| `part_parentRole` | `vector<int>` | 0/1 = descends from the generated lead/recoil |
+| `part_rescatterCode` | `vector<int>` | GENIE fate of that input nucleon (1 = left without interacting, −1 = cascade did not run) |
 
 ### EIC (collider-frame) output
 
@@ -342,19 +343,13 @@ hN-specific parameters:
 | `HNINUKE-UseOset` | true | Salcedo-Oset medium corrections for pion-nucleon |
 | `HNINUKE-AltOset` | false | Alternative Oset parameterization |
 
-### Fermi momentum (Pauli blocking)
+### Pauli blocking
 
-The Fermi momentum for Pauli blocking is set in the analysis code:
-
-```cpp
-myGen->SetFSITuning(220.);  // MeV/c
-```
-
-Typical values: 220 MeV/c (carbon), 250 MeV/c (iron), 270 MeV/c (lead).
+There is no post-cascade Pauli veto and no generator-side Fermi-momentum setting. Pauli blocking is GENIE's own: absorption and pion production re-sample blocked final states, using `INUKE-FermiMomentum` above, but the NN elastic / charge-exchange block in `TwoBodyCollision` is commented out in this GENIE version (`INukeUtils2018.cxx:826-832`, #10).
 
 ### Log suppression
 
-`config/quiet_messenger.xml` silences all GENIE log output below ERROR level. Without this, GENIE produces ~1 GB of log output per 10k events. The `GMSGCONF` environment variable must point to this file.
+GENIE reads its message levels from the first `Messenger.xml` on `GXMLPATH`, which is `config/genie_override/Messenger.xml` (ERROR only). Without it, GENIE produces ~1 GB of log output per 10k events. `GENIE` and `GXMLPATH` are the variables that matter; `GMSGCONF` and `config/quiet_messenger.xml` are not read by GENIE R-3_06_02 (#24).
 
 ---
 
@@ -374,7 +369,6 @@ QEGeneratorFSI* gen = new QEGeneratorFSI(4.5, nucleus, cs, rng);
 // Configure FSI
 gen->EnableFSI(true);                // on by default
 gen->SetFSIModel(kHN2018);          // or kHA2018 for fast mode
-gen->SetFSITuning(220.);            // Fermi momentum in MeV/c
 
 // Event loop
 for (int i = 0; i < nEvents; i++) {
@@ -388,29 +382,28 @@ for (int i = 0; i < nEvents; i++) {
     gen->generate_event(weight, lead_type, rec_type,
                         vk, vLead, vRec, vAm2, vRel, vq, Estar);
 
-    if (weight <= 0.) continue;  // absorbed or Pauli-blocked
+    if (weight <= 0.) continue;  // kinematic rejection; FSI never zeroes the weight
 
-    // Use vLead, vRec (post-FSI momenta)
+    // vLead, vRec are the generated (pre-FSI) momenta; the post-FSI final
+    // state is gen->GetFinalStateParticles() (below)
 }
 ```
 
 ### Accessing FSI details
 
-After each event, you can inspect what happened during FSI:
+After each event, the post-FSI final state is a flat particle list. No particle is labelled lead or recoil; that is a detection-level choice for the analysis.
 
 ```cpp
-// Per-event FSI summary flags
-const auto& stats = gen->GetLastFSIEventStats();
-if (stats.leadChargeExchange)  { /* lead nucleon changed identity */ }
-if (stats.recoilElasticLike)   { /* recoil scattered elastically */ }
-if (stats.nPionsTotal > 0)     { /* pions were produced */ }
-
-// Full list of FSI secondaries (pions, knocked-out nucleons, etc.)
-const auto& secondaries = gen->GetLastFSISecondaries();
-for (const auto& sec : secondaries) {
-    // sec.pdg       — PDG code (211=pi+, -211=pi-, 111=pi0, 2212=p, 2112=n)
-    // sec.p4        — 4-momentum (TLorentzVector)
-    // sec.parentRole — 0=from lead transport, 1=from recoil transport
+// GENIE's stable final state (nucleons, pions, knocked-out nucleons, ...)
+const auto& parts = gen->GetFinalStateParticles();
+for (const auto& p : parts) {
+    // p.pdg           — PDG code (211=pi+, -211=pi-, 111=pi0, 2212=p, 2112=n)
+    // p.p4            — 4-momentum (TLorentzVector)
+    // p.parentRole    — 0/1 = descends from the generated lead/recoil
+    // p.rescatterCode — GENIE fate of that input nucleon (1 = no interaction,
+    //                   -1 = cascade did not run)
+    // p.generation    — mother-chain depth, >= 1 for every cascade output;
+    //                   use rescatterCode == 1, not this, for untouched nucleons
 }
 ```
 
@@ -439,7 +432,7 @@ gen->EnableFSI(true);
 for (int i = 0; i < nEvents; i++) {
     gen->generate_event(weight, lead_type, rec_type, vk, vLead, vRec, vAm2);
     if (weight <= 0.) continue;
-    // Fill "with FSI" histograms
+    // Fill "with FSI" histograms from gen->GetFinalStateParticles()
 }
 ```
 
@@ -489,7 +482,7 @@ genQE_FSI/
     plot_theta_heatmap_2N.py   # 2D theta heatmap plotter
 
   config/
-    quiet_messenger.xml        # GENIE log suppression
+    quiet_messenger.xml        # unused: GENIE never reads GMSGCONF (#24)
     genie_override/
       HNIntranuke2018.xml      # hN cascade tuning parameters
       HAIntranuke2018.xml      # hA cascade tuning parameters
@@ -506,11 +499,11 @@ genQE_FSI/
 
 ## Light Nuclei Handling
 
-For targets with A <= 4 (e.g., deuterium, He-3, He-4), the residual nucleus after removing the SRC pair has A_res = A - 2:
+The residual nucleus after removing the SRC pair has A_res = A - 2:
 
-- **A_res <= 0** (deuterium, A=2): No FSI applied. The SRC pair exits without rescattering.
-- **0 < A_res < 7** (He-3, He-4): GENIE FSI runs on the residual, but a warning is printed. GENIE's cascade is validated for A > 6 (heavier than lithium); results for very light residuals should be treated with caution.
-- **A_res >= 7** (carbon and heavier): Normal FSI, fully validated.
+- **A_res < 3** (deuterium, He-3, He-4): No FSI applied. The SRC pair exits without rescattering, and the final-state list is the generated nucleons.
+- **3 <= A_res < 7** (e.g. Li-6, Li-7): GENIE FSI runs on the residual, but a warning is printed. GENIE's cascade is validated for A > 6 (heavier than lithium); results for very light residuals should be treated with caution.
+- **A_res >= 7** (A >= 9, e.g. Be-9, carbon and heavier): Normal FSI.
 
 ---
 
