@@ -45,7 +45,13 @@
 #   EPIC_CONFIG       detector config (default epic_craterlake_5x41 for 5x41, epic_craterlake_10x110_H2 for 10x110)
 #   FIELD             beamline field file swapped into the config (default fields/beamline_5x41_He4.xml for
 #                     5x41; none for 10x110, whose H2 config already has the Z/A = 1/2 field)
-#   AB_PRESET         abconv preset (default ip6_eAu_41x5 / ip6_eAu_110x10)
+#   AB_PRESET         abconv preset (default ip6_eAu_41x5 / ip6_eAu_110x10). abconv has no light-ion
+#                     preset, so C12, d and He4 use the eAu ones, an approximation: 25 mrad crossing
+#                     angle plus 0.1 mrad vertical, the eAu ion divergence and bunch length (vertex z
+#                     spread 58 mm rms at 41x5), no momentum spread. PRC 105, 034001 applied only the
+#                     crossing angle and parametrized smearing. Names are case sensitive (abconv's help
+#                     lists ip6_eau_41x5, which it rejects); ab.hepmc's beam metadata (ion_beam_pdg 11,
+#                     ion_beam_energy 18) is wrong, and run.json records the preset used.
 #
 # The run directory gets gen.root, gen.hepmc3 (+ .json), ab.hepmc, geometry.xml, chunk_*.hepmc,
 # sim_*.edm4hep.root, reco_*.edm4eic.root, per-job logs and exit codes, and run.json with the

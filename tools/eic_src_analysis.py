@@ -678,7 +678,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
         ax.set_xlim(0, xmax)
         ax.set_ylim(0, 0.8)
         ax.set_xlabel("Opening Angle [mrad]", fontsize=12, color="#333333")
-        ax.set_ylabel("Momentum (IRF) [GeV]", fontsize=12, color="#333333")
+        ax.set_ylabel(r"Momentum (IRF) [GeV/$c$]", fontsize=12, color="#333333")
         ax.tick_params(labelsize=11, colors="#333333")
     fig.tight_layout()
     fig.savefig(outdir / "fig4_pirf_vs_theta.pdf")
