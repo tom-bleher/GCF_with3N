@@ -35,7 +35,7 @@ void Usage()
        << "-P: Use text file to specify phase space\n"
        << "-u: Specify NN interaction (default AV18)\n"
        << "-k: Specify pRel hard cutoff [GeV/c]\n"
-       << "-R: Specify the reaction channel, default pim+proton. (pim, rho0, rhom, omega, phi, phin, delta++pi-, delta+pi-)\n"
+       << "-R: Specify the reaction channel, default pim+proton. (pim, rho0, rhom, omega, phi, phin, delta++ [Delta++ pi-], delta+pi- [Delta+ pi-])\n"
        << "-A: Use the energy spectrum of the amorphous GlueX radiator rather than the diamond radiator\n"
        << "-B: Specify a fixed beam energy (default is HallD spectrum)\n"
        << "-l: Use the lightcone cross section to generate events\n"

@@ -65,7 +65,9 @@ merged with `hadd`.
 
 A config has up to three tables. Unset options take the defaults shown by
 `gcf <command> --help`; options that don't apply to the chosen model are an
-error rather than silently ignored.
+error rather than silently ignored. The exception, for now, is `nn` and
+`estar` with `model = "MF"`: the config accepts them, but the mean-field
+generator uses neither, so they have no effect (#77).
 
 ```toml
 [run]

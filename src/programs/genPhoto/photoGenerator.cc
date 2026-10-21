@@ -230,9 +230,6 @@ void photoGenerator::generate_event(double &weight, double &Ephoton, int &meson_
       v1_target.SetXYZT(v1_perp.X(),v1_perp.Y(),p1_z,E1);
       vRec_target.SetXYZT(vRec_perp.X(),vRec_perp.Y(),pRec_z,ERec);
       vAm2_target.SetXYZT(vAm2_perp.X(),vAm2_perp.Y(),pAm2_z,EAm2);
-
-      (v1_target+vRec_target+vAm2_target).Print();
-      
     }
 
   double cosThetaCM;
@@ -284,8 +281,12 @@ void photoGenerator::print_beam_info()
     }
   else
     {
+      // Bin range from the energies: the diamond and amorphous spectra have
+      // different binning.
+      const int b8 = photonSpectrum->FindBin(8.+1.E-9);
+      const int b9 = photonSpectrum->FindBin(9.-1.E-9);
       std::cerr << "photoGenerator: using the Hall-D photon source spectrum\n"
-		<< "     " << 100.*photonSpectrum->Integral(120,160) / photonSpectrum->Integral() << " % falls within the coherent peak (8--9 GeV)\n";
+		<< "     " << 100.*photonSpectrum->Integral(b8,b9) / photonSpectrum->Integral() << " % falls within 8--9 GeV (the diamond's coherent peak)\n";
     }
 }
 
