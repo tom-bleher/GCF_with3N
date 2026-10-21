@@ -244,6 +244,12 @@ class QEGeneratorFSI: public gcfGenerator
                       const TLorentzVector &vLead_target,
                       const TLorentzVector &vRec_target);
 
+  // Coulomb correction (-C) of the final-state particle list, the same shift
+  // the generated nucleons get: each charged particle leaving the nucleus
+  // gains q*deltaE (q in units of e). A negative particle with less kinetic
+  // energy than that cannot escape and is dropped.
+  void CoulombCorrectFinalState(double deltaE);
+
   // Shared electron/Jacobian/cross-section kinematics (extracted so both the
   // 2N pair path and the single-nucleon MF path use identical physics).
   // Given the struck-nucleon 3-momentum v1, its off-shell 4-vector v1_target
