@@ -416,8 +416,9 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     scale = lumi_nb_inv * transparency
     summary = {}
 
-    # The figures follow the style of PRC 105, 034001 (Figs. 3-6). The paper's evaporation nucleons
-    # (from BeAGLE) are not simulated here, so Figs. 3 and 4 show recoil and leading nucleons only.
+    # The figures follow the style of PRC 105, 034001 (Figs. 3-6). Figs. 3 and 4 show recoil and
+    # leading nucleons only; the paper's evaporation nucleons (from BeAGLE) are simulated only in
+    # --deexcite runs (Geant4 de-excitation of the A-2 remnant) and shown in figEvap below.
     green, red, orange, magenta, brown = "#45c045", "#f0281e", "#ff9800", "#ee5fbf", "#9a5a1c"
     low_energy = {lab: metas[0]["beams"]["ion_momentum_per_nucleon_GeV"] < 75 for lab, (_, metas) in data.items()}
     for lab in data:
