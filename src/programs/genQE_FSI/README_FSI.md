@@ -174,7 +174,7 @@ Example (carbon-12, 4.5 GeV, 500k events):
 | `-M` | Use randomized E* (Barack's values) |
 | `-k <kCut>` | Relative momentum hard cutoff [GeV/c] (default: 0.25) |
 | `-O` | Enable peaking radiation |
-| `-C` | Enable Coulomb correction |
+| `-C` | Enable Coulomb correction (e′, `pLead`/`pRec`; with #117 also every charged particle in `part_*`, by its charge times ΔE_C) |
 | `-r` | Randomize nuclear properties |
 | `-l` | Use lightcone cross section |
 
@@ -222,7 +222,7 @@ npsim --compactFile geometry.xml --inputFiles ab.hepmc --outputFile sim.edm4hep.
   - **Other generators.** `--generator genQE_FSI` runs GENIE FSI. Add `--gen-args "-n"` to switch FSI off (a PWIA baseline from the same generator; it reproduces genQE to 2%), or `--gen-args "-n -F 0.25" --no-cuts` for single-nucleon mean-field knockout (PRC 105, 034001 Fig. 7). E* sampling (`-M`) is added only for SRC pairs in A > 2 nuclei: for the deuteron it would give the empty remnant a mass.
   - **Beyond quasielastic 2N.** `--generator genQE_3N_FSI` (3N SRC; `--attempts` counts accepted events, about 8% pass the paper cuts; the rest-frame electron window scales as 1/E_IRF) and `--generator genDIS --no-cuts` (tagged DIS off an SRC pair with CT18NN PDFs; the electron, recoil and A-2 remnant are simulated, the unhadronized struck system is not). The analysis makes the 3N recoil-tagging figure (0, 1 or 2 recoils detected, by recoil pair) and the tagged-DIS figures (recoil acceptance vs the spectator light-cone fraction alpha_s and momentum; tagged yield over x' and Q2).
   - **Reconstructed momenta.** The analysis stores each nucleon's reconstructed momentum (B0/central track, or reconstructed ZDC neutron) boosted back to the ion rest frame with the nominal crossing angle and boost. Fig. 2 gives dp/p vs p; Fig. 6's blue points are the spectrum in reconstructed p_IRF, the analog of the paper's smeared points. RP/OMD have no reconstruction for ion beams.
-  - **Evaporation.** `--deexcite` breaks up the excited A−2 remnant (E* from genQE `-M`) with Geant4's nuclear de-excitation (evaporation, Fermi break-up, photon emission) before the afterburner, in place of the BeAGLE evaporation of PRC 105, 034001. The tool is `tools/deexcite` (build it inside eic-shell: `cmake -S tools/deexcite -B tools/deexcite/build && cmake --build tools/deexcite/build`). It breaks the remnant up at rest with mass M_gs + E*, boosts the products back, checks A, Z and four-momentum conservation, keeps the remnant as status 2 and appends the products after all other particles, so the analysis finds e', lead and recoil where it always does. `gen_deex.hepmc3.json` records the products and checks. With the seed of an earlier genQE run and fewer `--attempts`, the generator writes exactly that run's first events, so an evaporation run can be compared event by event with a run without it. The analysis then adds `figEvap_angles_momenta.pdf` (Fig. 3 with evaporation nucleons, their rest-frame momenta) and an `evaporation` block in `summary.json` (multiplicities, far-forward detection, overlap with tagged recoil neutrons in the ZDC).
+  - **Evaporation.** `--deexcite` breaks up the excited A−2 remnant (E* from genQE `-M`) with Geant4's nuclear de-excitation (evaporation, Fermi break-up, photon emission) before the afterburner, in place of the BeAGLE evaporation of PRC 105, 034001. The tool is `tools/deexcite` (build it inside eic-shell: `cmake -S tools/deexcite -B tools/deexcite/build && cmake --build tools/deexcite/build`). It breaks the remnant up at rest with mass M_gs + E*, boosts the products back, checks A, Z and four-momentum conservation, keeps the remnant as a documentation entry (status 3 with #108, so npsim tracks the products of ¹⁰Be and ¹⁰C too; status 2 before it, #61) and appends the products after all other particles, so the analysis finds e', lead and recoil where it always does. `gen_deex.hepmc3.json` records the products and checks. With the seed of an earlier genQE run and fewer `--attempts`, the generator writes exactly that run's first events, so an evaporation run can be compared event by event with a run without it. The analysis then adds `figEvap_angles_momenta.pdf` (Fig. 3 with evaporation nucleons, their rest-frame momenta) and an `evaporation` block in `summary.json` (multiplicities, far-forward detection, overlap with tagged recoil neutrons in the ZDC).
   - **Contact uncertainty.** `tools/eic_src_analysis.py band` varies the ¹²C contacts (AV18, k-space, with their uncertainties from `gcfSRC.cc`, independently as `genQE -r` does) and reweights every simulated event exactly by S'(k_rel)/S(k_rel), using the generator's `pRel`. The weight is linear in the contacts, so the band costs four weighted sums per observable. It writes the Q² yield, the accepted recoil spectra and the relative uncertainty with the 68% band, and percentiles of σ, tagged yields, acceptances and pair shares in `summary.json`.
   - **Compression.** Jobs write to local scratch and land a ZSTD-5 copy (`--compress 505`, the default) in the run directory. That is about a third smaller than npsim's and EICrecon's ZLIB-1 output, reads faster, and holds identical contents.
   - **Analysis.** `tools/eic_src_analysis.py` handles FSI output. The leading or recoil nucleon is the highest-momentum nucleon descended from the generated one, the detector follows its final type, and absorbed nucleons count as undetected. Mean-field runs give Fig. 7 (p_miss < 0.3 GeV/c, E_miss < 80 MeV, Q² > 3, electron and nucleon detected).
@@ -349,7 +349,7 @@ There is no post-cascade Pauli veto and no generator-side Fermi-momentum setting
 
 ### Log suppression
 
-GENIE reads its message levels from the first `Messenger.xml` on `GXMLPATH`, which is `config/genie_override/Messenger.xml` (ERROR only). Without it, GENIE produces ~1 GB of log output per 10k events. `GENIE` and `GXMLPATH` are the variables that matter; `GMSGCONF` and `config/quiet_messenger.xml` are not read by GENIE R-3_06_02 (#24).
+GENIE reads its message levels from the first `Messenger.xml` on `GXMLPATH`, by default `config/genie_override/Messenger.xml` (ERROR only); with #98 a directory of your own on `GXMLPATH`, or the override selected by `$GENIE_OVERRIDE_DIR`, comes first if it has one. Without it, GENIE produces ~1 GB of log output per 10k events. `GENIE` and `GXMLPATH` are the variables that matter; `GMSGCONF` and `config/quiet_messenger.xml` are not read by GENIE R-3_06_02 (#24).
 
 ---
 
@@ -402,8 +402,10 @@ for (const auto& p : parts) {
     // p.parentRole    — 0/1 = descends from the generated lead/recoil
     // p.rescatterCode — GENIE fate of that input nucleon (1 = no interaction,
     //                   -1 = cascade did not run)
-    // p.generation    — mother-chain depth, >= 1 for every cascade output;
-    //                   use rescatterCode == 1, not this, for untouched nucleons
+    // p.generation    — mother-chain depth, >= 1 for every cascade output,
+    //                   0 when the cascade did not run (set by #110; was
+    //                   uninitialised before); use rescatterCode == 1, not
+    //                   this, for untouched nucleons
 }
 ```
 
