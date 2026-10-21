@@ -7,6 +7,7 @@ Usage:
     python analyze_2N.py events_2N.root [-o output_dir]
 """
 import os
+import sys
 import argparse
 import numpy as np
 import uproot
@@ -48,20 +49,13 @@ mN = 0.93892  # nucleon mass GeV
 kF = 0.25     # Fermi momentum GeV/c
 
 # ──────────── Region definitions ────────────
-def region_params(A=135.0, K=3.0):
-    A_rad = np.radians(A)
-    B = np.degrees(np.arctan(np.sin(A_rad) / (K + np.cos(A_rad)))) / (180.0 - A)
-    return A, B
-
-def in_region_R(theta12, theta23, A=135.0, K=4.0):
-    _, B = region_params(A, K)
-    line1 = B * (theta12 - 180.0) + 180.0
-    line2 = (1.0/B) * (theta12 - 180.0) + 180.0
-    line3 = -(theta12 - A) + 180.0 - (180.0 - A) * B
-    return (theta23 <= line1) & (theta23 >= line2) & (theta23 >= line3)
-
-def in_region_L(theta12, theta23, A=135.0, K=4.0):
-    return in_region_R(360.0 - theta12 - theta23, theta23, A, K)
+# One shared definition (A=135 deg, K=4, as in the paper's Fig. 5): the
+# triangles drawn below and the regions counted must be the same.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "..", "genQE_3N", "plotting"))
+from plot_fig5_theta_heatmap_pair import (region_params,
+                                          in_region_R_array as in_region_R,
+                                          in_region_L_array as in_region_L)
 
 def in_region_BR(theta12, theta23, A=135.0, K=4.0):
     return in_region_R(theta12, 360.0 - theta12 - theta23, A, K)
