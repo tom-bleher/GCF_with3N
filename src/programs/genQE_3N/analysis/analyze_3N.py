@@ -62,11 +62,23 @@ def in_region_R(theta12, theta23, A=135.0, K=4.0):
     line3 = -(theta12 - A) + 180.0 - (180.0 - A) * B
     return (theta23 <= line1) & (theta23 >= line2) & (theta23 >= line3)
 
-# L and BR are R with theta12 resp. theta23 replaced by theta13. For coplanar
-# momenta (p1+p2+p3 = 0, e.g. p3 reconstructed) theta13 = 360 - theta12 -
-# theta23, the mirror used when theta13 is not given. The truth momenta here
-# are NOT coplanar when the generator's CM motion is on, so callers pass the
-# actual theta13.
+# L and BR are R with theta12 resp. theta23 replaced by theta13. By default
+# theta13 is the planar mirror 360 - theta12 - theta23: that is how Fig. 5
+# defines L in the (theta12, theta23) plane (exact when p3 is reconstructed),
+# it is the region the triangle overlays below outline, and it keeps L and R
+# defined in the same plane so that L/R is a mirror test. The truth momenta in
+# this script are NOT coplanar when the generator's CM motion is on, so the
+# actual theta13 can be used instead with --L-from-theta13 (REGION_FROM_THETA13);
+# L and BR are then 3D regions and no longer coincide with the drawn triangles.
+REGION_FROM_THETA13 = False
+
+def _t13(theta13):
+    """theta13 to hand to in_region_L/BR: the actual angle only when opted in."""
+    return theta13 if REGION_FROM_THETA13 else None
+
+def _region_tag():
+    return " [L/BR from actual theta13]" if REGION_FROM_THETA13 else ""
+
 def in_region_L(theta12, theta23, A=135.0, K=4.0, theta13=None):
     t13 = 360.0 - theta12 - theta23 if theta13 is None else theta13
     return in_region_R(t13, theta23, A, K)
@@ -334,11 +346,11 @@ def plot_theta_heatmap(d, out_dir):
         w = d["weight"][mask]
         w_tot = sum(w) + 1e-30
 
-        fL = sum(w[in_region_L(t12, t23, theta13=t13)]) / w_tot
+        fL = sum(w[in_region_L(t12, t23, theta13=_t13(t13))]) / w_tot
         fR = sum(w[in_region_R(t12, t23)]) / w_tot
-        fBR = sum(w[in_region_BR(t12, t23, theta13=t13)]) / w_tot
+        fBR = sum(w[in_region_BR(t12, t23, theta13=_t13(t13))]) / w_tot
         fC = sum(w[in_region_center(t12, t23, center_radius)]) / w_tot
-        print(f"  [{cut_label}] L: {fL:.6f}  R: {fR:.6f}  BR: {fBR:.6f}  Center(r={center_radius:.2f}): {fC:.6f}")
+        print(f"  [{cut_label}] L: {fL:.6f}  R: {fR:.6f}  BR: {fBR:.6f}  Center(r={center_radius:.2f}): {fC:.6f}{_region_tag()}")
 
         h, xe, ye = np.histogram2d(t12, t23, bins=bins, range=[[0, 180], [0, 180]], weights=w)
         h_norm = h / (np.sum(h) + 1e-30)
@@ -471,7 +483,7 @@ def plot_region_overlays(d, out_dir):
                 & (d["lead_over_q"] > 0.75) \
                 & (d["interplane_angle"] < 20)
 
-    mask_L = mask_cuts & in_region_L(d["theta12"], d["theta23"], theta13=d["theta13"])
+    mask_L = mask_cuts & in_region_L(d["theta12"], d["theta23"], theta13=_t13(d["theta13"]))
     mask_R = mask_cuts & in_region_R(d["theta12"], d["theta23"])
 
     variables = [
@@ -794,9 +806,9 @@ def plot_xB_by_region(d, out_dir):
     Q2_cut = d["Q2"] >= 1.0
 
     regions = [
-        ("Region L", in_region_L(t12, t23, theta13=t13) & Q2_cut, 'purple'),
+        ("Region L", in_region_L(t12, t23, theta13=_t13(t13)) & Q2_cut, 'purple'),
         ("Region R", in_region_R(t12, t23) & Q2_cut, 'tab:blue'),
-        ("Region BR", in_region_BR(t12, t23, theta13=t13) & Q2_cut, 'green'),
+        ("Region BR", in_region_BR(t12, t23, theta13=_t13(t13)) & Q2_cut, 'green'),
     ]
 
     fig, axes = plt.subplots(1, 3, figsize=(20, 5))
@@ -863,9 +875,9 @@ def plot_E1_over_mN_by_region(d, out_dir):
     Q2_cut = d["Q2"] >= 1.0
 
     regions = [
-        ("Region L", in_region_L(t12, t23, theta13=t13) & Q2_cut, 'purple'),
+        ("Region L", in_region_L(t12, t23, theta13=_t13(t13)) & Q2_cut, 'purple'),
         ("Region R", in_region_R(t12, t23) & Q2_cut, 'tab:blue'),
-        ("Region BR", in_region_BR(t12, t23, theta13=t13) & Q2_cut, 'green'),
+        ("Region BR", in_region_BR(t12, t23, theta13=_t13(t13)) & Q2_cut, 'green'),
     ]
 
     fig, ax = plt.subplots(figsize=(7, 5))
@@ -897,8 +909,11 @@ def compute_region_fractions(d):
     t12 = d["theta12"][mask_cuts]
     t23 = d["theta23"][mask_cuts]
     t13 = d["theta13"][mask_cuts]
-    w_L = np.sum(d["weight"][mask_cuts][in_region_L(t12, t23, theta13=t13)])
+    w_L = np.sum(d["weight"][mask_cuts][in_region_L(t12, t23, theta13=_t13(t13))])
     w_R = np.sum(d["weight"][mask_cuts][in_region_R(t12, t23)])
+    # Both definitions, so the planar-vs-3D difference is always visible.
+    w_L_planar = np.sum(d["weight"][mask_cuts][in_region_L(t12, t23)])
+    w_L_theta13 = np.sum(d["weight"][mask_cuts][in_region_L(t12, t23, theta13=t13)])
 
     print("\n--- Region fractions with kinematic cuts ---")
     print("  (all nucleons > kF, e angle < 45, lead angle with q < 10, pLead/q > 0.7, |p2|>0.5)")
@@ -906,6 +921,9 @@ def compute_region_fractions(d):
     print("-" * 55)
     if w_total > 0:
         print(f"{'3N generator':<20s} | {100*w_L/w_total:>13.4f}% | {100*w_R/w_total:>13.4f}%")
+        print(f"  Region L, planar mirror 360-t12-t23: {100*w_L_planar/w_total:.4f}%   "
+              f"from actual theta13: {100*w_L_theta13/w_total:.4f}%   "
+              f"(table uses: {'actual theta13' if REGION_FROM_THETA13 else 'planar'})")
 
 
 def plot_lightcone(d, out_dir):
@@ -1061,11 +1079,21 @@ def plot_lightcone(d, out_dir):
 
 # ──────────── Main ────────────
 def main():
+    global REGION_FROM_THETA13
     parser = argparse.ArgumentParser(description="Analyze 3N SRC events from ROOT TTree")
     parser.add_argument("input", help="Path to events_3N.root", default="events_3N.root")
     parser.add_argument("-o", "--output-dir", default="analysis_output/png_files",
                         help="Output directory for plots")
+    parser.add_argument("--L-from-theta13", action="store_true",
+                        help="Evaluate regions L and BR with the actual theta13 (3D) "
+                             "instead of the planar mirror 360-theta12-theta23 used by "
+                             "Fig. 5 and by the triangle overlays. Off by default: with "
+                             "CM motion on the two differ, and the 3D regions do not "
+                             "coincide with the drawn triangles.")
     args = parser.parse_args()
+    REGION_FROM_THETA13 = bool(args.L_from_theta13)
+    if REGION_FROM_THETA13:
+        print("Regions L/BR evaluated with the actual theta13 (not the planar mirror)")
 
     os.makedirs(args.output_dir, exist_ok=True)
 
