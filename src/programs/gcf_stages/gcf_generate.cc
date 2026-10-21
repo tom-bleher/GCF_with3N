@@ -30,6 +30,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <vector>
 #include <unistd.h>
 
 using namespace std;
@@ -42,7 +43,7 @@ void Usage()
     "Usage: gcf_generate --model 3N|2N|MF --beam E --events N --output FILE [options]\n"
     "\n"
     "Generates N accepted (weight > 0) GCF quasi-elastic events in PWIA (no FSI).\n"
-    "Add FSI afterwards with gcf_fsi.\n"
+    "Add FSI afterwards with gcf_fsi. An option of another model is an error.\n"
     "\n"
     "Common options:\n"
     "  -m, --model 3N|2N|MF     SRC triplet, SRC pair, or single mean-field nucleon\n"
@@ -71,15 +72,18 @@ void Usage()
     "                           also sets sigma-cm = sqrt(3/5) kF unless given\n"
     "      --no-cm              no CM motion of the triplet\n"
     "\n"
-    "2N / MF only:\n"
-    "      --nn MODEL           2N: NN interaction for the pair contacts (default AV18)\n"
-    "      --estar E            2N: residual excitation energy E* (GeV); MF leaves the\n"
-    "                           A-1 residual in its ground state\n"
-    "      --kcut K             2N: relative-momentum cutoff (GeV/c, default 0.25)\n"
-    "      --onset fixed|local  2N: SRC onset k_rel > kcut (default) or > k_F(r)\n"
-    "      --prel-is            2N: importance-sample |p_rel| (lower variance)\n"
-    "      --fermi-gas global|local  MF: Fermi-gas model (default global)\n"
-    "      --kF-fg K            MF: global Fermi-gas momentum (GeV/c, default 0.25)\n"
+    "2N only:\n"
+    "      --nn MODEL           NN interaction for the pair contacts (default AV18)\n"
+    "      --estar E            A-2 residual excitation energy E* (GeV)\n"
+    "      --kcut K             relative-momentum cutoff (GeV/c, default 0.25)\n"
+    "      --onset fixed|local  SRC onset k_rel > kcut (default) or > k_F(r)\n"
+    "      --prel-is            importance-sample |p_rel| (lower variance)\n"
+    "\n"
+    "MF only (the A-1 residual is left in its ground state):\n"
+    "      --fermi-gas global|local  Fermi-gas model (default global)\n"
+    "      --kF-fg K            global Fermi-gas momentum (GeV/c, default 0.25)\n"
+    "\n"
+    "2N and MF:\n"
     "      --rad                peaking-approximation radiation\n"
     "      --coulomb            Coulomb correction (applied before any FSI stage)\n"
     "      --phase-space FILE   phase-space limits file (gcfGenerator format)\n";
@@ -102,6 +106,40 @@ string AbsolutePath(const string &path)
   return string(cwd) + "/" + path;
 }
 
+// The models each model-specific option applies to; an option outside its
+// models is an error, not a silent no-op. The options not listed (model, beam,
+// events, output, target, seed, cs, q2, check, verbose) apply to every model.
+// tools/gcf/schema.py carries the same table (Opt.models), and
+// test_model_options.py checks that the binary and the schema agree.
+struct ModelOption {
+  const char *flag;
+  const char *models;   // '/'-separated
+  const char *what;     // why it does not apply elsewhere
+};
+const ModelOption kModelOptions[] = {
+  {"--sigma-cm", "3N/2N", "CM motion of the SRC cluster; MF has no cluster"},
+  {"--wave-function", "3N", "three-body density of the triplet; 2N uses --nn"},
+  {"--theta-e", "3N", "electron-angle window of the 3N generator; 2N/MF limits go in --phase-space"},
+  {"--kF", "3N", "internal-momentum cutoff of the triplet; 2N uses --kcut, MF --kF-fg"},
+  {"--no-cm", "3N", "CM motion of the triplet; 2N sets its width with --sigma-cm"},
+  {"--nn", "2N", "NN interaction of the pair contacts; 3N uses --wave-function, MF has no contacts"},
+  {"--estar", "2N", "excitation of the pair's A-2 residual; MF leaves the A-1 residual in its ground state"},
+  {"--kcut", "2N", "relative-momentum cutoff of the SRC pair"},
+  {"--onset", "2N", "SRC onset of the pair's relative momentum"},
+  {"--prel-is", "2N", "importance sampling of the pair's |p_rel|"},
+  {"--fermi-gas", "MF", "Fermi-gas model of the mean-field nucleon"},
+  {"--kF-fg", "MF", "Fermi momentum of the mean-field Fermi gas"},
+  {"--rad", "2N/MF", "radiation exists in the 2N/MF generator only"},
+  {"--coulomb", "2N/MF", "Coulomb correction exists in the 2N/MF generator only"},
+  {"--phase-space", "2N/MF", "limits file of the 2N/MF generator; 3N uses --q2 and --theta-e"},
+};
+
+bool AppliesTo(const char *models, const string &model)
+{
+  const string list = string("/") + models + "/";
+  return list.find("/" + model + "/") != string::npos;
+}
+
 } // namespace
 
 int main(int argc, char **argv)
@@ -115,8 +153,8 @@ int main(int argc, char **argv)
   int A = 12, Z = 6, u = 1;
   bool sigCMSet = false, q2Set = false, kFSet = false, estarSet = false,
        kcutSet = false, kFfgSet = false, useCM = true, doRad = false,
-       doCoul = false, prelIS = false, verbose = false, checkOnly = false,
-       nnSet = false, onsetSet = false;
+       doCoul = false, prelIS = false, verbose = false, checkOnly = false;
+  vector<string> given;   // model-specific options on the command line
 
   enum { kSigmaCM = 1000, kQ2, kThetaE, kKF, kNoCM, kNN, kEstar, kKcut,
          kOnset, kPrelIS, kFermiGas, kKFfg, kRad, kCoulomb, kPhaseSpace, kCheck };
@@ -152,7 +190,14 @@ int main(int argc, char **argv)
     {nullptr, 0, nullptr, 0}};
 
   int c;
-  while ((c = getopt_long(argc, argv, "m:b:n:o:A:Z:S:c:u:vh", longOpts, nullptr)) != -1) {
+  int optIndex = -1;
+  while ((c = getopt_long(argc, argv, "m:b:n:o:A:Z:S:c:u:vh", longOpts, &optIndex)) != -1) {
+    string flag;
+    if (c == 'u') flag = "--wave-function";   // also -u and --interaction
+    else if (c >= kSigmaCM && optIndex >= 0) flag = string("--") + longOpts[optIndex].name;
+    if (!flag.empty() && find(given.begin(), given.end(), flag) == given.end())
+      given.push_back(flag);
+    optIndex = -1;
     switch (c) {
       case 'm': model = optarg; break;
       case 'b': beamE = atof(optarg); break;
@@ -185,10 +230,10 @@ int main(int argc, char **argv)
         break;
       case kKF: kF = atof(optarg); kFSet = true; break;
       case kNoCM: useCM = false; break;
-      case kNN: nnName = optarg; nnSet = true; break;
+      case kNN: nnName = optarg; break;
       case kEstar: estar = atof(optarg); estarSet = true; break;
       case kKcut: kcut = atof(optarg); kcutSet = true; break;
-      case kOnset: onset = optarg; onsetSet = true; break;
+      case kOnset: onset = optarg; break;
       case kPrelIS: prelIS = true; break;
       case kFermiGas: fermiGas = optarg; break;
       case kKFfg: kFfg = atof(optarg); kFfgSet = true; break;
@@ -217,18 +262,14 @@ int main(int argc, char **argv)
   if (kFSet && (kF <= 0. || kF > 0.5)) fail("--kF expects k_F in GeV/c, e.g. 0.22");
   if (onset != "fixed" && onset != "local") fail("--onset must be fixed or local");
   if (fermiGas != "global" && fermiGas != "local") fail("--fermi-gas must be global or local");
-  if (model == "3N" && (!nnName.empty() && nnName != "AV18"))
-    fail("--nn applies to 2N; the 3N wave function is chosen with --wave-function");
-  // The mean-field model has no pair: no contacts (--nn), no pair CM motion
-  // (--sigma-cm), no relative momentum (--kcut, --onset, --prel-is), and the
-  // A-1 residual is left in its ground state (--estar).
-  if (model == "MF") {
-    if (nnSet) fail("--nn applies to 2N, not MF (the mean-field weight has no NN contacts)");
-    if (sigCMSet) fail("--sigma-cm applies to 3N/2N, not MF (no SRC-cluster CM motion)");
-    if (estarSet) fail("--estar applies to 2N, not MF (the A-1 residual is left in its ground state)");
-    if (kcutSet) fail("--kcut applies to 2N, not MF (no SRC pair, so no relative-momentum cutoff)");
-    if (onsetSet) fail("--onset applies to 2N, not MF (the SRC onset is a property of the pair)");
-    if (prelIS) fail("--prel-is applies to 2N, not MF (no |p_rel| to importance-sample)");
+  if (model == "3N" || model == "2N" || model == "MF") {
+    for (const string &flag : given) {
+      for (const ModelOption &o : kModelOptions) {
+        if (flag != o.flag || AppliesTo(o.models, model)) continue;
+        fail(flag + " applies to " + o.models + ", not " + model + " (" + o.what + ")");
+        break;
+      }
+    }
   }
   if (!ok) { cerr << "(gcf_generate --help for usage)\n"; return 1; }
   if (!output.empty()) output = AbsolutePath(output);
