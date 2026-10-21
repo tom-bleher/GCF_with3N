@@ -153,8 +153,9 @@ double photoCrossSection::dipole_F(double t, double tmin, double tmax)
 {
   // |F(t)|^2 with F(t) = 1/(1 - t/mSq)^2, normalized to 1 over [tmax, tmin].
   // mSq is the dipole mass squared in GeV^2: 0.71 is the proton dipole of
-  // Lomnitz & Klein, arXiv:1803.06420 eq. (15); 1.14 is the Frankfurt-Strikman
-  // two-gluon value.
+  // Lomnitz & Klein, arXiv:1803.06420 eq. (15). 1.14 is the code's original
+  // value (d744e3e, no source given); it is close to the Frankfurt-Strikman
+  // two-gluon scale m^2 ~ 1.1 GeV^2, which may be where it came from.
   double mSq = 0.71;
   //double mSq = 1.14;
 
