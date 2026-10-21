@@ -59,8 +59,11 @@ std::string GenieOverrideDir();
 // order), GenieOverrideDir(), $GENIE/config/G18_10a, $GENIE/config. Entries
 // naming one of the last three, in any spelling, are moved to their slot
 // and duplicates dropped, so a user directory always wins over the project
-// override and the override over GENIE's defaults. Returns the new
-// GXMLPATH. Idempotent; safe to call multiple times.
+// override and the override over GENIE's defaults. An entry naming the
+// compile-time default override is dropped when $GENIE_OVERRIDE_DIR selects
+// another directory. Warns (once) if the selected override has no
+// HNIntranuke2018.xml. Returns the new GXMLPATH. Idempotent; safe to call
+// multiple times.
 std::string ResolveGenieXMLPath();
 
 // The first GXMLPATH directory holding `file` (the copy GENIE reads), or ""

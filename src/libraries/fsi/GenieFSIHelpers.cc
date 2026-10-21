@@ -150,6 +150,27 @@ std::string ResolveGenieXMLPath()
   const std::string config_dir = std::string(genie_home) + "/config";
   const std::string default_tune_dir = config_dir + "/G18_10a";
   const std::string override_dir = GenieOverrideDir();
+  // The compile-time default override. When $GENIE_OVERRIDE_DIR selects a
+  // different directory, an entry naming the default (build/gcf_env.sh and
+  // the gcf front end export one) is dropped rather than kept ahead of the
+  // selection, so the variable always takes effect.
+  std::string default_override;
+#ifdef GENIE_OVERRIDE_DIR
+  default_override = GENIE_OVERRIDE_DIR;
+#endif
+
+  // A selected override without the Intranuke files would silently hand
+  // those files to GENIE's own config further down the path.
+  if (!override_dir.empty()) {
+    std::ifstream probe((override_dir + "/HNIntranuke2018.xml").c_str());
+    static bool warned = false;
+    if (!probe && !warned) {
+      std::cerr << "Warning: GENIE override directory " << override_dir
+                << " has no HNIntranuke2018.xml (GENIE_OVERRIDE_DIR?); GENIE "
+                   "reads its own defaults for the files it lacks\n";
+      warned = true;
+    }
+  }
 
   // GENIE reads each XML file from the first GXMLPATH entry that has it.
   // Order: (1) the user's own entries, in their order (e.g. a gcf_fsi
@@ -157,7 +178,8 @@ std::string ResolveGenieXMLPath()
   // (2) the selected project override, (3) the G18_10a tune, (4) GENIE's
   // config. Entries naming (2)-(4) are recognised by canonical path and
   // moved to their slot, so any spelling of them works and a user
-  // directory is never shadowed by the project override.
+  // directory is never shadowed by the project override. An entry naming
+  // the default override when another one is selected is dropped.
   std::vector<std::string> fixed;
   std::vector<std::string> seen;
   auto add = [&](const std::string &dir) {
@@ -172,6 +194,7 @@ std::string ResolveGenieXMLPath()
   tail.push_back(config_dir);
   std::vector<std::string> tailCanon;
   for (const std::string &d : tail) tailCanon.push_back(CanonicalDir(d));
+  if (!default_override.empty()) tailCanon.push_back(CanonicalDir(default_override));
   if (gxml_env)
     for (const std::string &dir : SplitPathList(gxml_env)) {
       const std::string canon = CanonicalDir(dir);

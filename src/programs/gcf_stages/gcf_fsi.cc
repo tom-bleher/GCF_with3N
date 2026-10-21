@@ -345,6 +345,12 @@ int main(int argc, char **argv)
   regex keepRe;
   try { keepRe = regex(keep); } catch (const regex_error &) { fail("--keep is not a valid regex"); }
   if (!countOnly && !getenv("GENIE")) fail("GENIE is not set; source setup_env.sh (or build/gcf_env.sh) first");
+  if (!countOnly) {
+    // A missing override would silently run GENIE's own cascade configuration.
+    const string ov = fsi::GenieOverrideDir();
+    if (!ov.empty() && !ifstream(ov + "/HNIntranuke2018.xml"))
+      fail("GENIE override directory " + ov + " has no HNIntranuke2018.xml (check GENIE_OVERRIDE_DIR)");
+  }
   if (!ok) { cerr << "(gcf_fsi --help for usage)\n"; return 1; }
   runner.mode = independent ? fsi::kIndependent : fsi::kSharedRemnant;
   if (runner.vertexPower == 2) fsi::SetSRCVertexRhoPower(2);
