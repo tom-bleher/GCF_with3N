@@ -56,6 +56,19 @@ const int kVertexAuto = 0;
 void TransportEvent(const StageInput &in, TransportMode mode, FSIModel model,
                     int vertexPower, TRandom3 *rnd, StageResult &out);
 
+// Coulomb correction of the particles leaving the nucleus, the rule of the
+// generators' -C / --coulomb: a particle of charge q (in units of e) gains
+// q * deltaE (gcfGenerator::coulombCorrection, fixed mass). A negative
+// particle with kinetic energy T <= |q| deltaE cannot escape and is dropped;
+// the return value is the number dropped. Neutral and unknown PDG codes are
+// untouched. deltaE is Delta E_C of the nucleus (gcfGenerator::calcCoulombEnergy).
+int CoulombCorrectFinalState(std::vector<FSIParticle> &particles, double deltaE);
+
+// The inverse shift on the particles entering the cascade: q * deltaE is
+// taken off again, so a list stored with the correction applied (gcf_generate
+// --coulomb) is transported with its momenta inside the nucleus.
+void CoulombUncorrect(std::vector<FSIInputNucleon> &particles, double deltaE);
+
 } // namespace fsi
 
 #endif

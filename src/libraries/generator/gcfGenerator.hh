@@ -56,6 +56,14 @@ class gcfGenerator
   
   void decay_function(double &weight, int lead_type, int rec_type, TVector3 &vi, TVector3 &vRec);
   void decay_function_lc(double &weight, int lead_type, int rec_type, double &alphai, TVector2 &vi_perp, double &alphaRec, TVector2 &vRec_perp);
+
+  // Coulomb correction (-C / --coulomb). calcCoulombEnergy: the energy
+  // Delta E_C (GeV) a unit charge gains leaving the nucleus (0 for the
+  // deuteron). coulombCorrection: E -> E + deltaE at fixed mass (a particle
+  // of charge q leaving the nucleus gets deltaE = q * Delta E_C); public and
+  // static so gcf_fsi can apply the same shift after the cascade.
+  double calcCoulombEnergy();
+  static void coulombCorrection(TLorentzVector &p, double deltaE);
   
   protected:
   double get_mAm2(int lead_type, int rec_type);
@@ -70,9 +78,6 @@ class gcfGenerator
   double deltaHard(double QSq);
   double radiationFactor(double Ebeam, double Ek, double QSq);
 
-  double calcCoulombEnergy();
-  void coulombCorrection(TLorentzVector &p, double deltaE);
-  
   gcfNucleus * myInfo;
   TRandom3 * myRand;  
 
