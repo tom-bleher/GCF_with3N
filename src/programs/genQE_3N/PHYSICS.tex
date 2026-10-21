@@ -33,12 +33,18 @@ events of the form
   e + A \;\longrightarrow\; e' + N_{1} + N_{2} + N_{3} + (A{-}3)^{*},
 \end{equation}
 where the electron scatters off one nucleon of a correlated triplet.
-The current implementation targets $^{4}$He with $ppn$ triplets.
+Only $ppn$ triplets are generated.  The default target is $^{12}$C
+(residual $^{9}$Be); \texttt{-A}/\texttt{-Z} select any nucleus with
+$A \ge 3$, $Z \ge 2$, $N \ge 1$ whose mass and $(A{-}3,\,Z{-}2)$ residual
+mass are in the generator's lookup table
+(\texttt{QEGenerator\_3N::LookupNuclearMass}).  For $^{3}$He the triplet
+is the whole nucleus: there is no residual and no CM motion.
 
 The key conceptual difference from the 2N generator is that
 \emph{contact coefficients times universal functions} are replaced by
-\textbf{pre-computed 3D density matrices} $\rho(\theta_{ab},\,k_{\text{cm}},\,k_{\text{rel}})$
-obtained from \textit{ab initio} nuclear structure calculations.
+\textbf{pre-computed 3D density tables} $\rho(\theta_{ab},\,p_{a},\,p_{b})$
+built from Faddeev $^{3}$He ground-state wave functions, used as a
+stand-in for the 3N SRC wave function in any nucleus.
 
 %======================================================================
 \section{From 2N Contacts to 3N Density Matrices}
@@ -60,49 +66,81 @@ full three-body correlation is encoded in a density matrix that depends on
 three independent kinematic variables describing the internal configuration
 of the triplet:
 \begin{equation}
-  \rho_{3N}(\theta_{ab},\,k_{\text{cm}},\,k_{\text{rel}}),
+  \rho_{3N}(\theta_{ab},\,p_{a},\,p_{b}),
 \end{equation}
-where
+where, in the triplet rest frame,
 \begin{itemize}[nosep]
-  \item $\theta_{ab}$: angle between the two Jacobi-like momenta
-        $\vect{p}_{a}$ and $\vect{p}_{b}$ (see below),
-  \item $k_{\text{cm}}$: magnitude of the three-body center-of-mass--like
-        momentum,
-  \item $k_{\text{rel}}$: magnitude of the relative momentum within the pair.
+  \item $p_{a} = |\vect{p}_{1}|$: momentum of the odd nucleon (in the
+        tables, the neutron),
+  \item $p_{b} = |\vect{p}_{2}-\vect{p}_{3}|/2$: \emph{half}-relative
+        momentum of the other two (the $pp$ pair),
+  \item $\theta_{ab}$: angle between $\vect{p}_{a}$ and $\vect{p}_{b}$.
 \end{itemize}
+The half-relative convention for $p_{b}$ is the one the tables use:
+with it the mean kinetic energy of the AV18 table comes out at
+$\langle T\rangle = 45.6\MeV$, while reading the same table with the
+full relative momentum $\vect{p}_{2}-\vect{p}_{3}$ gives $32\MeV$.
+The code calls the two table axes $k_{\text{cm}}$ ($=p_{a}$) and
+$k_{\text{rel}}$ ($=p_{b}$).
 
-These density matrices are tabulated on a regular grid and loaded from
-binary data files at initialization.
+The tables are plain-text files, loaded at initialization.
 
 \subsection{Data files}
 
-Four NN-potential choices are available:
+The interaction number \texttt{u} (second positional argument;
+\texttt{-u}/\texttt{--wave-function} in \texttt{gcf\_generate}) selects
+the table:
 \begin{center}
 \begin{tabular}{cl}
 \toprule
-Index & File \\
+\texttt{u} & File (in \texttt{array/}) \\
 \midrule
-1 & \texttt{AV8\_1D.dnst}  (Argonne $v_8'$) \\
-2 & \texttt{N2LO\_1D.dnst} (Chiral N$^{2}$LO) \\
-3 & \texttt{G3\_1D.dnst}   (Chiral N$^{3}$LO / higher) \\
-4 & \texttt{AV4\_1D.dnst}  (Argonne AV4$'$) \\
+1 & \texttt{he3\_3Ndensity\_AV18.dnst}       (AV18) \\
+2 & \texttt{he3\_3Ndensity\_AV18UIX.dnst}    (AV18 + Urbana IX) \\
+3 & \texttt{he3\_3Ndensity\_AV18TM.dnst}     (AV18 + Tucson--Melbourne) \\
+4 & \texttt{he3\_3Ndensity\_CDBonn.dnst}     (CD-Bonn) \\
+5 & \texttt{he3\_3Ndensity\_CDBonnTM.dnst}   (CD-Bonn + Tucson--Melbourne) \\
+6--10 & \texttt{he3\_3Ndensity\_pD\_*.dnst} (the same five, deuteron channel only) \\
 \bottomrule
 \end{tabular}
 \end{center}
+The $p$D tables keep only the deuteron channels of the Faddeev wave
+function and share the grid, units and Jacobian of $u=1$--5.  Any other
+\texttt{u} aborts.  The older \texttt{AV8/N2LO/G3/AV4\_1D.dnst} tables
+are still in \texttt{array/} but are no longer loaded.  The directory is
+the absolute path CMake bakes in as \texttt{GCF\_3N\_ARRAY\_DIR}; the
+environment variable of the same name overrides it at run time.
 
-Each file contains $61 \times 101 \times 101 = 622{,}261$ entries:
+Each file holds one value per line, $61 \times 101 \times 101 = 622{,}261$
+lines, with $\theta_{ab}$ the outermost and $p_{b}$ the innermost index:
 \begin{center}
 \begin{tabular}{lcl}
 \toprule
 Variable & Bins & Range \\
 \midrule
 $\theta_{ab}$ & 61  & $[0^{\circ},\,180^{\circ}]$, $\Delta\theta = 3^{\circ}$ \\
-$k_{\text{cm}}$  & 101 & $[0,\,10]\fm^{-1}$, $\Delta k = 0.1\fm^{-1}$ \\
-$k_{\text{rel}}$ & 101 & $[0,\,10]\fm^{-1}$, $\Delta k = 0.1\fm^{-1}$ \\
+$p_{a}/\hbar c$ & 101 & $[0,\,10]\fm^{-1}$, $\Delta k = 0.1\fm^{-1}$ \\
+$p_{b}/\hbar c$ & 101 & $[0,\,10]\fm^{-1}$, $\Delta k = 0.1\fm^{-1}$ \\
 \bottomrule
 \end{tabular}
 \end{center}
-Values are trilinearly interpolated at runtime.
+Values are trilinearly interpolated at runtime; $p_{a}$ or $p_{b}$ above
+$10\fm^{-1}$ returns zero.
+
+\paragraph{Normalization.}
+A table stores the raw (Cartesian) density $|\tilde\varphi(p_{a},p_{b},\theta_{ab})|^{2}$
+per unit $d^{3}p_{a}\,d^{3}p_{b}$, which is finite at $p_{a}=p_{b}=0$.  With
+momenta in GeV/$c$,
+\begin{equation}
+  8\pi^{2}\int \rho(\theta_{ab},p_{a},p_{b})\,
+     p_{a}^{2}\,p_{b}^{2}\,\sin\theta_{ab}\;dp_{a}\,dp_{b}\,d\theta_{ab}
+  = \tfrac{1}{3}
+\end{equation}
+(measured: 0.33308).  The $1/3$ is the isospin assignment: the table
+fixes which nucleon is the neutron, and the three equivalent choices sum
+to one.  The $8\pi^{2} = 4\pi\cdot 2\pi$ comes from the orientation of
+$\vect{p}_{a}$ and the azimuth of $\vect{p}_{b}$ about it.  Powers of
+$\hbar c$ are absorbed into the contact $C$.
 
 %======================================================================
 \section{Three-Body Kinematics}
@@ -115,16 +153,17 @@ $\vect{p}_{a}$, $\vect{p}_{b}$ and a three-body center-of-mass momentum
 $\vect{P}_{\text{CM}}$.
 
 \paragraph{Internal frame.}
-$\vect{p}_{a}$ is placed along $\hat{z}$ and $\vect{p}_{b}$ lies in the
-$xz$-plane:
+$\vect{p}_{a}$ is placed along $\hat{z}$ and $\vect{p}_{b}$ at polar
+angle $\theta_{ab}$ and azimuth $\phi_{baz}$ about it:
 \begin{equation}
   \vect{p}_{a} = (0,\,0,\,p_{a}), \qquad
-  \vect{p}_{b} = (p_{b}\sin\theta_{ab},\;0,\;p_{b}\cos\theta_{ab}).
+  \vect{p}_{b} = p_{b}\,(\sin\theta_{ab}\cos\phi_{baz},\;\sin\theta_{ab}\sin\phi_{baz},\;\cos\theta_{ab}).
 \end{equation}
 
 \paragraph{Rotation to lab.}
-Three Euler angles $(\phi_{a},\,\theta_{a},\,\phi_{baz})$, sampled uniformly,
-rotate this frame into the laboratory.
+Both vectors are then rotated by $\theta_{a}$ about $\hat{y}$ and by
+$\phi_{a}$ about $\hat{z}$, so $(\phi_{a},\,\theta_{a},\,\phi_{baz})$
+act as three Euler angles, all sampled uniformly.
 
 \paragraph{Individual momenta.}
 \begin{equation}
@@ -134,6 +173,10 @@ rotate this frame into the laboratory.
   \qquad
   \vect{v}_{3} = -\tfrac{1}{2}\,\vect{p}_{a} - \vect{p}_{b}.
 \end{equation}
+so $\vect{p}_{b} = (\vect{v}_{2}-\vect{v}_{3})/2$, matching the tables.
+The map from $(\vect{P}_{\text{CM}},\vect{p}_{a},\vect{p}_{b})$ to the
+three nucleon momenta has unit determinant, so
+$d^{3}p_{1}\,d^{3}p_{2}\,d^{3}p_{3} = d^{3}P_{\text{CM}}\,d^{3}p_{a}\,d^{3}p_{b}$.
 After Euler rotation, each nucleon receives an additional
 $\vect{P}_{\text{CM}}/3$ boost.  The $(A{-}3)$ residual recoils with
 $\vect{p}_{A{-}3} = -\vect{P}_{\text{CM}}$.
@@ -143,8 +186,15 @@ $\vect{p}_{A{-}3} = -\vect{P}_{\text{CM}}$.
 \begin{equation}
   P_{\text{CM},\alpha} \sim \mathcal{N}(0,\;\sigma_{\text{CM}}),
   \qquad
-  \sigma_{\text{CM}} = 0.055\GeV/c.
+  \sigma_{\text{CM}} = 0.15\GeV/c \ \text{(default)}.
 \end{equation}
+The default is the $^{12}$C 2N-pair literature value.  \texttt{-s} sets
+$\sigma_{\text{CM}}$ directly.  In \texttt{genQE\_3N\_FSI} (\texttt{-K})
+and \texttt{gcf\_generate} (\texttt{--kF}), giving a Fermi momentum
+$k_{F}$ sets $\sigma_{\text{CM}} = \sqrt{3/5}\,k_{F}$ unless
+$\sigma_{\text{CM}}$ is also given, the CM width of three uncorrelated
+mean-field nucleons.  \texttt{-C 0} (\texttt{--no-cm}) switches the CM
+motion off, and it is always off for $A=3$.
 
 %======================================================================
 \section{Event Generation Pipeline}
@@ -164,6 +214,7 @@ of~3 to account for the three equivalent assignments.
 \begin{equation}
   \vect{P}_{\text{CM}} \sim \mathcal{N}^{3}(0,\,\sigma_{\text{CM}}).
 \end{equation}
+The Gaussian is the CM distribution itself, so it adds no weight factor.
 
 \subsection{Step 3: Sample orientation (Euler angles)}
 
@@ -181,22 +232,35 @@ Phase-space weight factor: $\Delta\phi_{a}\,\Delta(\cos\theta_{a})\,\Delta\phi_{
   p_{b} \in [0,\,5.0]\GeV/c, \qquad
   \theta_{ab} \in [10^{-4},\,\pi].
 \end{equation}
-Phase-space weight factor: $5.0 \times 5.0 \times \pi$.
+Here $p_{b}$ is the half-relative momentum of Sec.~2, the variable the
+tables are read in.
+Phase-space weight factor: $5.0 \times 5.0 \times (\pi - 10^{-4})$.
 
 \subsection{Step 5: Construct individual momenta}
 
-Build $\vect{v}_{1,2,3}$ from the Jacobi decomposition, apply the Euler
-rotation, add $\vect{P}_{\text{CM}}/3$ to each, and set
+Build $\vect{v}_{1,2,3}$ from the Jacobi decomposition and apply the
+Euler rotation.  The event is rejected ($w=0$) unless every internal
+momentum satisfies
+\begin{equation}
+  k_{\min} \le |\vect{v}_{i}| \le 5\GeV/c, \qquad i = 1,2,3,
+\end{equation}
+with $k_{\min} = 0.25\GeV/c$ by default, or $k_{F}$ when \texttt{-K}
+(\texttt{--kF}) is given: the SRC condition $k > k_{F}$ on the initial
+state.  The cut acts before the CM boost.  Then add
+$\vect{P}_{\text{CM}}/3$ to each nucleon and set
 $\vect{p}_{A{-}3} = -\vect{P}_{\text{CM}}$.
 
 \subsection{Step 6: Residual-nucleus energy}
 
-For $^{4}$He the $(A{-}3) = {}^{1}$H system is a single nucleon:
+The $(A{-}3)$ residual (for $^{12}$C, $^{9}$Be) is on shell, with mass
+from the lookup table plus an excitation energy ($E^{*}=0$ in the
+drivers):
 \begin{equation}
-  m_{A{-}3} = m_{N} + E^{*},
+  m_{A{-}3} = M(A{-}3,\,Z{-}2) + E^{*},
   \qquad
   E_{A{-}3} = \sqrt{|\vect{p}_{A{-}3}|^{2} + m_{A{-}3}^{2}}.
 \end{equation}
+For $^{3}$He there is no residual and $E_{A{-}3}=0$.
 
 Spectator energies:
 \begin{equation}
@@ -205,7 +269,7 @@ Spectator energies:
   E_{3} = \sqrt{|\vect{v}_{3}|^{2} + m_{N}^{2}}.
 \end{equation}
 
-Leading nucleon energy from conservation:
+Leading nucleon energy from conservation (off shell):
 \begin{equation}
   E_{1} = m_{A} - E_{A{-}3} - E_{2} - E_{3}.
 \end{equation}
@@ -214,32 +278,51 @@ Leading nucleon energy from conservation:
 
 The scattered electron direction is sampled uniformly:
 \begin{equation}
-  \cos\theta_{k} \in [\cos 40^{\circ},\,\cos 5^{\circ}],
+  \cos\theta_{k} \in [\cos\theta_{k}^{\max},\,\cos\theta_{k}^{\min}],
   \qquad
-  \phi_{k} \in [-\pi,\,\pi].
+  \phi_{k} \in [-\pi,\,\pi],
 \end{equation}
+with $[\theta_{k}^{\min},\theta_{k}^{\max}] = [5^{\circ},\,40^{\circ}]$ in
+the drivers (\texttt{-t} in \texttt{genQE\_3N\_FSI}, \texttt{--theta-e}
+in \texttt{gcf\_generate}).  Phase-space weight factor:
+$\Delta(\cos\theta_{k})\,\Delta\phi_{k}$.
 
-Define the recoil system $\vect{X} = \vect{v}_{2} + \vect{v}_{3} + \vect{p}_{A{-}3}$
-and $Z = m_{A} + E_{\text{beam}} - E_{2} - E_{3} - E_{A{-}3}$.  The
-scattered electron energy is fixed by 4-momentum conservation:
+Define
+\begin{equation}
+  \vect{X} = \vect{v}_{1} + \vect{p}_{\text{beam}},
+  \qquad
+  Z = m_{A} + E_{\text{beam}} - E_{2} - E_{3} - E_{A{-}3}.
+\end{equation}
+Requiring the struck nucleon to be on shell after absorbing the photon,
+\begin{equation}
+  Z - E_{k} = \sqrt{m_{N}^{2} + (\vect{X} - E_{k}\hat{k})^{2}},
+\end{equation}
+fixes the scattered electron energy:
 \begin{equation}
   E_{k} = \frac{Z^{2} - m_{N}^{2} - |\vect{X}|^{2}}
                {2\bigl(Z - \vect{X}\cdot\hat{k}\bigr)}.
 \end{equation}
+The event is rejected if $E_{k} \le 0$ or $Z - E_{k} \le 0$, or if
+$Q^{2}$ falls outside the optional generation window (\texttt{-q} in
+\texttt{genQE\_3N\_FSI}, \texttt{--q2} in \texttt{gcf\_generate}; open
+by default).
 
-The virtual photon is $\vect{q} = \vect{p}_{\text{beam}} - \vect{k}$,
-and the lead nucleon receives the photon:
-$\vect{p}_{\text{lead}} = \vect{v}_{1} + \vect{q}$.
+The virtual photon is $q = p_{\text{beam}} - k$ (four-vectors), and the
+lead nucleon receives the photon: $p_{\text{lead}} = (E_{1},\vect{v}_{1}) + q$,
+so $E_{\text{lead}} = Z - E_{k}$.
 
 \subsection{Step 8: Jacobian}
 
-The energy-conservation $\delta$-function produces a Jacobian:
+Integrating the energy-conservation $\delta$-function over $E_{k}$
+produces the Jacobian
 \begin{equation}
-  J_{\delta} = E_{\text{lead}} + \vect{p}_{\text{lead}} \cdot
-               (\vect{v}_{1} + \vect{p}_{\text{beam}} + \hat{k}),
+  J_{\delta} = E_{\text{lead}} - \vect{p}_{\text{lead}}\cdot\hat{k},
   \qquad
-  w \;\mathrel{*}=\; \frac{E_{\text{lead}}}{J_{\delta}}.
+  w \;\mathrel{*}=\; \left|\frac{E_{\text{lead}}}{J_{\delta}}\right|,
 \end{equation}
+from $|\partial f/\partial E_{k}| = J_{\delta}/E_{\text{lead}}$, where the
+inner derivative of $(\vect{X} - E_{k}\hat{k})^{2}$ is
+$-2\,\vect{p}_{\text{lead}}\cdot\hat{k}$.
 
 \subsection{Step 9: Cross section and density weight}
 
@@ -249,25 +332,32 @@ The energy-conservation $\delta$-function produces a Jacobian:
     \;\times\; \rho_{3N}(\theta_{ab},\,p_{a},\,p_{b}),
 \end{equation}
 where $C = 0.12$ and $t = 2$ are normalization constants.
-$\sigma_{eN}$ uses the same Kelly form factors as the 2N generator.
+$\sigma_{eN}$ is the de~Forest cross section of the 2N generator with
+Kelly form factors, cc1 by default (\texttt{-c onshell|cc1|cc2}).
 
-\subsection{Step 10: Density matrix evaluation}
+\subsection{Step 10: Density evaluation}
 
-The sampled variables $(p_{a},\,p_{b},\,\theta_{ab})$ must be
-transformed to the density-matrix coordinates
-$(k_{\text{cm}},\,k_{\text{rel}},\,\theta'_{ab})$ via a coordinate
-relabeling that depends on which pair $(N_{2},N_{3})$ is the
-correlated subsystem.  The Jacobian of this coordinate transformation is
+The table always has the neutron as nucleon~1 and the $pp$ pair as
+nucleons 2,3.  The sampled triplet is therefore relabelled according to
+which of $N_{1},N_{2},N_{3}$ is the neutron, $(\vect{v}'_{1},\vect{v}'_{2},\vect{v}'_{3})$,
+and the table is read at
 \begin{equation}
-  J_{\text{coord}}
-  = \frac{p_{a}\,p_{b}\,\sin\theta_{ab}}
-         {p'_{a}\,p'_{b}\,\sin\theta'_{ab}},
+  p'_{a} = |\vect{v}'_{1}|, \qquad
+  p'_{b} = \tfrac{1}{2}|\vect{v}'_{2}-\vect{v}'_{3}|, \qquad
+  \theta'_{ab} = \angle(\vect{v}'_{1},\,\vect{v}'_{2}-\vect{v}'_{3}).
 \end{equation}
-and the density is
+The relabelling is a pointwise re-evaluation of the same density: the
+map between the two Jacobi sets has unit determinant, so it carries no
+Jacobian.  Because the table is a density per $d^{3}p_{a}\,d^{3}p_{b}$
+and the generator samples $p_{a}$, $p_{b}$ and $\theta_{ab}$ uniformly,
+the weight needs the measure of the \emph{sampled} variables,
+$d^{3}p_{a}\,d^{3}p_{b} = p_{a}^{2}\,p_{b}^{2}\sin\theta_{ab}\;dp_{a}\,dp_{b}\,d\theta_{ab}\,d\Omega_{a}\,d\phi_{baz}$:
 \begin{equation}
-  \rho = J_{\text{coord}} \times
-         \text{interpolate}\bigl[\rho_{\text{table}}(\theta'_{ab},\,k_{\text{cm}},\,k_{\text{rel}})\bigr].
+  \rho_{3N} = p_{a}^{2}\,p_{b}^{2}\,\sin\theta_{ab} \times
+         \text{interpolate}\bigl[\rho_{\text{table}}(\theta'_{ab},\,p'_{a}/\hbar c,\,p'_{b}/\hbar c)\bigr].
 \end{equation}
+The measure uses the unprimed (sampled) variables, the table the primed
+ones.
 
 %======================================================================
 \section{Weight Summary}
@@ -275,14 +365,40 @@ and the density is
 
 Collecting all factors:
 \begin{equation}
-  w = 3 \times 8\pi^{2} \times 25\pi
+\begin{split}
+  w = {}& 3 \times 8\pi^{2} \times 25\,(\pi - 10^{-4})
       \times \Delta(\cos\theta_{k})\,\Delta\phi_{k}
-      \times \frac{E_{\text{lead}}}{J_{\delta}}
-      \times \frac{C\,t}{2\,(2\pi)^{7}}
-      \times \sigma_{eN}
-      \times \rho_{3N}
-      \times \Theta(w > 0).
+      \times \left|\frac{E_{\text{lead}}}{J_{\delta}}\right|
+      \times \frac{C\,t}{2\,(2\pi)^{7}} \\
+    & \times \sigma_{eN}
+      \times p_{a}^{2}\,p_{b}^{2}\sin\theta_{ab}\;\rho_{\text{table}}(\theta'_{ab},p'_{a},p'_{b})
+      \times \Theta(\text{cuts}),
+\end{split}
 \end{equation}
+where $\Theta(\text{cuts})$ stands for the internal-momentum window, the
+$E_{k}$ conditions and the $Q^{2}$ window.  Only events with $w>0$ are
+written; \texttt{hAttempts} counts every attempt for per-attempt
+normalization.
+
+\subsection{Relation to \texttt{3N\_Generator.pdf}}
+
+The code follows the tables where they disagree with the derivation in
+\texttt{3N\_Generator.pdf}:
+\begin{itemize}[nosep]
+  \item Eq.~(6) defines $\vect{p}_{b} = \vect{p}_{2}-\vect{p}_{3}$; the
+        tables, and the code, use $(\vect{p}_{2}-\vect{p}_{3})/2$.  With
+        the full relative momentum the map from
+        $(\vect{p}_{1},\vect{p}_{2},\vect{p}_{3})$ has $|\det| = 1/8$
+        instead of 1.
+  \item Eq.~(9) is inverted: the measure is
+        $p_{a}^{2}\,p_{b}^{2}\sin\theta_{ab}$, not its reciprocal.
+  \item Eq.~(25) leaves out $p_{a}^{2}\,p_{b}^{2}\sin\theta_{ab}$, which the
+        Cartesian tables require.
+  \item Eq.~(18) dots $\vect{p}'_{1}$ into the whole argument
+        $\vect{p}_{1}+\vect{p}_{\text{beam}}-\hat{k}$ instead of the inner
+        derivative $-\hat{k}$; the code uses
+        $J_{\delta} = E_{\text{lead}} - \vect{p}_{\text{lead}}\cdot\hat{k}$.
+\end{itemize}
 
 %======================================================================
 \section{Alternative Momentum Parameterization}
@@ -295,12 +411,23 @@ alternative parameterization in terms of momentum fractions is available:
   \qquad
   f_{1} + f_{2} + f_{3} = 1.
 \end{equation}
-The Jacobian for the transformation
-$(\vect{k}_{1},\vect{k}_{2},\vect{k}_{3}) \to (p_{\text{tot}},f_{1},f_{2})$
-is
+Here $p_{\text{tot}} = p_{1}+p_{2}+p_{3}$ in the triplet rest frame,
+where $\vect{p}_{1}+\vect{p}_{2}+\vect{p}_{3}=0$.  Integrating out the
+overall orientation,
+$d^{3}p_{1}\,d^{3}p_{2} = 8\pi^{2}\,p_{1}\,p_{2}\,p_{3}\;dp_{1}\,dp_{2}\,dp_{3}$,
+and $dp_{1}\,dp_{2}\,dp_{3} = p_{\text{tot}}^{2}\;dp_{\text{tot}}\,df_{1}\,df_{2}$,
+so the density per $dp_{\text{tot}}\,df_{1}\,df_{2}$ is
 \begin{equation}
-  J = \frac{8}{\sqrt{3}}\,\frac{1}{p_{1}\,p_{2}\,p_{3}\,p_{\text{tot}}^{2}}.
+  \frac{dN}{dp_{\text{tot}}\,df_{1}\,df_{2}}
+  \;\propto\; p_{1}\,p_{2}\,p_{3}\,p_{\text{tot}}^{2}\;\rho_{\text{table}},
 \end{equation}
+up to the constant area factor of the ternary coordinates; it vanishes
+at the edges of the ternary plot.
+\texttt{QEGenerator\_3N::get\_rho\_ptot\_f1f2f3} currently uses the
+reciprocal, $J = (8/\sqrt{3})/(p_{1}\,p_{2}\,p_{3}\,p_{\text{tot}}^{2})$,
+which is wrong (issue \#9).  Event generation does not use it (it calls
+\texttt{get\_rho}); only the ternary and $\theta$-plot diagnostics
+(\texttt{Ternary.cc}, \texttt{analysis/theta\_plot*.cpp}) do.
 
 %======================================================================
 \section{Differences from the 2N Generator}
@@ -312,12 +439,12 @@ is
 Aspect & \texttt{genQE} (2N) & \texttt{genQE\_3N} (3N) \\
 \midrule
 Correlated cluster & Pair ($N N$) & Triplet ($N N N$) \\
-Structure input    & Contacts $C_{ij}\,\varphi^{2}(k)$ & 3D density matrix $\rho(\theta,k_{\text{cm}},k_{\text{rel}})$ \\
+Structure input    & Contacts $C_{ij}\,\varphi^{2}(k)$ & $^{3}$He Faddeev density $\rho(\theta_{ab},p_{a},p_{b})$ \\
 Residual system    & $(A{-}2)^{*}$ & $(A{-}3)^{*}$ \\
 Phase space dim.   & 6D (CM + rel) & 9D (CM + Euler + Jacobi) \\
 Electron vertex    & Quadratic solve for $k_{\perp}$ & Direct solve for $E_{k}$ \\
-$\sigma_{\text{CM}}$ & 0.10--0.15 GeV/$c$ & 0.055 GeV/$c$ \\
-Target nuclei      & $^{2}$H through $^{208}$Pb & $^{4}$He \\
+$\sigma_{\text{CM}}$ & 0.10--0.15 GeV/$c$ & 0.15 GeV/$c$, or $\sqrt{3/5}\,k_{F}$ \\
+Target nuclei      & $^{2}$H through $^{208}$Pb & $^{12}$C default; $A\ge3$ in the mass table \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -329,18 +456,22 @@ Target nuclei      & $^{2}$H through $^{208}$Pb & $^{4}$He \\
 For each Monte Carlo trial:
 \begin{enumerate}
   \item Assign triplet types ($ppn$); weight $\times\,3$.
-  \item Sample $\vect{P}_{\text{CM}}$ (Gaussian, $\sigma = 0.055\GeV/c$).
+  \item Sample $\vect{P}_{\text{CM}}$ (Gaussian, $\sigma = 0.15\GeV/c$ by
+        default, or $\sqrt{3/5}\,k_{F}$; none for $A=3$).
   \item Sample Euler angles $(\phi_{a},\theta_{a},\phi_{baz})$ uniformly.
   \item Sample Jacobi magnitudes $(p_{a},p_{b})$ and angle $\theta_{ab}$
         uniformly.
   \item Construct $\vect{v}_{1,2,3}$ via Jacobi decomposition + Euler
-        rotation + CM boost.
+        rotation; apply $k_{\min} \le |\vect{v}_{i}| \le 5\GeV/c$; add
+        the CM boost.
   \item Compute residual and spectator energies; derive $E_{1}$ from
         conservation.
-  \item Sample electron direction $(\theta_{k},\phi_{k})$; solve for $E_{k}$.
-  \item Compute Jacobian $J_{\delta}$ from energy-conservation constraint.
-  \item Evaluate $\sigma_{eN}$ (CC1, Kelly form factors).
-  \item Look up $\rho_{3N}$ from density matrix with coordinate transform.
+  \item Sample electron direction $(\theta_{k},\phi_{k})$; solve for $E_{k}$;
+        apply the optional $Q^{2}$ window.
+  \item Compute Jacobian $J_{\delta} = E_{\text{lead}} - \vect{p}_{\text{lead}}\cdot\hat{k}$.
+  \item Evaluate $\sigma_{eN}$ (cc1 by default, Kelly form factors).
+  \item Relabel so the neutron is nucleon~1, look up $\rho_{\text{table}}$,
+        and multiply by $p_{a}^{2}\,p_{b}^{2}\sin\theta_{ab}$.
   \item Multiply all weight factors; store event if $w > 0$.
 \end{enumerate}
 
