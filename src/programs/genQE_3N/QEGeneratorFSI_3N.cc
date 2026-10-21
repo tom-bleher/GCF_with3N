@@ -45,7 +45,8 @@ void QEGeneratorFSI_3N::generate_event_with_FSI(double &weight,
   // replaces this with GENIE's cascade output when FSI actually runs.
   auto seed = [&](int pdg, const TLorentzVector &p4, int role) {
     FSIParticle part;
-    part.pdg = pdg; part.p4 = p4; part.rescatterCode = -1; part.parentRole = role;
+    part.pdg = pdg; part.p4 = p4; part.rescatterCode = -1; part.generation = 0;
+    part.parentRole = role;
     fParticles.push_back(part);
   };
   seed(N1_type, vLead_target, 0);
