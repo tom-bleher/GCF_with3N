@@ -189,6 +189,7 @@ and fm; the frame is the target rest frame with the beam along +z.
 | `vtx_valid` | int | 1 if `vtx_*` hold the interaction vertex |
 | `vtx_x vtx_y vtx_z` | double | vertex inside the nucleus (fm) |
 | `res_px res_py res_pz res_E` | double | residual nucleus before FSI |
+| `coulomb_dE` | double | ΔE_C (GeV) of the Coulomb correction (`--coulomb`) already applied to `e_*` and to the charged `nuc_*` (q ΔE_C each); 0 = none |
 
 Per file, outside the tree:
 
@@ -209,7 +210,8 @@ Only `nuc_pdg` and `nuc_px nuc_py nuc_pz nuc_E`, plus the target, from
 - no `nuc_role`: the roles are the list positions;
 - no vertex (or `vtx_valid == 0`): one is drawn from ρⁿ(r) r² of the target,
   with n = 1, 2, 3 for 1, 2, ≥ 3 nucleons (`--vertex-power` overrides);
-- no `weight`, no `hAttempts`: fine, they are only passed through.
+- no `weight`, no `hAttempts`: fine, they are only passed through;
+- no `coulomb_dE`: no Coulomb correction.
 
 Protons and neutrons in the list are transported; anything else (a pion, say)
 is passed to the final state unchanged. All input branches are copied to the
@@ -236,10 +238,20 @@ with uproot.recreate("my_events.root") as f:
 | `fsi_ran` | 1 if the GENIE cascade ran; 0 if it was skipped: residual A < 3 (e.g. 3N on ⁴He) or nothing to transport |
 | `fsi_vtx_x y z`, `fsi_vtx_sampled` | vertex used, and whether it was sampled here |
 | `fsi_res_A`, `fsi_res_Z` | transport medium: the target minus the transported nucleons |
-| `part_n`, `part_pdg`, `part_px py pz E` | the final state: GENIE's stable particles verbatim, or the input unchanged when `fsi_ran == 0` |
+| `part_n`, `part_pdg`, `part_px py pz E` | the final state: GENIE's stable particles verbatim, or the input unchanged when `fsi_ran == 0`; Coulomb-corrected when `coulomb_dE != 0` (below) |
 | `part_parentRole` | role of the input nucleon a particle descends from |
 | `part_rescatterCode` | GENIE fate of that input nucleon: **1 = left without interacting** (the particle then has exactly its input momentum); other values are cascade products; -1 = the cascade did not run |
 | `part_generation` | mother-chain depth. Intranuke re-emits even non-interacting nucleons as daughters, so this is ≥ 1 for every cascade output; use `part_rescatterCode`, not this, to find untouched nucleons |
+
+**Coulomb correction.** When `coulomb_dE` is nonzero the stored `nuc_*` carry
+the correction, so `gcf_fsi` first takes it off again (the cascade transports
+the momenta inside the nucleus) and applies it to the final state after the
+cascade, with the rule of `genQE_FSI -C`: a particle of charge q gains
+q ΔE_C at fixed mass (protons and π⁺ gain ΔE_C, π⁻ loses it, neutrals are
+untouched), and a negative particle with kinetic energy T ≤ |q| ΔE_C cannot
+leave the nucleus and is dropped (counted in the run summary and the
+`gcf_fsi` provenance). A nucleon with `part_rescatterCode == 1`, or every
+particle when `fsi_ran == 0`, therefore has exactly its `nuc_*` momentum.
 
 No particle is labelled "lead" or "recoil": that is a detection-level choice
 made in the analysis from types and momenta. Pauli blocking is GENIE's own; in
@@ -276,10 +288,13 @@ streams instead of one interleaved stream. The results agree statistically
 
 - **3N vertex**: drawn in stage 1 (ρ³-weighted, as before) instead of right
   before the cascade; the same distribution.
-- **2N Coulomb correction** (`--coulomb`): applied at generation, so the
-  cascade transports the corrected nucleon. The combined program corrects the
-  generated lead nucleon after FSI and leaves the FSI particle list
-  uncorrected.
+- **2N/MF Coulomb correction** (`--coulomb`): the beam and e′ are corrected
+  at generation; the hadron side is applied by `gcf_fsi` after the cascade
+  ([FSI output](#fsi-output)), so the cascade transports the uncorrected
+  nucleons and rescattered nucleons and cascade pions are corrected too, as
+  in `genQE_FSI -C`. Files from an older `gcf_generate` have no
+  `coulomb_dE`; their cascade ran on the corrected nucleons and `part_*` stay
+  uncorrected (`gcf_fsi` warns).
 - **Event counts**: `gcf_generate --events N` means N accepted events for
   every model; the combined 2N program counted attempts.
 - Not available in the stages yet: the 2N light-cone cross section and the

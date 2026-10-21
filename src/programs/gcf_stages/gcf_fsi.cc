@@ -48,6 +48,8 @@ void Usage()
     "\n"
     "Adds GENIE intranuclear-cascade FSI to every event of an event file and\n"
     "writes all input branches plus the final-state particle list (part_*).\n"
+    "A Coulomb correction recorded in the input (coulomb_dE, from gcf_generate\n"
+    "--coulomb) is applied to the charged final-state particles after the cascade.\n"
     "\n"
     "  -i, --input FILE         input event file (GCF event-file format)\n"
     "  -o, --output FILE        output file (must differ from the input)\n"
@@ -184,6 +186,8 @@ struct Runner {
   int vertexPower = fsi::kVertexAuto;
   TRandom3 rnd;
   long long total = 0, done = 0, nRan = 0, nVertexSampled = 0, progressEvery = 1;
+  long long nCoulomb = 0, nCoulombDropped = 0;
+  double coulombDE = 0.;   // last nonzero coulomb_dE seen (for the summary)
   fsi::StageResult res;
   vector<int> pdg, role, rescatter, generation;
   vector<double> px, py, pz, E;
@@ -191,7 +195,7 @@ struct Runner {
   bool Run(int A, int Z, const RVec<int> &ipdg, const RVec<int> &irole,
            const RVec<double> &ipx, const RVec<double> &ipy,
            const RVec<double> &ipz, const RVec<double> &iE,
-           int vtxValid, double vx, double vy, double vz)
+           int vtxValid, double vx, double vy, double vz, double dECoul)
   {
     const size_t n = ipdg.size();
     if (ipx.size() != n || ipy.size() != n || ipz.size() != n || iE.size() != n)
@@ -208,7 +212,16 @@ struct Runner {
     }
     in.haveVertex = (vtxValid != 0);
     in.vertex.SetXYZT(vx, vy, vz, 0.);
+    // Coulomb correction (coulomb_dE != 0): the stored momenta carry it, the
+    // cascade needs them inside the nucleus, and every charged particle that
+    // leaves gets it, as genQE_FSI -C does.
+    fsi::CoulombUncorrect(in.particles, dECoul);
     fsi::TransportEvent(in, mode, model, vertexPower, &rnd, res);
+    if (dECoul != 0.) {
+      ++nCoulomb;
+      coulombDE = dECoul;
+      nCoulombDropped += fsi::CoulombCorrectFinalState(res.particles, dECoul);
+    }
 
     pdg.clear(); role.clear(); rescatter.clear(); generation.clear();
     px.clear(); py.clear(); pz.clear(); E.clear();
@@ -426,16 +439,28 @@ int main(int argc, char **argv)
   node = node.Define("__gcf_vx", haveVertex ? "static_cast<double>(vtx_x)" : "0.");
   node = node.Define("__gcf_vy", haveVertex ? "static_cast<double>(vtx_y)" : "0.");
   node = node.Define("__gcf_vz", haveVertex ? "static_cast<double>(vtx_z)" : "0.");
+  node = node.Define("__gcf_dEC", has("coulomb_dE") ? "static_cast<double>(coulomb_dE)" : "0.");
+  if (!has("coulomb_dE")) {
+    // Files from gcf_generate before coulomb_dE existed: the nucleons carry
+    // the correction but nothing says so, and the products stay uncorrected.
+    TFile in(input.c_str(), "READ");
+    const TNamed *gen = in.Get<TNamed>("gcf_generate");
+    if (gen && string(gen->GetTitle()).find(" --coulomb") != string::npos)
+      cerr << "Warning: the input was generated with --coulomb but has no coulomb_dE branch "
+              "(older gcf_generate): the cascade transports the corrected nucleons and the "
+              "final state gets no Coulomb correction. Regenerate it to correct part_*.\n";
+  }
 
   node = node.Define("__gcf_fsi",
       [&runner](int A, int Z, const RVec<int> &pdg, const RVec<int> &role,
                 const RVec<double> &px, const RVec<double> &py,
                 const RVec<double> &pz, const RVec<double> &E,
-                int vv, double vx, double vy, double vz) {
-        return runner.Run(A, Z, pdg, role, px, py, pz, E, vv, vx, vy, vz);
+                int vv, double vx, double vy, double vz, double dEC) {
+        return runner.Run(A, Z, pdg, role, px, py, pz, E, vv, vx, vy, vz, dEC);
       },
       {"__gcf_A", "__gcf_Z", "__gcf_pdg", "__gcf_role", "__gcf_px", "__gcf_py",
-       "__gcf_pz", "__gcf_E", "__gcf_vvalid", "__gcf_vx", "__gcf_vy", "__gcf_vz"});
+       "__gcf_pz", "__gcf_E", "__gcf_vvalid", "__gcf_vx", "__gcf_vy", "__gcf_vz",
+       "__gcf_dEC"});
 
   // ---- Output columns ----------------------------------------------------
   vector<string> outputColumns;
@@ -524,7 +549,14 @@ int main(int argc, char **argv)
     for (const auto &c : channels) prov << " " << c.first << "=" << c.second;
     prov << "\n"
          << "events: " << runner.done << ", cascade ran: " << runner.nRan
-         << ", vertex sampled: " << runner.nVertexSampled << "\n";
+         << ", vertex sampled: " << runner.nVertexSampled << "\n"
+         << "coulomb: ";
+    if (runner.nCoulomb)
+      prov << "applied after the cascade to " << runner.nCoulomb << " events (dE_C "
+           << runner.coulombDE << " GeV), negative particles dropped: "
+           << runner.nCoulombDropped << "\n";
+    else
+      prov << "none\n";
     out.cd();
     TNamed("gcf_fsi", prov.str().c_str()).Write("gcf_fsi", TObject::kOverwrite);
   }
@@ -538,6 +570,11 @@ int main(int argc, char **argv)
        << ") applied to " << runner.done << " events in " << timer.RealTime() << " s: "
        << "cascade ran for " << runner.nRan << ", skipped for "
        << runner.done - runner.nRan << " (residual A < 3 or nothing to transport); "
-       << runner.nVertexSampled << " vertices sampled.\nWrote " << output << "\n";
+       << runner.nVertexSampled << " vertices sampled.\n";
+  if (runner.nCoulomb)
+    cout << "Coulomb correction (coulomb_dE = " << runner.coulombDE << " GeV) applied after the "
+         << "cascade to " << runner.nCoulomb << " events; " << runner.nCoulombDropped
+         << " negative particles with T <= |q| dE_C dropped (cannot escape).\n";
+  cout << "Wrote " << output << "\n";
   return 0;
 }
