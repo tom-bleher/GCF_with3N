@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
+#include <TDatabasePDG.h>
 #include <TMath.h>
 
 using namespace std;
@@ -53,6 +54,20 @@ void QEGeneratorFSI::SeedFinalState(int lead_type, int rec_type,
   };
   seed(lead_type, vLead_target, 0);
   seed(rec_type, vRec_target, 1);
+}
+
+void QEGeneratorFSI::CoulombCorrectFinalState(double deltaE)
+{
+  std::vector<FSIParticle> kept;
+  kept.reserve(fParticles.size());
+  for (FSIParticle &part : fParticles) {
+    const TParticlePDG *pd = TDatabasePDG::Instance()->GetParticle(part.pdg);
+    const double q = pd ? pd->Charge() / 3. : 0.;   // TParticlePDG: units of |e|/3
+    if (q < 0. && part.p4.E() - part.p4.M() <= -q * deltaE) { ++fNCoulombDropped; continue; }
+    if (q != 0.) coulombCorrection(part.p4, q * deltaE);
+    kept.push_back(part);
+  }
+  fParticles.swap(kept);
 }
 
 // ---------------------------------------------------------------------------
@@ -329,6 +344,7 @@ void QEGeneratorFSI::generate_event(double &weight, int &lead_type, int &rec_typ
     coulombCorrection(vk_target, -deltaECoul);
     if (lead_type == pCode) coulombCorrection(vLead_target, deltaECoul);
     if (rec_type == pCode) coulombCorrection(vRec_target, deltaECoul);
+    CoulombCorrectFinalState(deltaECoul);
   }
 }
 
@@ -472,6 +488,7 @@ void QEGeneratorFSI::generate_event_MF(double &weight, int &lead_type, int &rec_
     coulombCorrection(vk_target, -deltaECoul);
     if (lead_type == pCode) coulombCorrection(vLead_target, deltaECoul);
     // rec_type is the no-recoil sentinel: nothing to correct.
+    CoulombCorrectFinalState(deltaECoul);
   }
 }
 
@@ -770,5 +787,6 @@ void QEGeneratorFSI::generate_event_lightcone(double &weight, int &lead_type, in
     coulombCorrection(vk_target, -deltaECoul);
     if (lead_type == pCode) coulombCorrection(vLead_target, deltaECoul);
     if (rec_type == pCode) coulombCorrection(vRec_target, deltaECoul);
+    CoulombCorrectFinalState(deltaECoul);
   }
 }
