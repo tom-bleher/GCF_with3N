@@ -17,8 +17,9 @@ Two steps:
       uncertainties and every event reweighted exactly by S'(k_rel)/S(k_rel); no new simulation.
 
 Event weight: w = (generator weight) / (attempts of its run), in nb, so sum(w) over a
-selection is its cross section; yields for 10 fb^-1 are sigma[nb] * 1e7, times 0.5 for
-nucleon transparency as in the paper (applied only where a figure says so).
+selection is its cross section; yields for 10 fb^-1 are sigma[nb] * 1e7, times a flat nucleon
+transparency (applied only where a figure says so): 0.5 as in the paper, or 1 for GENIE FSI runs
+(genQE_FSI, genQE_3N_FSI), which absorb nucleons event by event; plots --transparency overrides.
 
 Detection, hit level (the paper's definition: enough hits to reconstruct a track, or a
 deposit in a calorimeter's volume):
@@ -383,6 +384,19 @@ def load(dirs):
     return d, metas
 
 
+def has_fsi(run):
+    """True for a GENIE FSI run (genQE_FSI or genQE_3N_FSI without -n), from its run.json; None when the
+    run directory has no run.json, so the caller can refuse to guess."""
+    rj = Path(run) / "run.json"
+    if not rj.exists():
+        return None
+    meta = json.loads(rj.read_text())
+    if "generator" not in meta:  # the first production batch predates the key; all of it is genQE (PWIA)
+        print(f"warning: {rj} has no 'generator' entry; taking it as a genQE (PWIA) run", file=sys.stderr)
+    gen = meta.get("generator", ["genQE"])
+    return gen[0] in ("genQE_FSI", "genQE_3N_FSI") and "-n" not in gen[1:]
+
+
 # ----------------------------------------------------------------------------- plots
 
 BLUE, ORANGE, AQUA, INK, MUTED = "#2a78d6", "#eb6834", "#1baf7a", "#0b0b0b", "#52514e"
@@ -405,7 +419,7 @@ def wstats(x, w, ok, bins):
     return gen, acc, eff, err
 
 
-def plots(settings, outdir, lumi_nb_inv, transparency):
+def plots(settings, outdir, lumi_nb_inv, transparency=None):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -413,6 +427,22 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     data = {lab: load(dirs) for lab, dirs in settings.items()}
+    # the flat transparency stands in for FSI in PWIA runs; GENIE FSI runs already absorb nucleons
+    # event by event, so they take 1 unless --transparency says otherwise
+    if transparency is None:
+        # from the directories given on the command line, not the paths stored in the npz at extract time
+        fsi = {r: has_fsi(r) for dirs in settings.values() for r in dirs}
+        unknown = [r for r, f in fsi.items() if f is None]
+        if unknown:
+            sys.exit("plots: no run.json in " + ", ".join(unknown) + "; cannot tell GENIE FSI (transparency 1) "
+                     "from PWIA (0.5) runs; pass --transparency")
+        fsi = set(fsi.values())
+        if len(fsi) > 1:
+            sys.exit("plots: GENIE FSI and PWIA runs need different transparencies; pass --transparency")
+        transparency, why = (1.0, "GENIE FSI runs") if fsi == {True} else (0.5, "PWIA runs, as in PRC 105, 034001")
+    else:
+        why = "--transparency"
+    print(f"plots: nucleon transparency {transparency:g} ({why})")
     scale = lumi_nb_inv * transparency
     summary = {}
 
@@ -422,7 +452,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     green, red, orange, magenta, brown = "#45c045", "#f0281e", "#ff9800", "#ee5fbf", "#9a5a1c"
     low_energy = {lab: metas[0]["beams"]["ion_momentum_per_nucleon_GeV"] < 75 for lab, (_, metas) in data.items()}
     for lab in data:
-        summary.setdefault(lab, {})
+        summary.setdefault(lab, {})["transparency"] = transparency
 
     def place_label(ax, text, color, pts, anchor, taken, bw=0.18, bh=0.13, **kw):
         """Put text at the free spot nearest anchor (axes fractions): no data point inside its box."""
@@ -661,7 +691,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         ax.set_xlim(0, xmax)
         ax.set_ylim(0, 0.8)
         ax.set_xlabel("Opening Angle [mrad]", fontsize=12, color="#333333")
-        ax.set_ylabel("Momentum (IRF) [GeV]", fontsize=12, color="#333333")
+        ax.set_ylabel(r"Momentum (IRF) [GeV/$c$]", fontsize=12, color="#333333")
         ax.tick_params(labelsize=11, colors="#333333")
     fig.tight_layout()
     fig.savefig(outdir / "fig4_pirf_vs_theta.pdf")
@@ -1032,6 +1062,8 @@ def band(settings, outdir, lumi_nb_inv, transparency, n_rep, seed):
         d, metas = load(dirs)
         if any(m_.get("kind", "2N") != "2N" for m_ in metas) or metas[0]["beams"]["ion"] != "C12":
             sys.exit("band: 12C SRC-pair (genQE) runs only")
+        if any(has_fsi(r) for r in dirs):
+            sys.exit("band: PWIA runs only (the reweighting needs pRel; GENIE FSI runs take no flat transparency)")
         k = np.concatenate([np.linalg.norm(uproot.open(Path(r) / "gen.root")["genT"]["pRel"].array(library="np")
                                            [np.load(Path(r) / "analysis_events.npz")["num"]], axis=1) for r in dirs])
         B = contact_basis(d, k)
@@ -1131,7 +1163,8 @@ def main():
     p.add_argument("--setting", action="append", required=True, help="LABEL=RUN_DIR[,RUN_DIR...] (Q2 slices of one setting)")
     p.add_argument("-o", "--outdir", required=True)
     p.add_argument("--lumi-fb", type=float, default=10.0, help="integrated luminosity per nucleus [fb^-1] (default 10)")
-    p.add_argument("--transparency", type=float, default=0.5, help="flat nucleon transparency factor (default 0.5)")
+    p.add_argument("--transparency", type=float, help="flat nucleon transparency factor (default 0.5, or 1 for GENIE FSI "
+                   "runs, from run.json)")
     b = sub.add_parser("band", help="GCF contact-uncertainty band of 12C runs by reweighting (no new simulation)")
     b.add_argument("--setting", action="append", required=True, help="LABEL=RUN_DIR[,RUN_DIR...] (Q2 slices of one setting)")
     b.add_argument("-o", "--outdir", required=True)
