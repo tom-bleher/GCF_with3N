@@ -8,8 +8,12 @@
 // energy is E* = m - M_gs(Z, A), with m its HepMC generated mass (GCF writes the A-2 mass including
 // the sampled E*) and M_gs the Geant4 ground-state mass. The nucleus is broken up in its rest frame
 // and the products are boosted back with its velocity, so energy and momentum are conserved
-// exactly. The remnant is kept as status 2 with an end vertex and the products are appended as
-// status 1, after all other particles, so the order of the other final-state particles is unchanged.
+// exactly. The products are appended as status 1, after all other particles, so the order of the
+// other final-state particles is unchanged. The remnant is kept as a status 3 (documentation) entry
+// with the products as its daughters: npsim (DD4hep) does not pass a status 3 particle to Geant4 and
+// starts its status 1 daughters at the primary vertex. As status 2 the remnant would be a Geant4
+// primary with pre-assigned decay products, which Geant4 ignores for a nuclide with a lifetime
+// (10Be, 10C): it transports the ion instead and the products are never simulated.
 // Products are written as ground-state species (Geant4 ends the chain in the ground state or a
 // long-lived isomer; isomer levels are dropped from the PDG code).
 #include <cmath>
@@ -154,7 +158,7 @@ int main(int argc, char** argv) {
       const double scale = m_star / m_in;  // only differs from 1 for clamped E* < 0
       max_dp = std::max({max_dp, std::fabs(sum.px() / GeV - P.px() * scale), std::fabs(sum.py() / GeV - P.py() * scale),
                          std::fabs(sum.pz() / GeV - P.pz() * scale), std::fabs(sum.e() / GeV - P.e() * scale)});
-      r->set_status(2);
+      r->set_status(3);  // history only; the products are the final state (see the header)
       evt.add_vertex(v);
       for (auto& gp : outs) v->add_particle_out(gp);
     }
