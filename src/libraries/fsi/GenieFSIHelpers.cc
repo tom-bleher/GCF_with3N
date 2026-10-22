@@ -9,6 +9,7 @@
 #include <string>
 #include <vector>
 #include <TMath.h>
+#include <TSystem.h>
 
 #ifdef USE_FSI
 #include "Framework/GHEP/GHepRecord.h"
@@ -79,13 +80,26 @@ namespace fsi {
 
 #ifdef USE_FSI
 namespace {
+// The entries of a GXMLPATH as GENIE reads them (utils::xml::GetXMLFilePath):
+// split on ':', ';' and ',', and $VARS and ~ expanded. Without the expansion
+// an entry such as a literal '$GENIE/config' would not be recognised and
+// would stay ahead of the project override, where GENIE expands it.
 std::vector<std::string> SplitPathList(const std::string &pathList)
 {
   std::vector<std::string> dirs;
-  std::stringstream ss(pathList);
   std::string dir;
-  while (std::getline(ss, dir, ':'))
-    if (!dir.empty()) dirs.push_back(dir);
+  for (size_t i = 0; i <= pathList.size(); ++i) {
+    if (i < pathList.size() && std::string(":;,").find(pathList[i]) == std::string::npos) {
+      dir += pathList[i];
+      continue;
+    }
+    if (!dir.empty()) {
+      char *e = gSystem->ExpandPathName(dir.c_str());
+      dirs.push_back(e ? e : dir);
+      delete[] e;
+    }
+    dir.clear();
+  }
   return dirs;
 }
 
