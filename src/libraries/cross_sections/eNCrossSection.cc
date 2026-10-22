@@ -185,6 +185,7 @@ double eNCrossSection::GEp(double QSq)
   return 0.;
 }
 
+// Galster form: S. Galster et al., Nucl. Phys. B 32, 221 (1971), doi:10.1016/0550-3213(71)90068-X
 double eNCrossSection::GEn(double QSq) // dipole and kelly use the Galster form; ye is its own z expansion
 {
   double tau = QSq/(4.*mN*mN);
