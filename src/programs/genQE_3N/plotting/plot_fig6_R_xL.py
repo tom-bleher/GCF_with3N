@@ -17,10 +17,16 @@ where R_3N = N_{L,3N} / N_{R,3N} and R_2N = N_{L,2N} / N_{R,2N} are the
 "pure-signal" and "pure-background" L/R ratios obtained from Fig. 5.
 
 make_paper_figures.sh passes the R values printed by
-plot_fig5_theta_heatmap_pair.py. The defaults are the shipped ones
-(Paper_Figures_indepFSI/Fig5_summary.txt):
-    R_3N = 0.451   (3N+FSI)
-    R_2N = 0.107   (2N+FSI, detection-based)
+plot_fig5_theta_heatmap_pair.py. The defaults are those of the regenerated
+Paper_Figures_indepFSI/Fig5_summary.txt: the paper's (e,e'pp) selection
+(exactly 2 final-state protons above kF, lead = the one closest to q,
+reconstructed |p3| > kF, theta_pq < 8 deg, p_lead/|q| > 0.75,
+0.25 < pmiss < 0.9 GeV/c, xB < 1.2, Q2 > 1, theta_e < 45 deg) on the
+2026-08-29 100M 12C 6 GeV hN independent-FSI productions:
+    R_3N = 1.762 +- 0.044   (3N+FSI)
+    R_2N = 2.212 +- 0.088   (2N+FSI)
+giving R(x_L = 0.1) = 1.795. (The earlier defaults 0.451 / 0.107 came from
+the old nucleon-counting selection and are superseded.)
 """
 import argparse
 import os
@@ -32,10 +38,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paper_style import apply_style, figure_size
 
 
-# Default values from the shipped Fig. 5 (Paper_Figures_indepFSI/Fig5_summary.txt,
-# paper cuts); make_paper_figures.sh overrides them with the values it measures.
-R_3N_DEFAULT = 0.451
-R_2N_DEFAULT = 0.107
+# Default values from the regenerated Fig. 5 (Paper_Figures_indepFSI/
+# Fig5_summary.txt, proton-based (e,e'pp) selection, see the docstring);
+# make_paper_figures.sh overrides them with the values it measures.
+R_3N_DEFAULT = 1.762
+R_2N_DEFAULT = 2.212
 
 
 def R(xL, R_3N, R_2N):
@@ -92,13 +99,18 @@ def main():
     ax.set_xlabel(r'$x_L \equiv N_{2N} / N_{3N}$ in region L')
     ax.set_ylabel(r'$R \equiv N_L / N_R$')
     ax.set_xlim(-0.02, args.xL_max + 0.02)
-    ax.set_ylim(0.0, max(1.05, 1.05 * args.R_3N))
+    # top: the whole curve (it rises with x_L when R_2N > R_3N) plus room
+    # for the "10% FSI" label placed 0.06 above its marker
+    y_top = max(1.05, 1.05 * y.max() + 0.08)
+    ax.set_ylim(0.0, y_top)
 
-    # Annotate the input R values in a small box
+    # Annotate the input R values in a small box, in the right-hand corner
+    # the curve's right end stays away from
     txt = (rf'$R_{{3N}} = {args.R_3N:.3f}$' '\n'
            rf'$R_{{2N}} = {args.R_2N:.3f}$')
-    ax.text(0.97, 0.97, txt, transform=ax.transAxes,
-            ha='right', va='top', fontsize=8,
+    box_low = y[-1] > 0.5 * y_top
+    ax.text(0.97, 0.05 if box_low else 0.97, txt, transform=ax.transAxes,
+            ha='right', va='bottom' if box_low else 'top', fontsize=8,
             bbox=dict(boxstyle='round,pad=0.3', facecolor='white',
                       edgecolor='0.7', linewidth=0.5, alpha=0.9))
 

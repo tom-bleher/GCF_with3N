@@ -7,10 +7,10 @@ looser lead cut (eq2 mode, theta_e in [8, 45], Q^2 > 1, theta_pq < 12 deg):
     R_3N  =  f_L^3N / f_R^3N  =  24.6 / 2.8    = 8.786
     R_2N  =  f_L^2N / f_R^2N  =  0.11 / 11.0   = 0.010
 
-They are NOT the paper's values. The paper cuts (theta_pq < 8 deg, see
-Paper_Figures_indepFSI/Fig5_summary.txt) give R_3N = 0.451, R_2N = 0.107;
-pass those with --R-3N/--R-2N (or use plot_fig6_R_xL.py). The plots label
-the defaults "theta_pq < 12 deg".
+They are NOT the paper's values. The paper's (e,e'pp) selection (theta_pq <
+8 deg, exactly 2 protons above kF, see Paper_Figures_indepFSI/Fig5_summary.txt)
+gives R_3N = 1.762, R_2N = 2.212; pass those with --R-3N/--R-2N (or use
+plot_fig6_R_xL.py). The plots label the defaults "theta_pq < 12 deg".
 
 For an event mixture with relative 2N-to-3N weighting parameterised by xL,
 
