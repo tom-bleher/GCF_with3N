@@ -388,6 +388,8 @@ bool QEGeneratorFSI::solve_lepton_kinematics(double &weight, int lead_type,
     weight *= 2.;
     if (myRand->Rndm() > 0.5) k_perp = (- b - sqrt(D))/2.;
   }
+  // Both roots negative: that is the phik+pi two-root case, already generated there
+  if (k_perp < 0.) { weight=0.; return false; }
 
   double k_plus = sq(k_perp)/k_minus;
   double kz = (k_plus - k_minus)/2.;
