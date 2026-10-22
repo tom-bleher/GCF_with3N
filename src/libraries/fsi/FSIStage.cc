@@ -1,5 +1,7 @@
 #include "fsi/FSIStage.hh"
 #include "constants.hh"
+#include "generator/gcfGenerator.hh"
+#include "TDatabasePDG.h"
 
 #include <iostream>
 #include <utility>
@@ -94,6 +96,39 @@ void TransportEvent(const StageInput &in, TransportMode mode, FSIModel model,
   out.ran = true;
   out.particles = cascade;
   out.particles.insert(out.particles.end(), passthrough.begin(), passthrough.end());
+}
+
+namespace {
+double ChargeOf(int pdg)
+{
+  const TParticlePDG *pd = TDatabasePDG::Instance()->GetParticle(pdg);
+  return pd ? pd->Charge() / 3. : 0.;   // TParticlePDG: units of |e|/3
+}
+} // namespace
+
+int CoulombCorrectFinalState(std::vector<FSIParticle> &particles, double deltaE)
+{
+  if (deltaE == 0.) return 0;
+  std::vector<FSIParticle> kept;
+  kept.reserve(particles.size());
+  int dropped = 0;
+  for (FSIParticle &part : particles) {
+    const double q = ChargeOf(part.pdg);
+    if (q < 0. && part.p4.E() - part.p4.M() <= -q * deltaE) { ++dropped; continue; }
+    if (q != 0.) gcfGenerator::coulombCorrection(part.p4, q * deltaE);
+    kept.push_back(part);
+  }
+  particles.swap(kept);
+  return dropped;
+}
+
+void CoulombUncorrect(std::vector<FSIInputNucleon> &particles, double deltaE)
+{
+  if (deltaE == 0.) return;
+  for (FSIInputNucleon &p : particles) {
+    const double q = ChargeOf(p.pdg);
+    if (q != 0.) gcfGenerator::coulombCorrection(p.p4, -q * deltaE);
+  }
 }
 
 } // namespace fsi
