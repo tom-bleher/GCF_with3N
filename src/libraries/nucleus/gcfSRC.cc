@@ -206,7 +206,15 @@ double gcfSRC::get_phiSq(double *phiPtr, double k_rel)
   if (bin < 0.)
     return 0.;
   if (bin < 1.)
-    return bin * phiPtr[0];
+    {
+      // Below the first table point (k = 0.1 fm^-1; normally reached only by the
+      // deuteron, via set_deuteron): Hulthen shape matched there, finite with zero
+      // slope at k = 0. alpha = sqrt(mN*B_d)/hbar c, beta = 1.385 fm^-1.
+      const double a2 = 0.2316*0.2316, b2 = 1.385*1.385, k2 = 0.01*bin*bin;
+      double h = 1./(k2 + a2) - 1./(k2 + b2);
+      double h0 = 1./(0.01 + a2) - 1./(0.01 + b2);
+      return phiPtr[0] * (h*h)/(h0*h0) / pow(GeVfm,3) / 100.;
+    }
   if (bin > 100.)
     return 0.;
   
