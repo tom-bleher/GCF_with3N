@@ -39,7 +39,8 @@ const double m_54Mn = 53.9403589 * mU - 25*me;
 const double m_54Fe = 53.9396090 * mU - 26*me;
 const double m_56Fe = 55.9349363 * mU - 26*me;
 
-// + total electron binding B_e(Z) in GeV (Lunney et al., RMP 75, 1021, Eq. A4)
+// + total electron binding B_e(Z) in GeV (Lunney et al., RMP 75, 1021, Eq. A4,
+//   doi:10.1103/RevModPhys.75.1021)
 const double m_206Hg = 205.977514 * mU - 80*me + 0.000534;
 const double m_206Tl = 205.9761103 * mU - 81*me + 0.000551;
 const double m_206Pb = 205.9744653 * mU - 82*me + 0.000568;
