@@ -225,7 +225,8 @@ cascade (vendored GENIE R-3_06_02):
   factors, for studies of which interaction does what.
 - **Known issues fixed on branches:** an unbounded retry inside GENIE that
   overflowed the stack for nucleons left with no allowed fate (#1), and the
-  Coulomb correction not being applied to the post-FSI list (#35).
+  Coulomb correction not being applied to the post-FSI list (#35; split
+  pipeline: #118).
 
 ## Assumptions and known limitations
 

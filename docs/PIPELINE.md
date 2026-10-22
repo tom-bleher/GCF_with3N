@@ -211,7 +211,10 @@ Only `nuc_pdg` and `nuc_px nuc_py nuc_pz nuc_E`, plus the target, from
 - no vertex (or `vtx_valid == 0`): one is drawn from ρⁿ(r) r² of the target,
   with n = 1, 2, 3 for 1, 2, ≥ 3 nucleons (`--vertex-power` overrides);
 - no `weight`, no `hAttempts`: fine, they are only passed through;
-- no `coulomb_dE`: no Coulomb correction.
+- no `coulomb_dE`: no Coulomb correction is applied. If the `gcf_generate`
+  provenance shows `--coulomb` (a file from before the branch existed),
+  `gcf_fsi` warns and its provenance records that `e_*` and `nuc_*` carry
+  the correction while `part_*` do not; with no provenance it prints a note.
 
 Protons and neutrons in the list are transported; anything else (a pion, say)
 is passed to the final state unchanged. All input branches are copied to the
@@ -251,7 +254,8 @@ q ΔE_C at fixed mass (protons and π⁺ gain ΔE_C, π⁻ loses it, neutrals ar
 untouched), and a negative particle with kinetic energy T ≤ |q| ΔE_C cannot
 leave the nucleus and is dropped (counted in the run summary and the
 `gcf_fsi` provenance). A nucleon with `part_rescatterCode == 1`, or every
-particle when `fsi_ran == 0`, therefore has exactly its `nuc_*` momentum.
+particle when `fsi_ran == 0`, therefore has its `nuc_*` momentum (to
+rounding, ~1e-15 GeV: the correction is taken off and put back).
 
 No particle is labelled "lead" or "recoil": that is a detection-level choice
 made in the analysis from types and momenta. Pauli blocking is GENIE's own; in
@@ -294,7 +298,7 @@ streams instead of one interleaved stream. The results agree statistically
   nucleons and rescattered nucleons and cascade pions are corrected too, as
   in `genQE_FSI -C`. Files from an older `gcf_generate` have no
   `coulomb_dE`; their cascade ran on the corrected nucleons and `part_*` stay
-  uncorrected (`gcf_fsi` warns).
+  uncorrected (`gcf_fsi` warns and says so in its provenance).
 - **Event counts**: `gcf_generate --events N` means N accepted events for
   every model; the combined 2N program counted attempts.
 - Not available in the stages yet: the 2N light-cone cross section and the

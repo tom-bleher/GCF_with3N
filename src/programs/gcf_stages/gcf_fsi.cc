@@ -177,6 +177,46 @@ bool WriteOverride(const string &dir, const string &srcDir, FSIModel model,
   return true;
 }
 
+// Coulomb state of an input without a coulomb_dE branch, read from its
+// gcf_generate provenance. Files from a gcf_generate before coulomb_dE
+// existed have e_* and the charged nuc_* corrected and nothing in the tree
+// says so; they are transported as they are (the old behavior). Prints a
+// warning or note and returns the text for the gcf_fsi provenance's
+// "coulomb:" line (empty: no correction involved, plain "none").
+string CoulombStateWithoutBranch(const string &input)
+{
+  TFile in(input.c_str(), "READ");
+  const TNamed *gen = in.Get<TNamed>("gcf_generate");
+  if (!gen) {
+    cout << "Note: the input has no coulomb_dE branch and no gcf_generate provenance: its "
+            "nuc_* are taken to carry no Coulomb correction, and none is applied.\n";
+    return "none (no coulomb_dE and no gcf_generate provenance in the input: none assumed)";
+  }
+  istringstream lines(gen->GetTitle());
+  string line, model;
+  bool requested = false;
+  while (getline(lines, line)) {
+    if (line.rfind("model: ", 0) == 0) model = line.substr(7);
+    if (line.rfind("command:", 0) != 0) continue;
+    // getopt_long takes any unambiguous prefix: --co ... --coulomb.
+    const string flag = "--coulomb";
+    istringstream tokens(line.substr(8));
+    string t;
+    while (tokens >> t)
+      if (t.size() >= 4 && t.size() <= flag.size() && flag.compare(0, t.size(), t) == 0)
+        requested = true;
+  }
+  // 3N: gcf_generate never applied --coulomb to it (now an error).
+  if (!requested || model == "3N") return "";
+  cerr << "Warning: the input was generated with --coulomb by a gcf_generate that did not "
+          "write coulomb_dE: its e_* and charged nuc_* carry the correction, the cascade "
+          "transports them as they are, and part_* get no Coulomb correction (nucleons that "
+          "left without interacting keep the one from generation). Regenerate the input to "
+          "have gcf_fsi apply it after the cascade.\n";
+  return "none (input generated with --coulomb by a gcf_generate without coulomb_dE: e_* and "
+         "the charged nuc_* carry the correction, the cascade ran on them, part_* not corrected)";
+}
+
 // Final-state buffers of the current event, shared by all output columns:
 // the cascade runs once per event (in the __gcf_fsi column) and the output
 // columns just read these.
@@ -440,16 +480,7 @@ int main(int argc, char **argv)
   node = node.Define("__gcf_vy", haveVertex ? "static_cast<double>(vtx_y)" : "0.");
   node = node.Define("__gcf_vz", haveVertex ? "static_cast<double>(vtx_z)" : "0.");
   node = node.Define("__gcf_dEC", has("coulomb_dE") ? "static_cast<double>(coulomb_dE)" : "0.");
-  if (!has("coulomb_dE")) {
-    // Files from gcf_generate before coulomb_dE existed: the nucleons carry
-    // the correction but nothing says so, and the products stay uncorrected.
-    TFile in(input.c_str(), "READ");
-    const TNamed *gen = in.Get<TNamed>("gcf_generate");
-    if (gen && string(gen->GetTitle()).find(" --coulomb") != string::npos)
-      cerr << "Warning: the input was generated with --coulomb but has no coulomb_dE branch "
-              "(older gcf_generate): the cascade transports the corrected nucleons and the "
-              "final state gets no Coulomb correction. Regenerate it to correct part_*.\n";
-  }
+  const string coulombNote = has("coulomb_dE") ? "" : CoulombStateWithoutBranch(input);
 
   node = node.Define("__gcf_fsi",
       [&runner](int A, int Z, const RVec<int> &pdg, const RVec<int> &role,
@@ -556,7 +587,7 @@ int main(int argc, char **argv)
            << runner.coulombDE << " GeV), negative particles dropped: "
            << runner.nCoulombDropped << "\n";
     else
-      prov << "none\n";
+      prov << (coulombNote.empty() ? "none" : coulombNote) << "\n";
     out.cd();
     TNamed("gcf_fsi", prov.str().c_str()).Write("gcf_fsi", TObject::kOverwrite);
   }
