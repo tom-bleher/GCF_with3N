@@ -17,7 +17,10 @@ from pathlib import Path
 OUTPUT_DIR = "analysis_output_2N/txt_files"
 PLOT_OUTPUT_DIR = "analysis_output_2N/png_files"
 
-# SRC pair CM width (GeV/c). Used to set sensible plotting ranges.
+# SRC pair CM width (GeV/c). Used to set sensible plotting ranges. This must match the
+# width that SRC_analysis_2N.cpp sets with set_sigmaCM() when it writes the files this
+# script reads (0.055 for its deuteron study); it is not the genQE default, which is the
+# per-nucleus value in gcfNucleus (0 for d, 0.10 for A = 3-6, 0.15 for A >= 12).
 SIGMA_CM = 0.055
 # Show pmiss_exc up to a few * sigma_CM
 PMISS_EXC_MAX = 4.0 * SIGMA_CM
