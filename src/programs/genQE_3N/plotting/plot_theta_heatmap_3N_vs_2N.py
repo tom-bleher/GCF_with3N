@@ -8,8 +8,10 @@ difference is the input sample.
 Cuts (default; flags can override):
     weight > 0
     detector tag:
-        - 3N: |p_lead| > kF AND at least one recoil above kF;
-              if both above kF, pick the higher-|p| one as the measured recoil.
+        - 3N: detected = final-state proton with |p| > kF (as Fig. 5);
+              --mode eq2: exactly 2 detected protons, ge2: at least 2.
+              lead = detected proton closest to q, recoil = the highest-|p|
+              other detected proton.
         - 2N: nAboveKF == 2 (both nucleons above kF; the only 2N-quality tag).
     theta_e < 45 deg
     Q^2 > 1.0 GeV^2
@@ -51,91 +53,63 @@ def angle_deg(ax, ay, az, bx, by, bz):
     return np.degrees(np.arccos(np.clip(dot / (a * b + 1e-30), -1.0, 1.0)))
 
 
-# ---------- 3N sample (raw genQE_3N_FSI tree) -------------------------------
+# ---------- 3N sample (genQE_3N_FSI genT, or its detection-based events) ----
+def _load_3N_events(path, ebeam, kF_thr):
+    """Return the detection-based (e,e'pp) `events` columns of a 3N sample.
+
+    Accepts the current genQE_3N_FSI `genT` (flat final-state particle list,
+    part_*), built on the fly with make_events_from_genT.build_events, or an
+    `events` tree already written by make_events_from_genT.py (the Fig. 5
+    input; its kF is the one it was built with)."""
+    from make_events_from_genT import GENT_BRANCHES, build_events
+    with uproot.open(path) as f:
+        if 'events' in f and 'nProtonAboveKF' in f['events'].keys():
+            return f['events'].arrays(
+                ['weight', 'lead', 'recoil', 'q', 'Q2', 'xB', 'pmiss',
+                 'scattering_angle', 'nProtonAboveKF'], library='np')
+        tree = f['genT']
+        if 'part_pdg' not in tree.keys():
+            raise ValueError(f'{path}: genT has no flat particle list (part_*); '
+                             'the old pLead/p2/p3/sec_* schema is not supported')
+        chunks = [build_events(a, ebeam, kF_thr)
+                  for a in tree.iterate(GENT_BRANCHES, library='ak',
+                                        step_size='200 MB')]
+    return {k: np.concatenate([c[k] for c in chunks]) for k in chunks[0]}
+
+
 def load_3N(path, ebeam, theta_e_max, Q2_min, xB_max, kF_thr,
             theta_pq_max=180.0, lead_over_q_min=0.0,
             pmiss_lo=0.0, pmiss_hi=1e9, mode='ge2',
             theta_e_min=0.0, stats=None,
             lead_over_q_max=1e9, xB_min=0.0, src_from_args=False):
+    """Detection-based (e,e'pp) selection, the same rule as Fig. 5: detected
+    = final-state PROTON with |p| > kF (neutrons are neither detected nor
+    counted), lead = detected proton closest in angle to q, recoil = the
+    highest-|p| other detected proton, p3 = -(p_lead - q + p_recoil).
+
+    mode 'eq2': exactly 2 detected protons (nProtonAboveKF == 2, as Fig. 5);
+    mode 'ge2': at least 2.
+    """
     print(f'Reading 3N+FSI: {path}')
-    with uproot.open(path) as f:
-        tree = f['genT']
-        arr = tree.arrays(['weight', 'pe', 'pLead', 'p2', 'p3'], library='np')
-        # Secondaries added 2026-07-20 so 3N uses the identical detection rule
-        # as 2N/MF. Older samples lack them -> fall back to primaries only.
-        has_sec_branches = 'sec_px' in tree.keys()
-        sec = (tree.arrays(['sec_px', 'sec_py', 'sec_pz', 'sec_pdg'], library='ak')
-               if has_sec_branches else None)
-    w  = arr['weight']
-    pe = arr['pe']
-    pL = arr['pLead']; p2 = arr['p2']; p3 = arr['p3']
-
-    qx = -pe[:, 0]; qy = -pe[:, 1]; qz = ebeam - pe[:, 2]
+    ev = _load_3N_events(path, ebeam, kF_thr)
+    w = ev['weight']
+    lead, rec, q = ev['lead'], ev['recoil'], ev['q']
+    Q2, xB, theta_e = ev['Q2'], ev['xB'], ev['scattering_angle']
+    nP = ev['nProtonAboveKF']
+    qx, qy, qz = q[:, 0], q[:, 1], q[:, 2]
     q_mag = np.sqrt(qx**2 + qy**2 + qz**2)
-    pe_mag = np.sqrt((pe**2).sum(axis=1))
-    omega = ebeam - pe_mag
-    Q2 = q_mag**2 - omega**2
-    xB = Q2 / (2.0 * mN * omega + 1e-30)
-    theta_e = np.degrees(np.arctan2(np.sqrt(pe[:, 0]**2 + pe[:, 1]**2),
-                                    pe[:, 2]))
-
-    pL_mag = np.sqrt((pL**2).sum(axis=1))
-    p2_mag = np.sqrt((p2**2).sum(axis=1))
-    p3_mag = np.sqrt((p3**2).sum(axis=1))
-
-    above_L  = pL_mag > kF_thr
-    above_p2 = p2_mag > kF_thr
-    above_p3 = p3_mag > kF_thr
-    only_p2 = above_p2 & ~above_p3
-    only_p3 = above_p3 & ~above_p2
-    both    = above_p2 & above_p3
-
-    # Leading above-kF secondary nucleon and how many exist (for the detection
-    # rule + the nAboveKF count), identical to the 2N/MF treatment.
-    n = len(w)
-    if sec is not None:
-        smag = np.sqrt(sec['sec_px']**2 + sec['sec_py']**2 + sec['sec_pz']**2)
-        sec_above = ((sec['sec_pdg'] == 2212) | (sec['sec_pdg'] == 2112)) & (smag > kF_thr)
-        n_sec_above = ak.to_numpy(ak.sum(sec_above, axis=1))
-        skey = ak.where(sec_above, smag, -1.0)
-        has_sec = ak.to_numpy(ak.fill_none(ak.max(skey, axis=1) > 0, False))
-        sidx = ak.argmax(skey, axis=1, keepdims=True)
-        sec_x = ak.to_numpy(ak.fill_none(ak.flatten(sec['sec_px'][sidx]), 0.0))
-        sec_y = ak.to_numpy(ak.fill_none(ak.flatten(sec['sec_py'][sidx]), 0.0))
-        sec_z = ak.to_numpy(ak.fill_none(ak.flatten(sec['sec_pz'][sidx]), 0.0))
-    else:
-        n_sec_above = np.zeros(n, dtype=int)
-        has_sec = np.zeros(n, dtype=bool)
-        sec_x = sec_y = sec_z = np.zeros(n)
-
-    nAbove = (above_L.astype(int) + above_p2.astype(int)
-              + above_p3.astype(int) + n_sec_above)
 
     if mode == 'eq2':
-        # Exactly 2 nucleons above kF among {lead, p2, p3, secondaries}; the
-        # lead is one, and the detected recoil is the UNIQUE other above-kF
-        # nucleon -- a surviving primary if it stayed above kF, else the leading
-        # above-kF ejected secondary. Same rule as load_2N.
-        detector = above_L & (nAbove == 2)
-        use_p2  = above_p2
-        use_p3  = above_p3 & ~above_p2
-        use_sec = (~above_p2) & (~above_p3) & has_sec
+        detector = nP == 2
     elif mode == 'ge2':
-        # lead above kF AND at least one recoil above kF; pick higher-|p|
-        detector = above_L & (above_p2 | above_p3)
-        use_p2 = detector & (only_p2 | (both & (p2_mag >= p3_mag)))
-        use_p3 = detector & (only_p3 | (both & (p3_mag >  p2_mag)))
-        use_sec = np.zeros(n, dtype=bool)
+        detector = nP >= 2
     else:
         raise ValueError(f"mode must be 'eq2' or 'ge2', got {mode!r}")
 
-    rx = np.where(use_p2, p2[:, 0], np.where(use_p3, p3[:, 0], sec_x))
-    ry = np.where(use_p2, p2[:, 1], np.where(use_p3, p3[:, 1], sec_y))
-    rz = np.where(use_p2, p2[:, 2], np.where(use_p3, p3[:, 2], sec_z))
-
-    p_miss_x = pL[:, 0] - qx
-    p_miss_y = pL[:, 1] - qy
-    p_miss_z = pL[:, 2] - qz
+    rx, ry, rz = rec[:, 0], rec[:, 1], rec[:, 2]
+    p_miss_x = lead[:, 0] - qx
+    p_miss_y = lead[:, 1] - qy
+    p_miss_z = lead[:, 2] - qz
     p_miss_mag = np.sqrt(p_miss_x**2 + p_miss_y**2 + p_miss_z**2)
 
     p3rec_x = -(p_miss_x + rx)
@@ -145,7 +119,8 @@ def load_3N(path, ebeam, theta_e_max, Q2_min, xB_max, kF_thr,
     theta12 = angle_deg(p_miss_x, p_miss_y, p_miss_z, rx, ry, rz)
     theta23 = angle_deg(rx, ry, rz, p3rec_x, p3rec_y, p3rec_z)
 
-    theta_pq    = angle_deg(pL[:, 0], pL[:, 1], pL[:, 2], qx, qy, qz)
+    pL_mag = np.sqrt(lead[:, 0]**2 + lead[:, 1]**2 + lead[:, 2]**2)
+    theta_pq    = angle_deg(lead[:, 0], lead[:, 1], lead[:, 2], qx, qy, qz)
     lead_over_q = pL_mag / (q_mag + 1e-30)
 
     mask = (np.isfinite(w) & (w > 0) & detector

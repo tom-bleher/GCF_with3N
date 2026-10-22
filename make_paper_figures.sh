@@ -3,18 +3,23 @@
 # with the unified detection-based (e,e'pp) selection. Outputs go to
 # Paper_Figures_eepp/ together with a README of the region fractions.
 # Usage: bash make_paper_figures.sh   (after run_paper_production.sh finished)
+# PY, OUT and the four sample paths (S3N_FSI, S3N_PWIA, S2N, SMF) can be
+# overridden from the environment, e.g. to read a production made in another
+# checkout (absolute paths):
+#   S3N_FSI=/path/events_3N_100M.root ... bash make_paper_figures.sh
 set -uo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 G3="$ROOT_DIR/src/programs/genQE_3N"
 G2="$ROOT_DIR/src/programs/genQE_FSI"
-PY="$G3/.venv/bin/python"
-OUT="$ROOT_DIR/Paper_Figures_eepp"
-mkdir -p "$OUT"
+PY="${PY:-$G3/.venv/bin/python}"
+[[ -x "$PY" ]] || PY="$(command -v python3)"
+OUT="${OUT:-$ROOT_DIR/Paper_Figures_eepp}"
+mkdir -p "$OUT" && OUT="$(cd "$OUT" && pwd)"   # absolute: the script cd's below
 
-S3N_FSI="$G3/events/events_3N_100M.root"
-S3N_PWIA="$G3/events/3N_PWIA_noCM_20M_events.root"
-S2N="$G2/events/misc/2N_hN_100M_6GeV_kF220_indep.root"
-SMF="$G2/events/misc/MF_localFG_hN_100M_6GeV_kF220.root"
+S3N_FSI="${S3N_FSI:-$G3/events/events_3N_100M.root}"
+S3N_PWIA="${S3N_PWIA:-$G3/events/3N_PWIA_noCM_20M_events.root}"
+S2N="${S2N:-$G2/events/misc/2N_hN_100M_6GeV_kF220_indep.root}"
+SMF="${SMF:-$G2/events/misc/MF_localFG_hN_100M_6GeV_kF220.root}"
 for f in "$S3N_FSI" "$S3N_PWIA" "$S2N" "$SMF"; do
   [[ -s "$f" ]] || { echo "ERROR: missing sample $f"; exit 1; }
 done

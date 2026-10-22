@@ -29,7 +29,9 @@ def fracs(t12, t23, w):
 
 for name, t12, t23, w in [('3N', t12_3, t23_3, w3), ('2N', t12_2, t23_2, w2)]:
     L, R, S, O = fracs(t12, t23, w)
-    print(f'{name}: L(lead-rkt)={L:6.2%}  R(recoil-rkt)={R:6.2%}  '
+    # L, at (0, 180): p1 || p2 with the reconstructed third nucleon opposite,
+    # so p3 is the rocket. R, at (180, 180): the recoil p2 is the rocket.
+    print(f'{name}: L(3rd-rkt)={L:6.2%}  R(recoil-rkt)={R:6.2%}  '
           f'Star={S:6.2%}  Other={O:6.2%}  (sum={L+R+S+O:.2%})')
 
 # ---- overlay figure ----
