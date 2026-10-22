@@ -53,10 +53,11 @@ void Usage()
     "  -Z, --target-Z Z         target charge (default 6)\n"
     "  -S, --seed S             random seed, positive (default: drawn and printed)\n"
     "  -c, --cs MODEL           eN cross section: onshell, cc1 (default), cc2\n"
-    "      --sigma-cm S         CM momentum width per component (GeV/c)\n"
+    "      --sigma-cm S         3N/2N: CM momentum width per component (GeV/c)\n"
     "      --q2 MIN:MAX         Q^2 window (GeV^2); 3N default open, 2N/MF default 1:10\n"
     "      --check              validate the options and set the generator up\n"
-    "                           (nucleus tables, ...), then exit without generating\n"
+    "                           (nucleus tables, ...) and try up to 10^6 events: fails\n"
+    "                           if none has a nonzero weight. Writes nothing\n"
     "  -v, --verbose            progress output\n"
     "  -h, --help               this message\n"
     "\n"
@@ -71,8 +72,9 @@ void Usage()
     "      --no-cm              no CM motion of the triplet\n"
     "\n"
     "2N / MF only:\n"
-    "      --nn MODEL           NN interaction for the 2N contacts (default AV18)\n"
-    "      --estar E            residual excitation energy E* (GeV)\n"
+    "      --nn MODEL           2N: NN interaction for the pair contacts (default AV18)\n"
+    "      --estar E            2N: residual excitation energy E* (GeV); MF leaves the\n"
+    "                           A-1 residual in its ground state\n"
     "      --kcut K             2N: relative-momentum cutoff (GeV/c, default 0.25)\n"
     "      --onset fixed|local  2N: SRC onset k_rel > kcut (default) or > k_F(r)\n"
     "      --prel-is            2N: importance-sample |p_rel| (lower variance)\n"
@@ -113,7 +115,8 @@ int main(int argc, char **argv)
   int A = 12, Z = 6, u = 1;
   bool sigCMSet = false, q2Set = false, kFSet = false, estarSet = false,
        kcutSet = false, kFfgSet = false, useCM = true, doRad = false,
-       doCoul = false, prelIS = false, verbose = false, checkOnly = false;
+       doCoul = false, prelIS = false, verbose = false, checkOnly = false,
+       nnSet = false, onsetSet = false;
 
   enum { kSigmaCM = 1000, kQ2, kThetaE, kKF, kNoCM, kNN, kEstar, kKcut,
          kOnset, kPrelIS, kFermiGas, kKFfg, kRad, kCoulomb, kPhaseSpace, kCheck };
@@ -182,10 +185,10 @@ int main(int argc, char **argv)
         break;
       case kKF: kF = atof(optarg); kFSet = true; break;
       case kNoCM: useCM = false; break;
-      case kNN: nnName = optarg; break;
+      case kNN: nnName = optarg; nnSet = true; break;
       case kEstar: estar = atof(optarg); estarSet = true; break;
       case kKcut: kcut = atof(optarg); kcutSet = true; break;
-      case kOnset: onset = optarg; break;
+      case kOnset: onset = optarg; onsetSet = true; break;
       case kPrelIS: prelIS = true; break;
       case kFermiGas: fermiGas = optarg; break;
       case kKFfg: kFfg = atof(optarg); kFfgSet = true; break;
@@ -215,7 +218,18 @@ int main(int argc, char **argv)
   if (onset != "fixed" && onset != "local") fail("--onset must be fixed or local");
   if (fermiGas != "global" && fermiGas != "local") fail("--fermi-gas must be global or local");
   if (model == "3N" && (!nnName.empty() && nnName != "AV18"))
-    fail("--nn applies to 2N/MF; the 3N wave function is chosen with --wave-function");
+    fail("--nn applies to 2N; the 3N wave function is chosen with --wave-function");
+  // The mean-field model has no pair: no contacts (--nn), no pair CM motion
+  // (--sigma-cm), no relative momentum (--kcut, --onset, --prel-is), and the
+  // A-1 residual is left in its ground state (--estar).
+  if (model == "MF") {
+    if (nnSet) fail("--nn applies to 2N, not MF (the mean-field weight has no NN contacts)");
+    if (sigCMSet) fail("--sigma-cm applies to 3N/2N, not MF (no SRC-cluster CM motion)");
+    if (estarSet) fail("--estar applies to 2N, not MF (the A-1 residual is left in its ground state)");
+    if (kcutSet) fail("--kcut applies to 2N, not MF (no SRC pair, so no relative-momentum cutoff)");
+    if (onsetSet) fail("--onset applies to 2N, not MF (the SRC onset is a property of the pair)");
+    if (prelIS) fail("--prel-is applies to 2N, not MF (no |p_rel| to importance-sample)");
+  }
   if (!ok) { cerr << "(gcf_generate --help for usage)\n"; return 1; }
   if (!output.empty()) output = AbsolutePath(output);
 
@@ -270,11 +284,37 @@ int main(int argc, char **argv)
     gen2->SetFermiGasMode(fermiGas == "local" ? QEGeneratorFSI::kLocalFG
                                               : QEGeneratorFSI::kGlobalFG);
     if (kFfgSet) gen2->SetFermiMomentumFG(kFfg);
+    // Without the A-1 masses every MF event gets weight 0 and the run would
+    // spin to the attempt limit.
+    if (model == "MF" && (nucleus->get_mAm1p() <= 0. || nucleus->get_mAm1n() <= 0.)) {
+      cerr << "Error: --model MF needs the A-1 residual masses, which the nucleus tables "
+              "have only for 12C (not A=" << A << ", Z=" << Z << ")\n";
+      return 1;
+    }
   }
 
   if (checkOnly) {
+    // A setup can be valid and still never give a nonzero weight (an empty
+    // phase space): try events until the first one is accepted.
+    const long long kCheckAttempts = 1000000LL;
+    long long tried = 0;
+    double w = 0.;
+    while (w <= 0. && tried < kCheckAttempts) {
+      int t1, t2, t3;
+      TLorentzVector vk, v1, v2, v3, vRes;
+      if (gen3) gen3->generate_event(w, t1, t2, t3, vk, v1, v2, v3, vRes, useCM);
+      else if (model == "2N") gen2->generate_event(w, t1, t2, vk, v1, v2, vRes);
+      else gen2->generate_event_MF(w, t1, t2, vk, v1, v2, vRes);
+      ++tried;
+    }
+    if (w <= 0.) {
+      cerr << "Error: no event with a nonzero weight in " << tried << " attempts: the "
+           << "requested phase space looks empty. Check the beam energy, target and windows.\n";
+      return 1;
+    }
     cout << "OK: " << model << " on A=" << A << " Z=" << Z << " at " << beamE
-         << " GeV is set up; nothing generated (--check)\n";
+         << " GeV is set up (first accepted event after " << tried
+         << " attempts); nothing written (--check)\n";
     return 0;
   }
 
