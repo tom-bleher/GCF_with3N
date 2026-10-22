@@ -4,9 +4,11 @@
 For each model-specific option in tools/gcf/schema.py (an Opt whose `models`
 is not all of them) and each model, runs `gcf_generate --check` with that
 option and checks that it is accepted (exit 0) when the schema lists the model
-and rejected with an "applies to" error (exit 1) when it does not. This keeps
-the binary's option table (kModelOptions in gcf_generate.cc) and the front
-end's schema in agreement.
+and rejected with an "applies to" error (exit 1) when it does not, and that
+the options for every model (--cs, --q2) are accepted by each. Before that it
+compares the binary's option table (kModelOptions in gcf_generate.cc) with the
+schema directly. Together this keeps the binary and the front end's schema in
+agreement.
 
     python3 src/programs/gcf_stages/test_model_options.py [path/to/gcf_generate]
 
@@ -16,6 +18,7 @@ next to this file.
 """
 
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -32,9 +35,32 @@ BASE = {
 }
 
 
+def table_mismatches():
+    """kModelOptions in gcf_generate.cc against the model-specific Opts of the
+    schema: the same flags with the same models (no binary needed)."""
+    src = open(os.path.join(HERE, "gcf_generate.cc")).read()
+    body = re.search(r"kModelOptions\[\]\s*=\s*\{(.*?)\n\};", src, re.S)
+    if not body:
+        return ["kModelOptions not found in gcf_generate.cc"]
+    binary = {flag: set(models.split("/"))
+              for flag, models in re.findall(r'\{"(--[\w-]+)",\s*"([\w/]+)"', body.group(1))}
+    schema_tab = {o.flag: set(o.models) for o in schema.GENERATE
+                  if o.flag is not None and set(o.models) != set(schema.MODELS)}
+    out = []
+    for flag in sorted(set(binary) | set(schema_tab)):
+        b, s = binary.get(flag), schema_tab.get(flag)
+        if b != s:
+            out.append(f"{flag}: gcf_generate.cc {sorted(b) if b else 'every model'}, "
+                       f"schema.py {sorted(s) if s else 'every model'}")
+    return out
+
+
 def sample_values(phase_space_file):
-    """A valid, non-default command-line value for every model-specific option."""
+    """A valid, non-default command-line value for every option with a flag
+    (other than model, beam and events)."""
     return {
+        "cs": ["--cs", "cc2"],
+        "q2": ["--q2", "2:8"],
         "sigma_cm": ["--sigma-cm", "0.12"],
         "wave_function": ["--wave-function", "AV18+UIX"],
         "theta_e": ["--theta-e", "10:30"],
@@ -61,18 +87,20 @@ def run(binary, args):
 
 def main():
     binary = sys.argv[1] if len(sys.argv) > 1 else os.path.join(HERE, "build", "gcf_generate")
-    failures, checked = [], 0
+    failures, checked = table_mismatches(), 0
+    for f in failures:
+        print(f"FAIL table: {f}")
     with tempfile.NamedTemporaryFile("w", suffix=".txt", delete=False) as ps:
         ps.write("QSq 1 10\n")
     try:
         samples = sample_values(ps.name)
-        specific = [o for o in schema.GENERATE
-                    if o.flag is not None and set(o.models) != set(schema.MODELS)]
-        missing = [o.key for o in specific if o.key not in samples]
+        flagged = [o for o in schema.GENERATE
+                   if o.flag is not None and o.key not in ("model", "beam", "events")]
+        missing = [o.key for o in flagged if o.key not in samples]
         if missing:
             print(f"FAIL: no test value for {missing}; add them to sample_values()")
             return 1
-        cases = [(o.key, samples[o.key], o.models) for o in specific]
+        cases = [(o.key, samples[o.key], o.models) for o in flagged]
         # Other spellings of the same options.
         cases += [("wave_function (-u)", ["-u", "AV18+UIX"], ["3N"]),
                   ("wave_function (--interaction)", ["--interaction", "2"], ["3N"]),

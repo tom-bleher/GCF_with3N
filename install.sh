@@ -597,6 +597,15 @@ if [[ $DO_TEST -eq 1 ]]; then
         smoke gcf_fsi "$REPO_DIR" exact $NEV "$SMOKE_DIR/gcf_fsi.root" \
             "$STAGES_DIR/build/gcf_fsi" --input "$SMOKE_DIR/gcf_pwia.root" \
             --output "$SMOKE_DIR/gcf_fsi.root"
+        # Each model accepts its own options and rejects the others', the same
+        # way as tools/gcf/schema.py (a few seconds).
+        if command -v python3 >/dev/null 2>&1; then
+            opt_log="$LOG_DIR/smoke-model-options.log"
+            python3 "$STAGES_DIR/test_model_options.py" "$STAGES_DIR/build/gcf_generate" \
+                >"$opt_log" 2>&1 \
+                || die "smoke test model-options: gcf_generate and tools/gcf/schema.py disagree; see $opt_log"
+            info "$(printf '%-13s %s' model-options "$(tail -n 1 "$opt_log")")"
+        fi
     fi
     step_done
 fi

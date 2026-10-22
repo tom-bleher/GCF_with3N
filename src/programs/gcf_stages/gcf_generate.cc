@@ -54,7 +54,6 @@ void Usage()
     "  -Z, --target-Z Z         target charge (default 6)\n"
     "  -S, --seed S             random seed, positive (default: drawn and printed)\n"
     "  -c, --cs MODEL           eN cross section: onshell, cc1 (default), cc2\n"
-    "      --sigma-cm S         3N/2N: CM momentum width per component (GeV/c)\n"
     "      --q2 MIN:MAX         Q^2 window (GeV^2); 3N default open, 2N/MF default 1:10\n"
     "      --check              validate the options and set the generator up\n"
     "                           (nucleus tables, ...) and try up to 10^6 events: fails\n"
@@ -71,6 +70,10 @@ void Usage()
     "      --kF K               internal-momentum cutoff k > kF (GeV/c, default 0.25);\n"
     "                           also sets sigma-cm = sqrt(3/5) kF unless given\n"
     "      --no-cm              no CM motion of the triplet\n"
+    "\n"
+    "3N and 2N:\n"
+    "      --sigma-cm S         CM momentum width of the SRC cluster per component\n"
+    "                           (GeV/c; default 0.15 for 3N, the nucleus table for 2N)\n"
     "\n"
     "2N only:\n"
     "      --nn MODEL           NN interaction for the pair contacts (default AV18)\n"
@@ -119,7 +122,7 @@ struct ModelOption {
 const ModelOption kModelOptions[] = {
   {"--sigma-cm", "3N/2N", "CM motion of the SRC cluster; MF has no cluster"},
   {"--wave-function", "3N", "three-body density of the triplet; 2N uses --nn"},
-  {"--theta-e", "3N", "electron-angle window of the 3N generator; 2N/MF limits go in --phase-space"},
+  {"--theta-e", "3N", "electron-angle window of the 3N generator; the 2N/MF generator has none"},
   {"--kF", "3N", "internal-momentum cutoff of the triplet; 2N uses --kcut, MF --kF-fg"},
   {"--no-cm", "3N", "CM motion of the triplet; 2N sets its width with --sigma-cm"},
   {"--nn", "2N", "NN interaction of the pair contacts; 3N uses --wave-function, MF has no contacts"},
