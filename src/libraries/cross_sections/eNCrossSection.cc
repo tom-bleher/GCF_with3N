@@ -4,7 +4,7 @@
 #include "helpers.hh"
 #include "constants.hh"
 
-// Parameters for Ye
+// Parameters for Ye (Ye et al., PLB 777, 8 (2018), doi:10.1016/j.physletb.2017.11.023)
 const double params_ye_GEp[13]={0.239163298067,-1.109858574410,1.444380813060,0.479569465603,-2.286894741870,1.126632984980,1.250619843540,-3.631020471590,4.082217023790,0.504097346499,-5.085120460510,3.967742543950,-0.981529071103};
 const double params_ye_GEn[13]={0.048919981379,-0.064525053912,-0.240825897382,0.392108744873,0.300445258602,-0.661888687179,-0.175639769687,0.624691724461,-0.077684299367,-0.236003975259,0.090401973470,0.,0.};
 const double params_ye_GMp[13]={0.264142994136,-1.095306122120,1.218553781780,0.661136493537,-1.405678925030,-1.356418438880,1.447029155340,4.235669735900,-5.334045653410,-2.916300520960,8.707403067570,-5.706999943750,1.280814375890};
@@ -57,8 +57,9 @@ double eNCrossSection::sigma_CC(double Ebeam,TVector3 k, TVector3 p, bool isProt
 }
 
 // Four-vector product in De Forest's (Pauli) metric, a.b = a_vec.b_vec - a0*b0:
-// his four-vectors are (p, iE) (Nucl. Phys. A 392 (1983) 232, p. 234), and the
-// cc2 responses below are his eq. (18) (cc1: eq. (17)) in that convention.
+// his four-vectors are (p, iE) (Nucl. Phys. A 392 (1983) 232, p. 234,
+// doi:10.1016/0375-9474(83)90124-0), and the cc2 responses below are his
+// eq. (18) (cc1: eq. (17)) in that convention.
 double dot4(double x0, TVector3 x, double y0, TVector3 y)
 {
   return ((x*y)-(x0*y0));
@@ -194,7 +195,7 @@ double eNCrossSection::GEn(double QSq) // This will use the Galster parameteriza
     case dipole:
       return mu_n * tau / (1. + 5.6 * tau) * Gdipole(QSq); // the original Galster numbers
     case kelly:
-      return 1.70 * tau / (1. + 3.3 * tau) * Gdipole(QSq); // params from Kelly paper
+      return 1.70 * tau / (1. + 3.3 * tau) * Gdipole(QSq); // params from Kelly paper (PRC 70, 068202, doi:10.1103/PhysRevC.70.068202)
     case ye:
       return Gye(QSq,params_ye_GEn);
     default:

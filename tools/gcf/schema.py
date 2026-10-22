@@ -64,6 +64,7 @@ GENERATE = [
     Opt("events", "int", "--events", 10000, label="Events",
         help="Number of accepted (weight > 0) events in total, over all jobs."),
     Opt("target", "target", None, [12, 6], label="Target (A, Z)"),
+    # De Forest: Nucl. Phys. A 392, 232 (1983), doi:10.1016/0375-9474(83)90124-0
     Opt("cs", "str", "--cs", "cc1", choices=["cc1", "cc2", "onshell"],
         label="eN cross section", help="De Forest cc1 (default), cc2, or on-shell.", advanced=True),
     Opt("sigma_cm", "float", "--sigma-cm", None, label="sigma_CM", unit="GeV/c",

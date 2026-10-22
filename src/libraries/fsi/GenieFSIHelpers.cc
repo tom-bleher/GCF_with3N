@@ -139,7 +139,8 @@ void ResolveGenieXMLPath()
 
 namespace {
 // SRC-pair vertex radial weight rho^n(r) r^2. Default n=2 (pair density);
-// n=1 reproduces GENIE's one-body vertex (the Wright et al. paper setup).
+// n=1 reproduces GENIE's one-body vertex (the Wright et al. paper setup,
+// arXiv:2104.05090, doi:10.48550/arXiv.2104.05090).
 int gSRCVertexRhoPower = 0;   // 0 = unresolved: env or default on first use
 int resolveSRCVertexRhoPower()
 {

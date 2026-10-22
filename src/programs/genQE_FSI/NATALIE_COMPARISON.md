@@ -1,7 +1,8 @@
 # Reproducing Wright et al. (arXiv:2104.05090)
 
 Every known difference between our 2N GCF generator + GENIE chain and hers, as
-of 2026-08-30. Her code is `github.com/nwright38/GCF_GENIE` @ `fc45782a`
+of 2026-08-30. The paper: N. Wright et al., arXiv:2104.05090,
+[doi:10.48550/arXiv.2104.05090](https://doi.org/10.48550/arXiv.2104.05090). Her code is `github.com/nwright38/GCF_GENIE` @ `fc45782a`
 (2021-03-29) — the commit immediately preceding the 2021-04-11 arXiv posting.
 
 ## Where we now match
@@ -351,7 +352,8 @@ Defaults of `natalie_paper_plots.py --convention detector` (all switchable):
   but still (e,e'p)); `all` (each such proton gives its own (e,e'pp) entry);
   `exactly2` (exactly two accepted protons in total -- the topology of the CLAS
   data file, whose 605 events all have two protons); `highest` (old rule).
-  The CLAS papers (Cohen PRL 121 092501; Duer PRL 122 172502) define the recoil
+  The CLAS papers (Cohen PRL 121 092501, [doi:10.1103/PhysRevLett.121.092501](https://doi.org/10.1103/PhysRevLett.121.092501);
+  Duer PRL 122 172502, [doi:10.1103/PhysRevLett.122.172502](https://doi.org/10.1103/PhysRevLett.122.172502)) define the recoil
   as a second proton >= 350 MeV/c and publish no multi-recoil rule.
 - `--convention wright` now applies her rotation as well: gate rotated, while
   the lead weight (1853) and the lottery (1697) read the map at the unsmeared,

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Acceptance analysis of run_eic_sim.sh runs: e + A -> e' N_lead N_rec (A-2), cf. PRC 105, 034001.
+"""Acceptance analysis of run_eic_sim.sh runs: e + A -> e' N_lead N_rec (A-2), cf. PRC 105, 034001
+(doi:10.1103/PhysRevC.105.034001).
 
 Two steps:
 
@@ -983,7 +984,8 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
 
 # ----------------------------------------------------------------------------- contact uncertainty band
 
-# GCF k-space contacts from the Scale and Scheme paper with their uncertainties, as set in
+# GCF k-space contacts from the Scale and Scheme paper (Cruz-Torres et al., Nature Phys. 17, 306,
+# doi:10.1038/s41567-020-01053-7) with their uncertainties, as set in
 # src/libraries/nucleus/gcfSRC.cc (set_Contacts_SS_k, AV18), per A/2; gcfSRC::randomize_Contacts
 # varies each one independently with a Gaussian of this width
 CONTACTS_SS_K = {"C12": {"Cpp0": (1.140, 0.210), "Cnn0": (1.140, 0.210), "Cpn0": (1.244, 0.319), "Cpn1": (15.876, 1.770)}}

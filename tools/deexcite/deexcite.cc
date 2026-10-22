@@ -1,6 +1,6 @@
 // De-excite the A-2 remnant of GCF events with Geant4's nuclear de-excitation (evaporation,
 // Fermi break-up for light nuclei, photon emission), as a replacement for the evaporation
-// stage of BeAGLE in PRC 105, 034001.
+// stage of BeAGLE in PRC 105, 034001 (doi:10.1103/PhysRevC.105.034001).
 //
 //   deexcite IN.hepmc3 OUT.hepmc3 [--seed S] [--json OUT.json]
 //
