@@ -36,6 +36,20 @@ The executables will then be located in subdirectories of the ```[build]/program
 [build]/programs/genQE/genQE
 ```
 
+## Authors
+
+In order of first contribution (from the git history):
+
+- Jackson Pybus ([@JacksonPybus](https://github.com/JacksonPybus)), 2020–2023
+- Phoebe Sharp ([@psharp15](https://github.com/psharp15)), 2020–2021
+- Alex Kiral ([@a-kiral](https://github.com/a-kiral)), 2020
+- Axel Schmidt ([@schmidta87](https://github.com/schmidta87)), 2020–2023
+- Andrew Denniston ([@awild7](https://github.com/awild7)), 2025 (3N generator)
+- Idey ([@ilayws](https://github.com/ilayws)), 2026
+- Tom Bleher ([@tom-bleher](https://github.com/tom-bleher)), 2026
+
+`git shortlog -sn` gives per-author commit counts; `.mailmap` merges each author's name and email variants.
+
 ## Meta
 
 This repository is maintained by Jackson Pybus (jrpybus@mit.edu).
