@@ -55,6 +55,9 @@ slide("Common Engine: Weighted Monte Carlo", [
     ("Physics factors multiplied in: structure/density function, e-N cross section, energy-conservation Jacobians.", 0),
     ("Kinematically invalid trial -> weight=0, discarded. Surviving events + weights -> ROOT TTree (weight-summed cross sections).", 0),
     ("Beam: electron along z, fixed energy.", 0),
+    # De Forest: NPA 392, 232, doi:10.1016/0375-9474(83)90124-0. Kelly: PRC 70, 068202,
+    # doi:10.1103/PhysRevC.70.068202. Ye: PLB 777, 8, doi:10.1016/j.physletb.2017.11.023.
+    # Galster: NPB 32, 221, doi:10.1016/0550-3213(71)90068-X.
     ("e-N cross section sigma_eN: De Forest CC1 (default) or CC2 off-shell, or on-shell Rosenbluth.", 0),
     ("Form factors: Kelly (default); dipole or Ye (Galster for neutron electric) optional.", 0),
     ("Optional: electron radiative corrections (peaking approx.) and Coulomb correction. Off by default.", 0),

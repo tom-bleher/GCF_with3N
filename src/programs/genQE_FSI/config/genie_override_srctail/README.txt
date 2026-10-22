@@ -22,7 +22,8 @@ This is the model Intranuke draws its cascade *target* nucleons from, so it
 sets the momentum an FSI knock-out nucleon can carry. That matters most for
 the mean-field sample, where the second detected proton can ONLY be an FSI
 product: without the tail those knock-outs are capped near the local Fermi
-momentum, with it they reach ~1 GeV/c. The paper's Fig 8 turns on the MF
+momentum, with it they reach ~1 GeV/c. Fig 8 of the paper (Wright et al.,
+arXiv:2104.05090, doi:10.48550/arXiv.2104.05090) turns on the MF
 pair c.m. distribution being much BROADER than the GCF one, so this is a
 first-order setting for that figure, not the second-order systematic the
 old note assumed.

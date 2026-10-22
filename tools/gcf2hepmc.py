@@ -81,6 +81,7 @@ def parse_args():
                          "trees that do not store q (genQE_3N_FSI), and checked against --beams")
     ap.add_argument("--rtol", type=float, default=1e-3,
                     help="allowed relative mismatch between the run's and the beams' E_IRF (default 1e-3)")
+    # --paper-cuts: the cuts of PRC 105, 034001 (doi:10.1103/PhysRevC.105.034001)
     ap.add_argument("--paper-cuts", action="store_true", help="Q2 > 3 GeV^2 and xB > 1.2 (PRC 105, 034001)")
     ap.add_argument("--q2-min", type=float, help="keep Q2 > this [GeV^2]")
     ap.add_argument("--q2-max", type=float, help="keep Q2 < this [GeV^2]")

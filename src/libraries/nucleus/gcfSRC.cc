@@ -218,6 +218,8 @@ double gcfSRC::get_phiSq(double *phiPtr, double k_rel)
 
 void gcfSRC::set_Contacts()
 {
+    // "Scale and Scheme paper": R. Cruz-Torres et al., Nature Phys. 17, 306 (2021),
+    // doi:10.1038/s41567-020-01053-7
     if (set_Contacts_SS_k())
     {
       std::cout << "You are using k-space contact values from the Scale and Scheme paper.\n";
@@ -1043,7 +1045,8 @@ bool gcfSRC::set_Contacts_deut()
 
 bool gcfSRC::set_Contacts_EG2()
 {
-  // C1 is in percent per A/2 (Weiss et al., PLB 780, 211, Table I), like the SS sets
+  // C1 is in percent per A/2 (Weiss et al., PLB 780, 211, Table I,
+  // doi:10.1016/j.physletb.2018.01.061), like the SS sets
 
   if ((Z==6) && (N==6))
     {

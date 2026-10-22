@@ -30,7 +30,8 @@ QEGenerator_3N::QEGenerator_3N(double E, eNCrossSection * thisCS, int thisU, TRa
   vbeam.SetXYZ(0.,0.,Ebeam);
   vbeam_target.SetXYZT(0.,0.,Ebeam,Ebeam);
 
-  sigCM = 0.15;  // 12C 2N SRC pair CM width, literature value (Cohen et al.)
+  sigCM = 0.15;  // 12C 2N SRC pair CM width, literature value (Cohen et al.,
+                 // PRL 121, 092501, doi:10.1103/PhysRevLett.121.092501)
   fkMinInternal = 0.25;  // GeV/c, lower cutoff on the internal (wavefunction-
                          // frame) momenta; settable to the nuclear kF
   fQ2min = 0.;

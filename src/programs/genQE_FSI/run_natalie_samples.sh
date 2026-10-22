@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 #
 # run_natalie_samples.sh — produce the matched samples for the
-# Wright et al. (arXiv:2104.05090) paper comparison, with the paper's
-# conventions PINNED:
+# Wright et al. (arXiv:2104.05090, doi:10.48550/arXiv.2104.05090) paper
+# comparison, with the paper's conventions PINNED:
 #
 #   * Ebeam = 5.01 GeV, 12C, sigma_CM = 0.150 GeV/c
 #   * FSI model hA (paper page 3), shared record (both nucleons in ONE

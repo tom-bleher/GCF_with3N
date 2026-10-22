@@ -22,7 +22,7 @@ Two GENIE cascade models are available, selectable at runtime:
 
 | Model | Class | Description | Speed |
 |---|---|---|---|
-| **hN** (default) | `HNIntranuke2018` | Full intranuclear cascade. Steps the hadron through the nucleus in 0.05 fm increments, resolving individual hadron-nucleon collisions. Includes medium corrections (Salcedo-Oset for pions, Pandharipande-Pieper for NN). | ~1x |
+| **hN** (default) | `HNIntranuke2018` | Full intranuclear cascade. Steps the hadron through the nucleus in 0.05 fm increments, resolving individual hadron-nucleon collisions. Includes medium corrections (Salcedo-Oset for pions, [doi:10.1016/0375-9474(88)90310-7](https://doi.org/10.1016/0375-9474(88)90310-7); Pandharipande-Pieper for NN, [doi:10.1103/PhysRevC.45.791](https://doi.org/10.1103/PhysRevC.45.791)). | ~1x |
 | **hA** | `HAIntranuke2018` | Effective cascade. Uses total hadron-nucleus cross sections to decide the outcome in one step. Faster but less detailed. | ~5-10x |
 
 For SRC studies, **hN is recommended** because it accurately models nucleon rescattering with proper angular distributions and secondary particle production. Use hA for fast exploratory runs or systematics scans.
@@ -203,7 +203,7 @@ The generators work in the target rest frame with the electron along +z. An EIC 
 # rest-frame electron energy: 440.33 GeV for e+12C at 5x41, 2362.49 GeV at 10x110
 E=$(../../../tools/gcf2hepmc.py --beams 5x41 --ion C12 --print-ebeam-irf)
 printf 'QSq 3 25\n' > ps_eic.txt
-./build/genQE 6 6 $E gen.root 200000 -P ps_eic.txt -M          # PRC 105, 034001 settings
+./build/genQE 6 6 $E gen.root 200000 -P ps_eic.txt -M          # PRC 105, 034001 settings (doi:10.1103/PhysRevC.105.034001)
 ../../../tools/gcf2hepmc.py gen.root gen.hepmc3 --beams 5x41 --ion C12 --paper-cuts
 # inside eic-shell:
 abconv -p ip6_eAu_41x5 -f hepmc3 -o ab gen.hepmc3
@@ -218,7 +218,7 @@ npsim --compactFile geometry.xml --inputFiles ab.hepmc --outputFile sim.edm4hep.
   - Default geometry: `epic_craterlake_5x41` with `fields/beamline_5x41_He4.xml` (Z/A = ½ rigidity), and `epic_craterlake_10x110_H2` for 10x110.
   - abconv always draws the same random sequence (it has no seed option), so the script runs it once over the whole sample and only then splits the events into jobs.
   - **Q² slices.** With flat Q² sampling, Q² = 3–5 GeV² carries about 90% of the cross section but only about 9% of the events. Production therefore runs disjoint slices (`--q2 3:5`, `--q2 5:12`, `--q2 12:25`), each a separate run with its own seed. Each slice is normalized by its own attempts (in `run.json`), and the slices add: 0.0312 + 0.0039 + 0.0001 nb equals the single 3–25 GeV² run, 0.035 nb (¹²C, 5x41, paper cuts).
-  - **Other generators.** `--generator genQE_FSI` runs GENIE FSI. Add `--gen-args "-n"` to switch FSI off (a PWIA baseline from the same generator; it reproduces genQE to 2%), or `--gen-args "-n -F 0.25" --no-cuts` for single-nucleon mean-field knockout (PRC 105, 034001 Fig. 7). E* sampling (`-M`) is added only for SRC pairs in A > 2 nuclei: for the deuteron it would give the empty remnant a mass.
+  - **Other generators.** `--generator genQE_FSI` runs GENIE FSI. Add `--gen-args "-n"` to switch FSI off (a PWIA baseline from the same generator; it reproduces genQE to 2%), or `--gen-args "-n -F 0.25" --no-cuts` for single-nucleon mean-field knockout (PRC 105, 034001 Fig. 7, [doi:10.1103/PhysRevC.105.034001](https://doi.org/10.1103/PhysRevC.105.034001)). E* sampling (`-M`) is added only for SRC pairs in A > 2 nuclei: for the deuteron it would give the empty remnant a mass.
   - **Beyond quasielastic 2N.** `--generator genQE_3N_FSI` (3N SRC; `--attempts` counts accepted events, about 8% pass the paper cuts; the rest-frame electron window scales as 1/E_IRF) and `--generator genDIS --no-cuts` (tagged DIS off an SRC pair with CT18NN PDFs; the electron, recoil and A-2 remnant are simulated, the unhadronized struck system is not). The analysis makes the 3N recoil-tagging figure (0, 1 or 2 recoils detected, by recoil pair) and the tagged-DIS figures (recoil acceptance vs the spectator light-cone fraction alpha_s and momentum; tagged yield over x' and Q2).
   - **Reconstructed momenta.** The analysis stores each nucleon's reconstructed momentum (B0/central track, or reconstructed ZDC neutron) boosted back to the ion rest frame with the nominal crossing angle and boost. Fig. 2 gives dp/p vs p; Fig. 6's blue points are the spectrum in reconstructed p_IRF, the analog of the paper's smeared points. RP/OMD have no reconstruction for ion beams.
   - **Evaporation.** `--deexcite` breaks up the excited A−2 remnant (E* from genQE `-M`) with Geant4's nuclear de-excitation (evaporation, Fermi break-up, photon emission) before the afterburner, in place of the BeAGLE evaporation of PRC 105, 034001. The tool is `tools/deexcite` (build it inside eic-shell: `cmake -S tools/deexcite -B tools/deexcite/build && cmake --build tools/deexcite/build`). It breaks the remnant up at rest with mass M_gs + E*, boosts the products back, checks A, Z and four-momentum conservation, keeps the remnant as status 2 and appends the products after all other particles, so the analysis finds e', lead and recoil where it always does. `gen_deex.hepmc3.json` records the products and checks. With the seed of an earlier genQE run and fewer `--attempts`, the generator writes exactly that run's first events, so an evaporation run can be compared event by event with a run without it. The analysis then adds `figEvap_angles_momenta.pdf` (Fig. 3 with evaporation nucleons, their rest-frame momenta) and an `evaporation` block in `summary.json` (multiplicities, far-forward detection, overlap with tagged recoil neutrons in the ZDC).
@@ -331,7 +331,7 @@ Key tunable parameters (both models share these via the `Intranuke2018` base cla
 | `INUKE-NucAbsFac` | 1.0 | Absorption cross section scale factor |
 | `INUKE-NucQEFac` | 1.0 | Quasi-elastic cross section scale factor |
 | `INUKE-NucCEXFac` | 1.0 | Charge exchange cross section scale factor |
-| `INUKE-XsecNNCorr` | true | Pandharipande-Pieper medium corrections for NN |
+| `INUKE-XsecNNCorr` | true | Pandharipande-Pieper medium corrections for NN ([doi:10.1103/PhysRevC.45.791](https://doi.org/10.1103/PhysRevC.45.791)) |
 | `INUKE-DoFermi` | true | Enable Fermi motion of target nucleons |
 | `INUKE-DoCompoundNucleus` | true | Enable compound nucleus formation |
 
@@ -339,7 +339,7 @@ hN-specific parameters:
 
 | Parameter | Default | Description |
 |---|---|---|
-| `HNINUKE-UseOset` | true | Salcedo-Oset medium corrections for pion-nucleon |
+| `HNINUKE-UseOset` | true | Salcedo-Oset medium corrections for pion-nucleon ([doi:10.1016/0375-9474(88)90310-7](https://doi.org/10.1016/0375-9474(88)90310-7)) |
 | `HNINUKE-AltOset` | false | Alternative Oset parameterization |
 
 ### Fermi momentum (Pauli blocking)
@@ -518,6 +518,6 @@ For targets with A <= 4 (e.g., deuterium, He-3, He-4), the residual nucleus afte
 
 - GENIE Physics and User Manual (v3.06): INTRANUKE models (hA, hN)
 - S. Dytman, "FSI models in GENIE" (2025, CERN Indico)
-- Papadopoulou et al. (e4nu), Phys. Rev. D 103, 113003 (2021) — GENIE FSI validation with electron scattering
-- Harewood & Gran, arXiv:1906.10576 (2019) — GENIE hA elastic scattering corrections
-- Nikolakopoulos et al., arXiv:2202.01689 (2022) — Cascade model validation
+- Papadopoulou et al. (e4nu), Phys. Rev. D 103, 113003 (2021), [doi:10.1103/PhysRevD.103.113003](https://doi.org/10.1103/PhysRevD.103.113003) — GENIE FSI validation with electron scattering
+- Harewood & Gran, arXiv:1906.10576 (2019), [doi:10.48550/arXiv.1906.10576](https://doi.org/10.48550/arXiv.1906.10576) — GENIE hA elastic scattering corrections
+- Nikolakopoulos et al., Phys. Rev. C 105, 054603 (2022), arXiv:2202.01689, [doi:10.1103/PhysRevC.105.054603](https://doi.org/10.1103/PhysRevC.105.054603) — Cascade model validation

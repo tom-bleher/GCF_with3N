@@ -43,7 +43,8 @@ cascade in the residual nucleus.
 ## Electron–nucleon cross section
 
 `src/libraries/cross_sections/eNCrossSection.cc`, following
-T. de Forest, Nucl. Phys. A 392 (1983) 232.
+T. de Forest, Nucl. Phys. A 392 (1983) 232
+([doi:10.1016/0375-9474(83)90124-0](https://doi.org/10.1016/0375-9474(83)90124-0)).
 
 Off-shell struck nucleon with momentum **p** and energy Ē = √(p² + m²) ("free"
 energy), on-shell outgoing nucleon **p′**, physical momentum transfer
@@ -56,7 +57,9 @@ q = (ω, **q**). The cross section is de Forest's eq. (13):
 with σ_Mott = 4α² E′² cos²(θ/2) / Q⁴ and φ the angle between the scattering
 plane and the (**q**, **p′**) plane. The responses W_C, W_T, W_S, W_I come
 from the nucleon current evaluated with free spinors and free form factors
-(Kelly parametrization, G_E and G_M for proton and neutron), in one of two
+(Kelly parametrization, PRC 70, 068202,
+[doi:10.1103/PhysRevC.70.068202](https://doi.org/10.1103/PhysRevC.70.068202);
+G_E and G_M for proton and neutron), in one of two
 off-shell prescriptions:
 
 - **cc1** (`-c cc1`, the default): de Forest's eq. (17), the simpler current
@@ -66,7 +69,9 @@ off-shell prescriptions:
   off-shell prescription.
 
 Form factors are evaluated at the physical Q² (de Forest's and SIMC's choice;
-GENIE/Wright evaluate them at Q̄²). For a free nucleon at rest all three
+GENIE/Wright
+[doi:10.48550/arXiv.2104.05090](https://doi.org/10.48550/arXiv.2104.05090)
+evaluate them at Q̄²). For a free nucleon at rest all three
 options coincide; this is the check used in #32, which found and fixed three
 errors in the coded cc1/cc2 expressions (metric sign, a parenthesis in W_C,
 the longitudinal factor). Until that fix is merged, the coded cc2 is wrong by
@@ -87,7 +92,9 @@ nuclear input in `src/libraries/nucleus/gcfSRC.cc`, `gcfNucleus.cc`.
   and isotropic direction;
 - S_NN(k) = Σ C_NN^(l) |φ_NN^(l)(k)|², the contact-weighted universal
   functions tabulated per NN interaction (AV18 by default; N2LO, N3LO, AV4,
-  NV available). The contacts are the "Scale and Scheme" k-space values.
+  NV available). The contacts are the "Scale and Scheme" k-space values
+  (Cruz-Torres et al., Nature Phys. 17, 306 (2021),
+  [doi:10.1038/s41567-020-01053-7](https://doi.org/10.1038/s41567-020-01053-7)).
 
 The struck nucleon has **p**₁ = **P**_cm/2 + **k**, its partner **p**₂ =
 **P**_cm/2 − **k**; the A−2 residual recoils with −**P**_cm and mass
@@ -200,7 +207,9 @@ cascade (vendored GENIE R-3_06_02):
   `NuclearModel = LocalFGM`), consistent with the generator's local Fermi gas.
 - **Starting point:** all nucleons of the cluster start from one point,
   drawn from ρ(r)ⁿ r² with ρ the one-body density of the *full* target and
-  n = 1 (single nucleon), 2 (pair; configurable, Wright uses 1) or 3
+  n = 1 (single nucleon), 2 (pair; configurable, Wright
+  [doi:10.48550/arXiv.2104.05090](https://doi.org/10.48550/arXiv.2104.05090)
+  uses 1) or 3
   (triplet): the cluster formed before the knockout, and its probability
   scales with the density to the power of its size. In the 2N generator the
   vertex is drawn during generation because, with the local onset, k_F at the
