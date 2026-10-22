@@ -175,8 +175,10 @@ local one (`--fermi-gas local`: position from the one-body density, then |p|
 from the local Fermi sphere with k_F(r) ∝ ρ(r)^{1/3}, as in GENIE's
 LocalFGM). The A−1 residual recoils with −**p**, in its ground state; there
 is no correlated partner. Only ¹²C has A−1 masses, so MF runs on ¹²C only;
-with #115, `gcf_generate --model MF` rejects other targets and the 2N-only
-options (`--nn`, `--estar`, `--sigma-cm`, `--kcut`, `--onset`, `--prel-is`).
+with #115, `gcf_generate --model MF` rejects other targets and the pair
+options it does not use (`--nn`, `--estar`, `--sigma-cm`, `--kcut`,
+`--onset`, `--prel-is`), and #121 extends the check to every model and
+every model-specific option (for example `--rad` and `--coulomb` on 3N).
 This sample is meant to complement the SRC sample. With the local
 onset the SRC branch tests the relative momentum, k > k_F(r), while the
 struck nucleon carries **p**₁ = **P**_cm/2 + **k**; the MF branch has
