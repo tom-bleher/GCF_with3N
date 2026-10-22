@@ -71,7 +71,10 @@ void compute_chunk(int start_i, int end_i, vector<vector<double>>& global_heatma
                     for (int b = 0; b < 3; ++b) {
                         if (a != b) {
                             int c = 3 - a - b;
-                            double weight = myGen->get_rho_ptot_f1f2f3(k[a], k[b], k[c]);
+                            // Uniform (k1,k2,k3) grid: the density per dk1 dk2 dk3 is
+                            // the per-(p_tot,f1,f2) density divided by p_tot^2.
+                            double p_tot = (k[a] + k[b] + k[c]) * GeVfm;
+                            double weight = myGen->get_rho_ptot_f1f2f3(k[a], k[b], k[c]) / (p_tot * p_tot);
                             if (weight > 0) {
                                 int bin12 = std::min(int(theta12 / dtheta), theta_bins - 1);
                                 int bin23 = std::min(int(theta23 / dtheta), theta_bins - 1);
