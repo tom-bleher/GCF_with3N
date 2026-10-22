@@ -136,7 +136,10 @@ momenta in GeV/$c$,
      p_{a}^{2}\,p_{b}^{2}\,\sin\theta_{ab}\;dp_{a}\,dp_{b}\,d\theta_{ab}
   = \tfrac{1}{3}
 \end{equation}
-(measured: 0.33308).  The $1/3$ is the isospin assignment: the table
+(measured: 0.33308, a sum over the table nodes; the trilinear interpolant
+that \texttt{get\_rho} evaluates integrates to about 0.347, 4\% higher, as
+the \texttt{get\_rho} comment says once PR~\#91 is merged).  The $1/3$ is
+the isospin assignment: the table
 fixes which nucleon is the neutron, and the three equivalent choices sum
 to one.  The $8\pi^{2} = 4\pi\cdot 2\pi$ comes from the orientation of
 $\vect{p}_{a}$ and the azimuth of $\vect{p}_{b}$ about it.  Powers of
