@@ -213,6 +213,8 @@ int main(int argc, char **argv)
   if (model == "3N" && (u < 1 || u > 10)) fail("--wave-function must be one of AV18, AV18+UIX, AV18+TM, CDBonn, CDBonn+TM (or with -pD), or 1-10");
   if (kFSet && (kF <= 0. || kF > 0.5)) fail("--kF expects k_F in GeV/c, e.g. 0.22");
   if (onset != "fixed" && onset != "local") fail("--onset must be fixed or local");
+  if (kcutSet && onset == "local")
+    fail("--kcut and --onset local exclude each other: the local onset cuts at k_F(r) on every event");
   if (fermiGas != "global" && fermiGas != "local") fail("--fermi-gas must be global or local");
   if (model == "3N" && (!nnName.empty() && nnName != "AV18"))
     fail("--nn applies to 2N/MF; the 3N wave function is chosen with --wave-function");
