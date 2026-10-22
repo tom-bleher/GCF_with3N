@@ -3,7 +3,7 @@
 Plot Region L/R kinematic distributions: overlay 2N+FSI vs 3N SRC for each variable.
 Reads directly from ROOT TTree files via uproot.
 
-Regions are triangular, defined by parameters A=135 deg, K=3.
+Regions are triangular, defined by parameters A=135 deg, K=4 (as in Fig. 5).
 Region R: triangle near (180,180) bounded by lines with slopes B and 1/B through
           (180,180), plus a diagonal with slope -1.
 Region L: (x,y) in L iff (360-x-y, y) in R  (theta12 <-> theta13 swap).
@@ -31,20 +31,12 @@ pCode = 2212
 nCode = 2112
 
 # ──────────── Region definitions ────────────
-def region_params(A=135.0, K=3.0):
-    A_rad = np.radians(A)
-    B = np.degrees(np.arctan(np.sin(A_rad) / (K + np.cos(A_rad)))) / (180.0 - A)
-    return A, B
-
-def in_region_R(theta12, theta23, A=135.0, K=3.0):
-    _, B = region_params(A, K)
-    line1 = B * (theta12 - 180.0) + 180.0
-    line2 = (1.0/B) * (theta12 - 180.0) + 180.0
-    line3 = -(theta12 - A) + 180.0 - (180.0 - A) * B
-    return (theta23 <= line1) & (theta23 >= line2) & (theta23 >= line3)
-
-def in_region_L(theta12, theta23, A=135.0, K=3.0):
-    return in_region_R(360.0 - theta12 - theta23, theta23, A, K)
+# The paper's regions (A=135 deg, K=4), shared with Fig. 5.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "..", "genQE_3N", "plotting"))
+from plot_fig5_theta_heatmap_pair import (region_params,
+                                          in_region_R_array as in_region_R,
+                                          in_region_L_array as in_region_L)
 
 # ──────────── Vector math ────────────
 def angle_deg(ax, ay, az, bx, by, bz):
@@ -284,7 +276,7 @@ def main():
         m_3n_R = m_3n_cuts & in_region_R(src3n["theta12"], src3n["theta23"])
 
     _, B = region_params()
-    print(f"\nRegion R: triangular near (180,180), A=135 deg, K=3, B={B:.4f}")
+    print(f"\nRegion R: triangular near (180,180), A=135 deg, K=4, B={B:.4f}")
     print(f"Region L: (x,y) in L iff (360-x-y, y) in R\n")
 
     # ── Region L: N=2 FSI vs 3N SRC ──
@@ -311,7 +303,7 @@ def main():
             plt.close(fig)
             continue
 
-        region_desc = r"Region L (triangular, $A=135°$, $K=3$)"
+        region_desc = r"Region L (triangular, $A=135°$, $K=4$)"
         ax.set_title(f"{var_label} — {region_desc}", fontsize=13)
         xlabel = var_label + (f" [{unit}]" if unit else "")
         ax.set_xlabel(xlabel, fontsize=12)
@@ -347,7 +339,7 @@ def main():
             plt.close(fig)
             continue
 
-        region_desc = r"Region R (triangular, $A=135°$, $K=3$)"
+        region_desc = r"Region R (triangular, $A=135°$, $K=4$)"
         ax.set_title(f"{var_label} — {region_desc}", fontsize=13)
         xlabel = var_label + (f" [{unit}]" if unit else "")
         ax.set_xlabel(xlabel, fontsize=12)
