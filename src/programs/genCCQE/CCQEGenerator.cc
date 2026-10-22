@@ -31,7 +31,7 @@ CCQEGenerator::~CCQEGenerator()
 void CCQEGenerator::generate_event(double &weight, double &Eneutrino, int &rec_type, TLorentzVector& vk_target, TLorentzVector &vLead_target, TLorentzVector &vRec_target, TLorentzVector &vAm2_target)
 {
   
-  Eneutrino = neutrinoSpectrum->GetRandom();
+  Eneutrino = neutrinoSpectrum->GetRandom(myRand);
   
   TLorentzVector vneutrino_target(0.,0.,Eneutrino,Eneutrino);
   
