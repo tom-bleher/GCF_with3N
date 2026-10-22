@@ -3,6 +3,7 @@
 #include <unistd.h>
 #include "TFile.h"
 #include "TTree.h"
+#include "TParameter.h"
 #include "photoGenerator.hh"
 #include "constants.hh"
 #include "helpers.hh"
@@ -10,6 +11,7 @@
 using namespace std;
 
 int nEvents;
+UInt_t seed = 0;
 TFile * outfile;
 bool verbose = false;
 bool do_ascii = false;
@@ -39,6 +41,7 @@ void Usage()
        << "-A: Use the energy spectrum of the amorphous GlueX radiator rather than the diamond radiator\n"
        << "-B: Specify a fixed beam energy (default is HallD spectrum)\n"
        << "-l: Use the lightcone cross section to generate events\n"
+       << "-S: Random seed (positive integer; default 0 = random, printed at start)\n"
        << "-h: Print this message and exit\n\n\n";
 }
 
@@ -99,7 +102,7 @@ bool init(int argc, char ** argv)
     uType = (char *)"AV18_deut";
 
   int c;
-  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:u:k:R:AB:lh")) != -1)
+  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:u:k:R:AB:lS:h")) != -1)
     switch(c)
       {
 
@@ -151,6 +154,9 @@ bool init(int argc, char ** argv)
       case 'l':
 	doLC = true;
 	break;
+      case 'S':
+	seed = strtoul(optarg, nullptr, 10);
+	break;
       case 'h':
 	Usage();
 	return false;
@@ -164,7 +170,11 @@ bool init(int argc, char ** argv)
 
   // Initialize objects
   myInfo = new gcfNucleus(Z,N,uType);
-  myRand = new TRandom3(0);
+  // Seed 0 (the default) draws a fresh seed; print and store it either way so
+  // any run can be reproduced.
+  if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
+  cout << "Random seed: " << seed << "\n";
+  myRand = new TRandom3(seed);
   myCS = new photoCrossSection();
 
   // Initialize generator
@@ -283,6 +293,7 @@ void fini()
 {
   outtree->SetName("genT");
   outtree->Write();
+  TParameter<Long64_t>("seed", seed).Write();
   outfile->Delete("genTbuffer;*");
   outfile->Close();
 

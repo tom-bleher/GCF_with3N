@@ -2,6 +2,7 @@
 #include <unistd.h>
 #include "TFile.h"
 #include "TTree.h"
+#include "TParameter.h"
 #include "electroGenerator.hh"
 #include "constants.hh"
 #include "helpers.hh"
@@ -9,6 +10,7 @@
 using namespace std;
 
 int nEvents;
+UInt_t seed = 0;
 TFile * outfile;
 bool verbose = false;
 TVector3 boost_vector;
@@ -29,6 +31,7 @@ void Usage()
        << "Optional flags:\n"
        << "-v: Verbose\n"
        << "-P: Use text file to specify phase space\n"
+       << "-S: Random seed (positive integer; default 0 = random, printed at start)\n"
        << "-h: Print this message and exit\n\n\n";
 }
 
@@ -57,7 +60,7 @@ bool init(int argc, char ** argv)
     uType = (char *)"AV18_deut";
   
   int c;
-  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:h")) != -1)
+  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:S:h")) != -1)
     switch(c)
       {
 	
@@ -67,6 +70,9 @@ bool init(int argc, char ** argv)
       case 'P':
 	custom_ps = true;
 	phase_space = optarg;
+	break;
+      case 'S':
+	seed = strtoul(optarg, nullptr, 10);
 	break;
       case 'h':
 	Usage();
@@ -78,7 +84,11 @@ bool init(int argc, char ** argv)
 
   // Initialize objects
   myInfo = new gcfNucleus(Z,N,uType);
-  myRand = new TRandom3(0);
+  // Seed 0 (the default) draws a fresh seed; print and store it either way so
+  // any run can be reproduced.
+  if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
+  cout << "Random seed: " << seed << "\n";
+  myRand = new TRandom3(seed);
   myCS = new photoCrossSection();
   
   // Initialize generator
@@ -142,6 +152,7 @@ void fini()
 {
   outtree->SetName("genT");
   outtree->Write();
+  TParameter<Long64_t>("seed", seed).Write();
   outfile->Delete("genTbuffer;*");
   outfile->Close();
 }
