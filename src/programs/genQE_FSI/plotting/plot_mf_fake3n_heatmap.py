@@ -283,6 +283,14 @@ def plot(d, args):
         center=wc[in_region_center(t12c, t23c, center_radius)].sum() / wtot,
     )
     LR_ratio = fr["L"] / fr["R"] if fr["R"] > 0 else float("inf")
+    # Weighted-MC statistical uncertainties (L, R disjoint -> independent).
+    inL, inR = in_region_L(t12c, t23c), in_region_R(t12c, t23c)
+    s2, s2L, s2R = (wc**2).sum(), (wc[inL]**2).sum(), (wc[inR]**2).sum()
+    efL = np.sqrt(s2L * (1 - 2 * fr["L"]) + s2 * fr["L"]**2) / wtot
+    efR = np.sqrt(s2R * (1 - 2 * fr["R"]) + s2 * fr["R"]**2) / wtot
+    eLR = (LR_ratio * np.sqrt(s2L / (wc[inL].sum()**2 + 1e-300)
+                              + s2R / (wc[inR].sum()**2 + 1e-300))
+           if fr["R"] > 0 else float("nan"))
     # Pass fractions relative to ALL generated events in the file (weighted);
     # the eq2 detector tag from build_fake3n is folded into both masks.
     f_base = w[mask_base].sum() / (d["_w_all_file"] + 1e-30)
@@ -295,11 +303,14 @@ def plot(d, args):
         for k, v in fr.items():
             fh.write(f"{k:8s} {v:.6f}\n")
         fh.write(f"L/R      {LR_ratio:.6f}\n")
+        fh.write(f"# stat. unc.: L +-{efL:.6f}  R +-{efR:.6f}  L/R +-{eLR:.6f}"
+                 f"  (n_L={int(inL.sum())}, n_R={int(inR.sum())})\n")
         fh.write(f"# pass fractions vs all {d['_n_all_file']} generated events (weighted)\n")
         fh.write(f"base     {f_base:.6e}\n")
         fh.write(f"src      {f_src:.6e}\n")
     print(f"  region fractions: L={fr['L']:.4f} R={fr['R']:.4f} "
           f"BR={fr['BR']:.4f} center={fr['center']:.4f}  L/R={LR_ratio:.3f}")
+    print(f"  stat. unc.: f_L +-{efL:.5f}  f_R +-{efR:.5f}  L/R +-{eLR:.5f}")
     print(f"  base-cut pass fraction (weighted, incl. eq2 tag): {f_base:.4e}  "
           f"({int(mask_base.sum())}/{d['_n_all_file']} events)")
     print(f"  SRC-cut  pass fraction (weighted, incl. eq2 tag): {f_src:.4e}  "

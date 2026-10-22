@@ -252,10 +252,25 @@ def main():
     for name, t12, t23, w in [('3N+FSI', t12_3, t23_3, w_3),
                               ('2N+FSI', t12_2, t23_2, w_2)]:
         wt = w.sum() + 1e-30
-        fL = w[in_region_L_array(t12, t23)].sum() / wt
-        fR = w[in_region_R_array(t12, t23)].sum() / wt
+        inL = in_region_L_array(t12, t23)
+        inR = in_region_R_array(t12, t23)
+        fL = w[inL].sum() / wt
+        fR = w[inR].sum() / wt
         ratio = (fL / fR) if fR > 0 else float('inf')
         print(f'  [{name}] f_L={fL:.4f}  f_R={fR:.4f}  L/R={ratio:.3f}')
+        # Weighted-MC statistical uncertainties (L and R are disjoint, so the
+        # sum-of-w^2 errors on N_L and N_R are independent). Kept off the
+        # [name] line, which make_paper_figures.sh parses for L/R.
+        s2L, s2R = (w[inL]**2).sum(), (w[inR]**2).sum()
+        s2 = (w**2).sum()
+        efL = np.sqrt(s2L * (1 - 2 * fL) + s2 * fL**2) / wt
+        efR = np.sqrt(s2R * (1 - 2 * fR) + s2 * fR**2) / wt
+        eratio = (ratio * np.sqrt(s2L / (w[inL].sum()**2 + 1e-300)
+                                  + s2R / (w[inR].sum()**2 + 1e-300))
+                  if fR > 0 else float('nan'))
+        print(f'    stat. unc. {name}: f_L={fL:.5f}+-{efL:.5f}  '
+              f'f_R={fR:.5f}+-{efR:.5f}  L/R={ratio:.4f}+-{eratio:.4f}  '
+              f'(n_L={int(inL.sum())}, n_R={int(inR.sum())}, n={len(w)})')
 
     # ---- Build figure (two panels, two-column PRR width) ----
     tri_R = triangle_vertices_R()
