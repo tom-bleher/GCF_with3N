@@ -534,7 +534,8 @@ copied verbatim into a flat list of \texttt{FSIParticle} objects
         descends from; 1 means that nucleon left without interacting,
         $-1$ that the cascade did not run
   \item \texttt{generation}: mother-chain depth from the input nucleon,
-        $\ge 1$ for every cascade output
+        $\ge 1$ for every cascade output (0 for the generated nucleons
+        when the cascade did not run, set by PR~\#110; uninitialised before)
 \end{itemize}
 No particle is selected as the outgoing lead or recoil: that is a
 detection-level choice made in the analysis from types and momenta.  The
@@ -609,7 +610,12 @@ Oset model & on & \texttt{HNINUKE-UseOset} & Low-energy pion cross sections \\
 
 GENIE configuration is loaded from XML files in\\
 \texttt{config/genie\_override/} (e.g., \texttt{HNIntranuke2018.xml},
-\texttt{Messenger.xml}).
+\texttt{Messenger.xml}).  With PR~\#98 the directory in
+\texttt{\$GENIE\_OVERRIDE\_DIR}, if set, replaces it, and the path is
+built explicitly as the user's own \texttt{GXMLPATH} entries, then that
+project override, then GENIE's defaults, so user and
+\texttt{gcf\_fsi --channel} files are no longer shadowed when
+\texttt{GXMLPATH} is unset (\#78).
 
 %======================================================================
 \section{References}
