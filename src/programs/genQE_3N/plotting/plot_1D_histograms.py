@@ -58,13 +58,20 @@ def discover_histogram_files():
     
     return sorted(variables)  # Sort for consistent ordering
 
-def load_histogram(var_name, use_average_weight=False, weight_filter_percentile=98.0):
+def load_histogram(var_name, use_average_weight=False, weight_filter_percentile=100.0):
     """Load histogram data for a given variable name
     
     Args:
         var_name: Variable name (e.g., 'xB', 'Q2')
         use_average_weight: If True, return weight/count, if False return total weight
-        weight_filter_percentile: Filter out weights above this percentile (default 99.5%)
+        weight_filter_percentile: Drop BINS whose content is above this
+            percentile of the non-zero bins (default 100 = keep all bins).
+            This acts on filled-histogram bin contents, not on event
+            weights: in a peaked distribution the highest bins are the
+            peak, so any value below 100 removes the peak. Event-weight
+            outliers have to be capped before the histogram is filled
+            (e.g. the w_max cut in plot_alpha3N_ratio.load_alpha3N); the
+            hist_*_1D.txt files read here carry no per-event weights.
     """
     filename = f"analysis_output/txt_files/hist_{var_name}_1D.txt"
     if not os.path.exists(filename):
@@ -93,7 +100,7 @@ def load_histogram(var_name, use_average_weight=False, weight_filter_percentile=
         if use_average_weight:
             print(f"Warning: {filename} doesn't have count data, showing total weight")
     
-    # Filter out weights that are too big
+    # Optional bin filter (off by default): drops the highest BINS, see docstring
     if weight_filter_percentile < 100:
         # Only filter if there are non-zero weights
         non_zero_weights = y[y > 0]
@@ -319,7 +326,7 @@ def fit_gaussian_to_peak(x, y, peak_fraction=0.1, min_r_squared=0.3):
             'error': str(e)
         }
 
-def plot_single_histogram(var_name, use_average_weight=False, weight_filter_percentile=98.0, xlim=None):
+def plot_single_histogram(var_name, use_average_weight=False, weight_filter_percentile=100.0, xlim=None):
     """Plot a single histogram with optional x-axis limits"""
     x, y = load_histogram(var_name, use_average_weight, weight_filter_percentile)
     if x is None:
@@ -400,7 +407,7 @@ def plot_single_histogram(var_name, use_average_weight=False, weight_filter_perc
             pass
     plt.close()
 
-def plot_ratio(var1_name, var2_name, weight_filter_percentile=98.0):
+def plot_ratio(var1_name, var2_name, weight_filter_percentile=100.0):
     """Plot the ratio of total weights between two variables (var1 / var2)
     
     Args:
@@ -549,7 +556,7 @@ def discover_variable_groups():
     # Expand each variable to its per-region filename pattern when used
     return groups
 
-def plot_grouped_histograms(use_average_weight=False, weight_filter_percentile=98.0, region_mode='theta', y_log=True):
+def plot_grouped_histograms(use_average_weight=False, weight_filter_percentile=100.0, region_mode='theta', y_log=True):
     """Plot grouped histograms for the groups defined in `discover_variable_groups()`.
     
     Args:
@@ -706,7 +713,7 @@ def plot_grouped_histograms(use_average_weight=False, weight_filter_percentile=9
         plt.close()
         print(f'Saved grouped plot: {out_path}')
 
-def plot_all_together_filtered(filtered_vars, use_average_weight=False, weight_filter_percentile=98.0):
+def plot_all_together_filtered(filtered_vars, use_average_weight=False, weight_filter_percentile=100.0):
     """Plot filtered histograms as subplots on one page (excludes grouped point variables)"""
     if not filtered_vars:
         print("No filtered variables to plot!")
@@ -789,7 +796,7 @@ def plot_all_together_filtered(filtered_vars, use_average_weight=False, weight_f
         pass
     plt.close()
 
-def plot_all_together(use_average_weight=False, weight_filter_percentile=98.0):
+def plot_all_together(use_average_weight=False, weight_filter_percentile=100.0):
     """Plot all histograms as subplots on one page"""
     # Discover available variables
     available_vars = discover_histogram_files()
@@ -937,9 +944,10 @@ Examples:
     # Configuration: Set to True for average weight per event, False for total weight
     use_average_weight = False  # When true, displays total_bin_weight / bin_event_count
     
-    # Weight filtering configuration: Filter out weights above this percentile
-    # Set to 100 to disable filtering, or lower values (e.g., 99.5, 99, 95) to filter outliers
-    weight_filter_percentile = 100.0 
+    # Bin filtering: drop bins above this percentile of non-zero bin contents.
+    # 100 disables it. Lower values cut the peak bins, not event-weight
+    # outliers (see load_histogram).
+    weight_filter_percentile = 100.0
     
     # Ratio plotting configuration: Set pairs of variables to calculate ratios
     # Format: [(var1, var2), ...] where ratio = var1 / var2
@@ -979,7 +987,7 @@ Examples:
                            y_log=y_log)
     print(f"Grouped plotting complete. Check analysis_output/png_files/grouped_plots/")
 
-def plot_multiple_ratios(ratio_pairs, weight_filter_percentile=98.0, title=None):
+def plot_multiple_ratios(ratio_pairs, weight_filter_percentile=100.0, title=None):
     """Plot multiple ratio graphs together on the same figure
     
     Args:
