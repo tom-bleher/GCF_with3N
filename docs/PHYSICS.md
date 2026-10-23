@@ -59,7 +59,10 @@ plane and the (**q**, **p′**) plane. The responses W_C, W_T, W_S, W_I come
 from the nucleon current evaluated with free spinors and free form factors
 (Kelly parametrization, PRC 70, 068202,
 [doi:10.1103/PhysRevC.70.068202](https://doi.org/10.1103/PhysRevC.70.068202);
-G_E and G_M for proton and neutron), in one of two
+G_E and G_M for proton and neutron; `-G ye` / `--ff ye` selects
+Ye et al., PLB 777, 8 (2018),
+[doi:10.1016/j.physletb.2017.11.023](https://doi.org/10.1016/j.physletb.2017.11.023),
+and `dipole` the dipole with Galster G_En), in one of two
 off-shell prescriptions:
 
 - **cc1** (`-c cc1`, the default): de Forest's eq. (17), the simpler current
