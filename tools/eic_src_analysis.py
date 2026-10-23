@@ -18,9 +18,10 @@ Two steps:
       uncertainties and every event reweighted exactly by S'(k_rel)/S(k_rel); no new simulation.
 
 Event weight: w = (generator weight) / (attempts of its run), in nb, so sum(w) over a
-selection is its cross section; yields for 10 fb^-1 are sigma[nb] * 1e7, times a flat nucleon
-transparency (applied only where a figure says so): 0.5 as in the paper, or 1 for GENIE FSI runs
-(genQE_FSI, genQE_3N_FSI), which absorb nucleons event by event; plots --transparency overrides.
+selection is its cross section (per nucleus); yields for 10 fb^-1 per nucleus (--lumi-fb; A x 10 fb^-1
+per nucleon, the ePIC convention for eA) are sigma[nb] * 1e7, times a flat nucleon transparency
+(applied only where a figure says so) chosen per target, see TRANSPARENCY: 1 for runs whose GENIE
+cascade ran (it absorbs nucleons event by event); plots --transparency overrides.
 
 Detection, hit level (the paper's definition: enough hits to reconstruct a track, or a
 deposit in a calorimeter's volume):
@@ -385,17 +386,66 @@ def load(dirs):
     return d, metas
 
 
-def has_fsi(run):
-    """True for a GENIE FSI run (genQE_FSI or genQE_3N_FSI without -n), from its run.json; None when the
-    run directory has no run.json, so the caller can refuse to guess."""
+# Flat nucleon transparency per target, for runs without a GENIE cascade. It scales yields only, never
+# acceptances; plots --transparency overrides it.
+#   C12: 0.5, the factor of PRC 105, 034001 (Figs. 5-7), kept for comparison with the paper. The measured
+#        12C(e,e'p) value is 0.57 (Garrow et al., PRC 66, 044613, doi:10.1103/PhysRevC.66.044613: constant
+#        fit 0.570 +- 0.008 above Q2 ~ 2 GeV^2); for pair-tagged (e,e'pN) yields Colle et al.
+#        (PRC 93, 034608, doi:10.1103/PhysRevC.93.034608) give about 0.28, so 0.5 is a convention (#85).
+#   d:   0.90, the measured D(e,e'p) transparency: Garrow et al.'s constant fit 0.904 +- 0.013 above
+#        Q2 ~ 2 GeV^2 (their Table II: 0.897, 0.917, 0.867 at Q2 = 3.3, 6.1, 8.1, each +- ~3%; consistent
+#        with SLAC NE18, Makins et al., PRL 72, 1986 and O'Neill et al., PLB 351, 87). It is measured in
+#        quasi-free kinematics (low p_miss); at SRC momenta deuteron FSI depends on the recoil angle
+#        (Boeglin et al., PRL 107, 262501, doi:10.1103/PhysRevLett.107.262501).
+#   He4: 0.72 = 4^-0.24, Garrow et al.'s world-data fit T = c A^alpha (c consistent with 1, alpha = -0.24
+#        for Q2 >= 1.8 GeV^2, fitted to d, C and Fe); there is no 4He(e,e'p) measurement at these Q2.
+TRANSPARENCY = {"C12": (0.5, "PRC 105, 034001 convention"),
+                "d": (0.90, "D(e,e'p), Garrow et al., PRC 66, 044613"),
+                "He4": (0.72, "A^-0.24 fit of Garrow et al., PRC 66, 044613; not measured")}
+ION_A = {"C12": 12, "d": 2, "He4": 4}
+
+
+def cascade_ran(generator, a):
+    """True when GENIE's cascade ran: genQE_FSI (SRC pair, or one nucleon with -F) or genQE_3N_FSI without -n,
+    on a target whose residual keeps A_res >= 3 nucleons (QEGeneratorFSI.cc and QEGeneratorFSI_3N.cc skip
+    the cascade below that, so genQE_FSI on d or He4 is PWIA)."""
+    removed = {"genQE_FSI": 1 if "-F" in generator[1:] else 2, "genQE_3N_FSI": 3}.get(generator[0])
+    return removed is not None and "-n" not in generator[1:] and a - removed >= 3
+
+
+def run_info(run):
+    """(generator command, ion) of a run directory from its run.json; None when there is no run.json, so the
+    caller can refuse to guess."""
     rj = Path(run) / "run.json"
     if not rj.exists():
         return None
     meta = json.loads(rj.read_text())
     if "generator" not in meta:  # the first production batch predates the key; all of it is genQE (PWIA)
         print(f"warning: {rj} has no 'generator' entry; taking it as a genQE (PWIA) run", file=sys.stderr)
-    gen = meta.get("generator", ["genQE"])
-    return gen[0] in ("genQE_FSI", "genQE_3N_FSI") and "-n" not in gen[1:]
+    ion = meta.get("ion", meta.get("converter", {}).get("beams", {}).get("ion"))
+    if ion not in ION_A:
+        sys.exit(f"{rj}: unknown ion {ion!r} (known: {', '.join(ION_A)})")
+    return meta.get("generator", ["genQE"]), ion
+
+
+def has_fsi(run):
+    """True for a run whose GENIE cascade ran, None without run.json."""
+    info = run_info(run)
+    return None if info is None else cascade_ran(info[0], ION_A[info[1]])
+
+
+def run_transparency(run):
+    """(transparency, reason) of one run directory: 1 when its GENIE cascade ran, else TRANSPARENCY[ion];
+    None without run.json."""
+    info = run_info(run)
+    if info is None:
+        return None
+    gen, ion = info
+    if cascade_ran(gen, ION_A[ion]):
+        return 1.0, f"{gen[0]} on {ion}, GENIE cascade"
+    t, src = TRANSPARENCY[ion]
+    no_cascade = " (FSI off)" if "-n" in gen[1:] else (" (no cascade: A_res < 3)" if "FSI" in gen[0] else "")
+    return t, f"{gen[0]} on {ion}{no_cascade}: {src}"
 
 
 # ----------------------------------------------------------------------------- plots
@@ -428,23 +478,37 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     data = {lab: load(dirs) for lab, dirs in settings.items()}
-    # the flat transparency stands in for FSI in PWIA runs; GENIE FSI runs already absorb nucleons
-    # event by event, so they take 1 unless --transparency says otherwise
+    # the flat transparency stands in for FSI where no GENIE cascade ran, per target (TRANSPARENCY);
+    # runs whose cascade ran already absorb nucleons event by event and take 1; --transparency overrides
     if transparency is None:
         # from the directories given on the command line, not the paths stored in the npz at extract time
-        fsi = {r: has_fsi(r) for dirs in settings.values() for r in dirs}
-        unknown = [r for r, f in fsi.items() if f is None]
+        per_run = {r: run_transparency(r) for dirs in settings.values() for r in dirs}
+        unknown = [r for r, t in per_run.items() if t is None]
         if unknown:
-            sys.exit("plots: no run.json in " + ", ".join(unknown) + "; cannot tell GENIE FSI (transparency 1) "
-                     "from PWIA (0.5) runs; pass --transparency")
-        fsi = set(fsi.values())
-        if len(fsi) > 1:
-            sys.exit("plots: GENIE FSI and PWIA runs need different transparencies; pass --transparency")
-        transparency, why = (1.0, "GENIE FSI runs") if fsi == {True} else (0.5, "PWIA runs, as in PRC 105, 034001")
+            sys.exit("plots: no run.json in " + ", ".join(unknown) + "; cannot tell the target or whether the "
+                     "GENIE cascade ran; pass --transparency")
+        for r, (t, why) in per_run.items():
+            print(f"plots: {r}: transparency {t:g} ({why})")
+        trans = {}
+        for lab, dirs in settings.items():
+            vals = {per_run[r] for r in dirs}
+            if len(vals) > 1:
+                sys.exit(f"plots: the runs of setting {lab} need different transparencies; pass --transparency")
+            trans[lab] = vals.pop()
     else:
-        why = "--transparency"
-    print(f"plots: nucleon transparency {transparency:g} ({why})")
-    scale = lumi_nb_inv * transparency
+        trans = {lab: (transparency, "--transparency") for lab in settings}
+    for lab, (t, why) in trans.items():
+        print(f"plots: {lab}: nucleon transparency {t:g} ({why})")
+    scale = {lab: lumi_nb_inv * t for lab, (t, _) in trans.items()}
+    # luminosity is per nucleus; ePIC quotes eA luminosity per nucleon (A x per nucleus)
+    lumi_fb = lumi_nb_inv / 1e6
+    lumi_txt = rf"{lumi_fb:g} fb$^{{-1}}$ per nucleus"
+    t_all = {t for t, _ in trans.values()}
+    t_txt = rf" $\times$ T = {next(iter(t_all)):g}" if len(t_all) == 1 else r" $\times$ T"
+
+    def t_tag(lab):
+        """The setting's transparency for its curve label when settings in one figure differ."""
+        return "" if len(t_all) == 1 else f" (T = {trans[lab][0]:g})"
     summary = {}
 
     # The figures follow the style of PRC 105, 034001 (Figs. 3-6). Figs. 3 and 4 show recoil and
@@ -452,8 +516,11 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
     # --deexcite runs (Geant4 de-excitation of the A-2 remnant) and shown in figEvap below.
     green, red, orange, magenta, brown = "#45c045", "#f0281e", "#ff9800", "#ee5fbf", "#9a5a1c"
     low_energy = {lab: metas[0]["beams"]["ion_momentum_per_nucleon_GeV"] < 75 for lab, (_, metas) in data.items()}
-    for lab in data:
-        summary.setdefault(lab, {})["transparency"] = transparency
+    for lab, (_, metas) in data.items():
+        a = metas[0]["beams"]["ion_pdg"] // 10 % 1000
+        summary[lab] = {"transparency": trans[lab][0], "transparency_reason": trans[lab][1],
+                        "lumi_fb_per_nucleus": lumi_fb, "lumi_fb_per_nucleon_equivalent": a * lumi_fb}
+        print(f"plots: {lab}: yields for {lumi_fb:g} fb^-1 per nucleus = {a * lumi_fb:g} fb^-1 per nucleon (A = {a})")
 
     def place_label(ax, text, color, pts, anchor, taken, bw=0.18, bh=0.13, **kw):
         """Put text at the free spot nearest anchor (axes fractions): no data point inside its box."""
@@ -486,7 +553,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
         cen7 = 0.5 * (bins[1:] + bins[:-1])
         curves7 = {}
         for lab, (d, _) in data.items():
-            w = d["w_nb"] * scale
+            w = d["w_nb"] * scale[lab]
             kin = (d["q2"] > 3) & (d["pmiss"] < 0.3) & (d["emiss"] < 0.08)
             ok = kin & d["e_truth_matched"] & detected_anywhere(d, "lead")
             h = np.histogram(d["q2"][ok], bins, weights=w[ok])[0]
@@ -503,9 +570,9 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
         for i, lab in enumerate(order):
             h, c = curves7[lab]
             k = 12 if i == 0 else 3
-            ax.text(cen7[k], max(h[k], 1e-3) * (9 if i == 0 else 0.2), lab, color=c, fontsize=15, ha="center", va="center")
+            ax.text(cen7[k], max(h[k], 1e-3) * (9 if i == 0 else 0.2), lab + t_tag(lab), color=c, fontsize=15, ha="center", va="center")
         frame(ax)
-        ax.set_ylabel("Events per bin", fontsize=13, loc="top")
+        ax.set_ylabel(f"Events per bin ({lumi_txt}{t_txt})", fontsize=11, loc="top")
         ax.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="right")
         fig.tight_layout()
         fig.savefig(outdir / "fig7_q2_mean_field.pdf")
@@ -597,7 +664,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
 
     if run_kind == "DIS":
         # Tagged DIS off SRC pairs: recoil acceptance vs the spectator light-cone fraction and momentum,
-        # and the tagged yield over (x', Q2) for 10 fb^-1 x transparency
+        # and the tagged yield over (x', Q2) for --lumi-fb per nucleus x transparency
         acceptance_grid(lambda r: "alpha_s", np.linspace(0.5, 1.9, 15), r"Spectator Light-cone Fraction $\alpha_s$",
                         ("rec",), "figDIS_recoil_acceptance_vs_alpha.pdf")
         acceptance_grid(lambda r: f"{r}_p_irf", np.linspace(0.3, 1.2, 19), r"Spectator Momentum (Ion Rest Frame) [GeV/$c$]",
@@ -606,16 +673,16 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
         for ax, (lab, (d, _)) in zip(axes[0], data.items()):
             tag = (d["rec_p_irf"] > P_IRF_MIN) & detected(d, "rec", "hit")
             H, xe, ye = np.histogram2d(d["xprime"][tag], d["q2"][tag], bins=[np.linspace(0.2, 1.0, 33), np.linspace(3, 25, 45)],
-                                       weights=d["w_nb"][tag] * scale)
+                                       weights=d["w_nb"][tag] * scale[lab])
             im = ax.pcolormesh(xe, ye, np.ma.masked_less(H.T, 1), cmap="Blues", norm=matplotlib.colors.LogNorm(vmin=1), rasterized=True)
             ax.text(0.95, 0.93, lab, transform=ax.transAxes, ha="right", va="top", fontsize=13, fontweight="bold")
             ax.set_xlabel(r"x$'$", fontsize=13, loc="right")
             frame(ax)
             summary[lab]["DIS"] = {"sigma_nb_pIRF>0.3": float(d["w_nb"][d["rec_p_irf"] > P_IRF_MIN].sum()),
                                    "tagged_fraction_hit": float(d["w_nb"][tag].sum() / d["w_nb"][d["rec_p_irf"] > P_IRF_MIN].sum()),
-                                   "tagged_events_10fb_x_transparency": float(d["w_nb"][tag].sum() * scale)}
+                                   "tagged_events_10fb_x_transparency": float(d["w_nb"][tag].sum() * scale[lab])}
         axes[0, 0].set_ylabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="top")
-        fig.colorbar(im, ax=axes[0, -1], label=rf"tagged events / bin ({lumi_nb_inv / 1e6:g} fb$^{{-1}}$ $\times$ {transparency:g})")
+        fig.colorbar(im, ax=axes[0, -1], label=f"tagged events / bin\n({lumi_txt}{t_txt})")
         fig.tight_layout()
         fig.savefig(outdir / "figDIS_xprime_q2_tagged.pdf")
         plt.close(fig)
@@ -625,7 +692,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
         print(f"wrote {outdir}/figDIS_recoil_acceptance_vs_alpha.pdf figDIS_recoil_acceptance_vs_pirf.pdf figDIS_xprime_q2_tagged.pdf summary.json")
         return
 
-    # Fig. 3: angle w.r.t. the ion beam of recoil (green) and leading (red) nucleons, 10 fb^-1, no p_IRF cut
+    # Fig. 3: angle w.r.t. the ion beam of recoil (green) and leading (red) nucleons, --lumi-fb per nucleus, no p_IRF cut
     fig, axes = plt.subplots(len(data), 1, figsize=(6.6, 3.9 * len(data)), squeeze=False)
     bins = np.arange(0, 51, 1.0)
     cen, hw3 = 0.5 * (bins[1:] + bins[:-1]), 0.5 * np.diff(bins)
@@ -671,7 +738,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
                                        ("lead", red, "Leading\nNucleon", lambda k: (cen[k] / 50, 0.25))):
             k = int(np.argmax(curves[role]))
             place_label(ax, text, c, pts, anchor(k), taken, fontsize=12, fontweight="bold")
-        ax.set_ylabel("Events per bin", fontsize=13)
+        ax.set_ylabel(f"Events per bin ({lumi_txt})", fontsize=12)
         ax.set_xlabel(r"$\theta$ [mrad]", fontsize=13, loc="right")
     fig.tight_layout(h_pad=2.5)
     fig.savefig(outdir / "fig3_angles.pdf")
@@ -698,14 +765,14 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
     fig.savefig(outdir / "fig4_pirf_vs_theta.pdf")
     plt.close(fig)
 
-    # Fig. 5: Q2 of events with a recoil detected far forward, 10 fb^-1 x transparency, one point per GeV^2
+    # Fig. 5: Q2 of events with a recoil detected far forward, --lumi-fb per nucleus x transparency, one point per GeV^2
     fig, ax = plt.subplots(figsize=(6.6, 3.8))
     bins = np.arange(3, 25.5, 1.0)
     cen5 = 0.5 * (bins[1:] + bins[:-1])
     curves5 = {}
     for lab, (d, _) in data.items():
         m = (d["rec_p_irf"] > P_IRF_MIN) & detected(d, "rec", "hit")
-        h, _ = np.histogram(d["q2"][m], bins, weights=d["w_nb"][m] * scale)
+        h, _ = np.histogram(d["q2"][m], bins, weights=d["w_nb"][m] * scale[lab])
         summary[lab]["q2_reach_100_per_GeV2"] = float(bins[1:][h >= 100].max()) if (h >= 100).any() else None
         c, mk = (red, "o") if low_energy[lab] else ("#1029ff", "s")
         g = h > 0
@@ -721,9 +788,9 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
     for i, lab in enumerate(order):
         h, c = curves5[lab]
         k = 12 if i == 0 else 3
-        ax.text(cen5[k], h[k] * (9 if i == 0 else 0.2), lab, color=c, fontsize=15, ha="center", va="center")
+        ax.text(cen5[k], h[k] * (9 if i == 0 else 0.2), lab + t_tag(lab), color=c, fontsize=15, ha="center", va="center")
     frame(ax)
-    ax.set_ylabel("Events per bin", fontsize=13, loc="top")
+    ax.set_ylabel(f"Events per bin ({lumi_txt}{t_txt})", fontsize=11, loc="top")
     ax.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="right")
     fig.tight_layout()
     fig.savefig(outdir / "fig5_q2.pdf")
@@ -732,7 +799,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
     # Fig. 6 in the style of PRC 105, 034001: rows are beam settings, columns recoil p and n, panels
     # share edges. Generated recoils over the full p_IRF range (black crosses), accepted at hit level
     # above the p_IRF cut (filled), accepted at reco level (blue crosses, in the slot of the paper's
-    # smeared points), all for 10 fb^-1 x transparency. fig6b: acceptance vs p_IRF.
+    # smeared points), all for --lumi-fb per nucleus x transparency. fig6b: acceptance vs p_IRF.
     pink, pblue = "#f4c4c4", "#1f3fe0"
     lbins = np.linspace(0.0, 1.3, 40)
     lc, hw = 0.5 * (lbins[1:] + lbins[:-1]), 0.5 * np.diff(lbins)
@@ -740,7 +807,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
     for lab, (d, _) in data.items():
         for code, name in ((2212, "proton"), (2112, "neutron")):
             m = d["rec_type"] == code
-            x, w = d["rec_p_irf"][m], d["w_nb"][m] * scale
+            x, w = d["rec_p_irf"][m], d["w_nb"][m] * scale[lab]
             cut = x > P_IRF_MIN
             sel = {"gen": np.ones(len(x), bool), "hit": cut & detected(d, "rec", "hit")[m],
                    "reco": cut & detected(d, "rec", "reco")[m], "cut": cut}
@@ -786,6 +853,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
         f = 10.0 ** k10
         it = iter(letters)
         for row, lab in enumerate(data):
+            axes[row, 0].set_ylabel(f"Events per bin\n({lumi_txt}" + rf" $\times$ T = {trans[lab][0]:g})", fontsize=11)
             ymax = 0.0
             for col, name in enumerate(("proton", "neutron")):
                 ax, H = axes[row, col], hists[lab, name]
@@ -905,7 +973,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
             ax.set_xlim(tb[0], tb[-1])
             frame(ax)
             ax.set_xlabel(r"$\theta$ w.r.t. ion beam [mrad]", fontsize=12, loc="right")
-            ax.set_ylabel("Particles per bin (10 fb$^{-1}$)", fontsize=11)
+            ax.set_ylabel(f"Particles per bin ({lumi_txt})", fontsize=11)
             ax.text(0.03, 0.95, lab, transform=ax.transAxes, ha="left", va="top", fontsize=12, fontweight="bold")
             lo_, hi_ = ax.get_ylim()
             ax.set_ylim(lo_, hi_ * 60)  # headroom for the legend
@@ -1042,6 +1110,7 @@ def band(settings, outdir, lumi_nb_inv, transparency, n_rep, seed):
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     scale = lumi_nb_inv * transparency
+    yield_txt = rf"{lumi_nb_inv / 1e6:g} fb$^{{-1}}$ per nucleus $\times$ T = {transparency:g}"
     names = list(CONTACTS_SS_K["C12"])
     nom = np.array([CONTACTS_SS_K["C12"][n][0] for n in names])
     sig = np.array([CONTACTS_SS_K["C12"][n][1] for n in names])
@@ -1120,14 +1189,14 @@ def band(settings, outdir, lumi_nb_inv, transparency, n_rep, seed):
                 ax.tick_params(labelbottom=False)
         ax6[row, 0].set_yscale("log")
         ax6[row, 0].set_ylim(1, None)
-        ax6[row, 0].set_ylabel("Events per bin", fontsize=12)
+        ax6[row, 0].set_ylabel(f"Events per bin\n({yield_txt})", fontsize=11)
         summary[lab] = {key: {"p16": float(v[0]), "median": float(v[1]), "p84": float(v[2])} for key, v in out.items()}
         summary[lab]["runs"] = [m_["run"] for m_ in metas]
         print(f"{lab}: " + ", ".join(f"{key} {v[1]:.4g} [{v[0]:.4g}, {v[2]:.4g}]" for key, v in out.items()))
     ax5.set_yscale("log")
     ax5.set_xlim(1, 25)
     ax5.tick_params(direction="in", which="both", top=True, right=True, labelsize=12)
-    ax5.set_ylabel("Events per bin", fontsize=13, loc="top")
+    ax5.set_ylabel(f"Events per bin ({yield_txt})", fontsize=11, loc="top")
     ax5.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="right")
     ax5.axhline(100, color=MUTED, lw=0.8, ls=":")
     ax5.legend(frameon=False, fontsize=12, title="band: GCF contact uncertainty (68%)", title_fontsize=10)
@@ -1165,13 +1234,15 @@ def main():
     p.add_argument("--setting", action="append", required=True, help="LABEL=RUN_DIR[,RUN_DIR...] (Q2 slices of one setting)")
     p.add_argument("-o", "--outdir", required=True)
     p.add_argument("--lumi-fb", type=float, default=10.0, help="integrated luminosity per nucleus [fb^-1] (default 10)")
-    p.add_argument("--transparency", type=float, help="flat nucleon transparency factor (default 0.5, or 1 for GENIE FSI "
-                   "runs, from run.json)")
+    p.add_argument("--transparency", type=float, help="flat nucleon transparency factor for every setting (default: per "
+                   "run from run.json, 1 where the GENIE cascade ran, else by target: C12 0.5, d 0.90, He4 0.72; see "
+                   "TRANSPARENCY)")
     b = sub.add_parser("band", help="GCF contact-uncertainty band of 12C runs by reweighting (no new simulation)")
     b.add_argument("--setting", action="append", required=True, help="LABEL=RUN_DIR[,RUN_DIR...] (Q2 slices of one setting)")
     b.add_argument("-o", "--outdir", required=True)
-    b.add_argument("--lumi-fb", type=float, default=10.0)
-    b.add_argument("--transparency", type=float, default=0.5)
+    b.add_argument("--lumi-fb", type=float, default=10.0, help="integrated luminosity per nucleus [fb^-1] (default 10)")
+    b.add_argument("--transparency", type=float, default=0.5, help="flat nucleon transparency factor (default 0.5, "
+                   "the 12C value of PRC 105, 034001)")
     b.add_argument("--replicas", type=int, default=1000)
     b.add_argument("--seed", type=int, default=1)
     a = ap.parse_args()
