@@ -108,7 +108,7 @@ exist depends on the model (`gcf_fsi --list-channels`):
 | `nucleon.cex` | – | yes | |
 | `nucleon.absorption` | – | yes | |
 | `nucleon.piprod` | – | yes | |
-| `nucleon.compound` | yes | yes | compound-nucleus (pre-equilibrium) fate |
+| `nucleon.compound` | yes | yes | compound-nucleus (pre-equilibrium) fate. Off by default in hN (#156), so `=1` turns it on; hA ignores this switch |
 | `pion.elastic` | yes | – | |
 | `pion.inelastic` | yes | yes | |
 | `pion.cex` | yes | yes | |
