@@ -321,6 +321,8 @@ XML override files in `config/genie_override/` control GENIE cascade parameters:
 - **`HAIntranuke2018.xml`** — hA model parameters
 - **`Messenger.xml`** — Log verbosity (ERROR-only for production)
 
+The programs set `GXMLPATH` themselves (so leaving it unset is fine), in this order: your own `GXMLPATH` entries, then the project override directory, then `$GENIE/config/G18_10a`, then `$GENIE/config`. GENIE reads each file from the first directory that has it, so a directory you put on `GXMLPATH` always wins over the project override. The project override is `config/genie_override`, or the directory in `$GENIE_OVERRIDE_DIR` if set (e.g. `config/genie_override_srctail`); when the variable selects a different directory, a `GXMLPATH` entry naming the default `config/genie_override` (as `build/gcf_env.sh` and the `gcf` front end export) is dropped, so the selection always takes effect. A selected directory without `HNIntranuke2018.xml` gives a warning at startup (`gcf_fsi` stops). The resolved path, and which directory and `NuclearModel` each Intranuke file comes from, are printed at startup.
+
 Key tunable parameters (both models share these via the `Intranuke2018` base class):
 
 | Parameter | Default | Description |
