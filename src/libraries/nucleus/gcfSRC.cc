@@ -306,7 +306,7 @@ bool gcfSRC::set_Contacts_SS_r()
 	  Cpn0=0.0 * ( A * 0.5);
 	  d_Cpn0=0.0 * ( A * 0.5);
 	  Cpn1=3.878 * ( A * 0.5);
-	  d_Cpn1=0.390 * ( A * 0.5);
+	  d_Cpn1=0.045 * ( A * 0.5);
 	  return true;
 	}
     }
@@ -419,7 +419,7 @@ bool gcfSRC::set_Contacts_SS_r()
 	  d_Cnn0=0.0 * ( A * 0.5);
 	  Cpn0=0.234 * ( A * 0.5);
 	  d_Cpn0=0.053 * ( A * 0.5);
-	  Cpn1=1.637 * ( A * 0.5);
+	  Cpn1=4.637 * ( A * 0.5);
 	  d_Cpn1=0.573 * ( A * 0.5);
 	  return true;
 	}
@@ -707,7 +707,7 @@ bool gcfSRC::set_Contacts_SS_k()
 	  Cpn0=0.0 * ( A * 0.5);
 	  d_Cpn0=0.0 * ( A * 0.5);
 	  Cpn1=3.840 * ( A * 0.5);
-	  d_Cpn1=0.398 * ( A * 0.5);
+	  d_Cpn1=0.103 * ( A * 0.5);
 	  return true;
 	}
     }
