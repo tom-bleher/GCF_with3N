@@ -52,7 +52,7 @@ bool init(int argc, char ** argv)
   nEvents = atoi(argv[5]);
 
   // Optional flags
-  csParam myParam = Panin;
+  csParam myParam = ppData;
   bool custom_ps = false;
   char * phase_space;
   char * uType = (char *)"AV18";
