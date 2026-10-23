@@ -333,7 +333,7 @@ Key tunable parameters (both models share these via the `Intranuke2018` base cla
 | `INUKE-NucCEXFac` | 1.0 | Charge exchange cross section scale factor |
 | `INUKE-XsecNNCorr` | true | Pandharipande-Pieper medium corrections for NN ([doi:10.1103/PhysRevC.45.791](https://doi.org/10.1103/PhysRevC.45.791)) |
 | `INUKE-DoFermi` | true | Enable Fermi motion of target nucleons |
-| `INUKE-DoCompoundNucleus` | true | Enable compound nucleus formation |
+| `INUKE-DoCompoundNucleus` | false (hN) | Compound-nucleus / pre-equilibrium fate. Off in the hN override, as in GENIE R-3_08_00, which withdrew it as experimental (#156). hA reads the flag but does not use it. |
 
 hN-specific parameters:
 
