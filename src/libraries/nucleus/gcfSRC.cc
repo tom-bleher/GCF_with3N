@@ -1045,8 +1045,13 @@ bool gcfSRC::set_Contacts_deut()
 
 bool gcfSRC::set_Contacts_EG2()
 {
-  // C1 is in percent per A/2 (Weiss et al., PLB 780, 211, Table I,
-  // doi:10.1016/j.physletb.2018.01.061), like the SS sets
+  // R01 values are the central values of the C_pp^{s=0}/C_np^{s=1} ratios fitted
+  // to EG2 (e,e'pp)/(e,e'p) data in Schmidt et al., Nature 578, 540 (2020),
+  // Extended Data Table 1, doi:10.1038/s41586-020-2021-6. For Pb the code applies
+  // R01 to Cpn0 and scales Cpp0/Cnn0 by Z/N; whether that matches the fit is open (#155).
+  // C1 is in percent per A/2, the units of the SS sets. The value 16 has no
+  // stated source; it is near the 12C AV18 k-space C_pn^{s=1} = 16.8 +- 0.8 of
+  // Weiss et al., PLB 780, 211 (2018), Table I, doi:10.1016/j.physletb.2018.01.061.
 
   if ((Z==6) && (N==6))
     {
