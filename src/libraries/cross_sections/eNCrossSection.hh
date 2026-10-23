@@ -6,6 +6,11 @@
 enum ffModel {dipole, kelly,ye};
 enum csMethod {onshell, cc1, cc2};
 
+// Form-factor model by name ("kelly", "ye", "dipole"); false if the name is unknown.
+bool parse_ffModel(const char *name, ffModel &model);
+const char *ffModel_name(ffModel model);
+const char *csMethod_name(csMethod method);
+
 class eNCrossSection
 {
  public:
