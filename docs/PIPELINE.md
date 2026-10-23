@@ -80,6 +80,7 @@ model = "3N"                  # 3N, 2N or MF
 beam = 6.0                    # GeV
 events = 1000000              # accepted events, over all jobs
 target = [12, 6]
+ff = "kelly"                  # nucleon form factors: kelly, ye or dipole
 wave_function = "AV18"        # 3N: AV18, AV18+UIX, AV18+TM, CDBonn, CDBonn+TM, or ...-pD
 theta_e = [5.0, 40.0]         # deg
 # 2N/MF: nn = "AV18" | "N2LO" | "N2LO12" | "N3LO" | "AV4" | "NV"; MF: fermi_gas = "global" | "local"

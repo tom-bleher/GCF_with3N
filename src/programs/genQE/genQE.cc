@@ -35,6 +35,7 @@ void Usage()
        << "-P: Use text file to specify phase space\n"
        << "-u: Specify NN interaction (default AV18)\n"
        << "-c: Specify eN cross section model (default cc1)\n"
+       << "-G: Nucleon form factors: kelly (default), ye or dipole\n"
        << "-s: Specify sigma_CM [GeV/c]\n"
        << "-E: Specify E* [GeV]\n"
        << "-M: Use randomized E* according to Barack's values\n"
@@ -84,7 +85,7 @@ bool init(int argc, char ** argv)
     uType = (char *)"AV18_deut";
   
   int c;
-  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:u:c:s:E:Mk:OCrlh")) != -1)
+  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:u:c:s:E:Mk:OCrlG:h")) != -1)
     switch(c)
       {
 	
@@ -108,6 +109,13 @@ bool init(int argc, char ** argv)
 	else
 	  {
 	    cerr << "Invalid cross section designation. Allowed values are onshell, cc1 and cc2. Aborting...\n";
+	    return false;
+	  }
+	break;
+      case 'G':
+	if (!parse_ffModel(optarg,ffMod))
+	  {
+	    cerr << "Invalid form-factor model. Allowed values are kelly, ye and dipole. Aborting...\n";
 	    return false;
 	  }
 	break;
