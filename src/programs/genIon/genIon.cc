@@ -30,7 +30,10 @@ void Usage()
        << "Optional flags:\n"
        << "-v: Verbose\n"
        << "-P: Use text file to specify phase space\n"
-       << "-I: Boost to inverse kinematics. In this case, the given beam energy is the kinetic energy per nucleon"
+       << "-I: Boost to inverse kinematics. In this case, the given beam energy is the kinetic energy per nucleon\n"
+       << "-x: Set the pp cross section to 0 where the pp s is outside the range of the pp data\n"
+       << "    (default: below, hold it at its value at the lower edge; above, extrapolate the fit).\n"
+       << "    The run summary gives the fraction of the weight from outside the range.\n"
        << "-h: Print this message and exit\n\n\n";
 }
 
@@ -53,6 +56,7 @@ bool init(int argc, char ** argv)
 
   // Optional flags
   csParam myParam = ppData;
+  ppRangePolicy myPolicy = ppExtend;
   bool custom_ps = false;
   char * phase_space;
   char * uType = (char *)"AV18";
@@ -60,7 +64,7 @@ bool init(int argc, char ** argv)
     uType = (char *)"AV18_deut";
   
   int c;
-  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:Ih")) != -1)
+  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:Ixh")) != -1)
     switch(c)
       {
 	
@@ -77,6 +81,9 @@ bool init(int argc, char ** argv)
       case 'I':
 	inv_kin = true;
 	break;
+      case 'x':
+	myPolicy = ppZero;
+	break;
       default:
 	abort();
 	
@@ -86,6 +93,7 @@ bool init(int argc, char ** argv)
   myInfo = new gcfNucleus(Z,N,uType);
   myRand = new TRandom3(0);
   myCS = new NNCrossSection(myParam);
+  myCS->set_pp_range_policy(myPolicy);
   
   if (inv_kin)
     {
@@ -106,6 +114,13 @@ bool init(int argc, char ** argv)
     myGen->set_deuteron();
   if (custom_ps)
     myGen->parse_phase_space_file(phase_space);
+
+  // The pp s of a beam nucleon on a free nucleon at rest
+  double s_nominal = myGen->get_s_nominal();
+  cerr << "genIon: nominal pp s = " << s_nominal << " GeV^2 (pp data: "
+       << NNCrossSection::pp_s_min() << "-" << NNCrossSection::pp_s_max() << " GeV^2)\n";
+  if (s_nominal < NNCrossSection::pp_s_min() or s_nominal > NNCrossSection::pp_s_max())
+    cerr << "genIon: WARNING: the nominal pp s is outside the range of the pp data.\n";
 
   // Set up the tree
   outfile->cd();
@@ -164,6 +179,7 @@ void evnt(int event)
 
 void fini()
 {
+  myGen->print_pp_summary();
   outtree->SetName("genT");
   outtree->Write();
   outfile->Delete("genTbuffer;*");
