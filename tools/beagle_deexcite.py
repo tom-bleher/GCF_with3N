@@ -24,7 +24,8 @@ alternative to tools/deexcite (Geant4) with the same input, output layout and JS
 
 BeAGLE needs FLUKA's data tables in its working directory, so every job runs in its own directory
 OUT.beagle/job_K with links to $FLUPRO/data. Large samples are split into contiguous blocks, one
-BeAGLE process each (about 30 s of initialization per process); block K uses seed S*1000 + K.
+BeAGLE process each (about 30 s of initialization per process); block K seeds both BeAGLE and
+FLUKA's own generator (FSEED card) with S*1000 + K.
 
 Environment (defaults in parentheses):
   BEAGLESYS  BeAGLE checkout with the BeAGLE executable (~/src/BeAGLE)
@@ -196,8 +197,11 @@ def select(ev):
 
 
 def card(code, what=(), sdum=""):
-    """BeAGLE/DPMJET input card: A10, six numbers in columns 11-70, A8."""
-    return f"{code:<10}{''.join(f'{x:10.1f}' for x in what):<60}{sdum}".rstrip()
+    """BeAGLE/DPMJET input card: A10, up to six numbers in columns 11-70 (read list-directed), A8."""
+    nums = "".join(f" {int(x)}" if float(x).is_integer() else f" {x}" for x in what)
+    if len(nums) > 60:
+        raise ValueError(f"{code} card: numbers do not fit in columns 11-70")
+    return f"{code:<10}{nums:<60}{sdum}".rstrip()
 
 
 def run_job(job, todo, workdir, env, seed, z_t, a_t, e_e, p_n):
@@ -218,6 +222,9 @@ def run_job(job, todo, workdir, env, seed, z_t, a_t, e_e, p_n):
         card("MOMENTUM", (e_e, p_n)),
         # GCF-FT: seed, nuclear-reaction level 2 (hand the (A-2)* to FLUKA, no rescattering)
         card("MODEL", (seed, 2.0, 0.0, 0.0, 0.0), "GCF-FT"),
+        # FLUKA's own generator (FLRNDM), which does the break-up: RNINIT(13, seed, 3, 3), BeAGLE's
+        # tested values with the sequence seed set; without it every job draws FLUKA's default sequence
+        card("FSEED", (13, seed, 3, 3)),
         f"{'INPFILE':<10}gcf.txt",
         f"{'OUTFILE':<10}beagle.txt",
         card("START", (0.0, 0.0)),
@@ -277,8 +284,10 @@ def main():
     for key, need in (("BEAGLESYS", "BeAGLE"), ("FLUPRO", "data/nuclear.bin"), ("LHAPATH", "cteq6ll.LHpdf")):
         if not Path(env[key], need).exists():
             sys.exit(f"beagle_deexcite: {key}={env[key]} has no {need}")
-    if args.seed * 1000 + args.jobs >= 10**7:
-        sys.exit("beagle_deexcite: --seed too large for BeAGLE's seed field")
+    # job K seeds BeAGLE's RANLUX and FLUKA's FLRNDM (RNINIT, below 9e8) with seed*1000 + K;
+    # a BeAGLE seed of 0 would mean a time-based seed
+    if not 1 <= args.seed or args.seed * 1000 + args.jobs >= 9 * 10**8:
+        sys.exit("beagle_deexcite: --seed must be between 1 and 899999")
 
     header, events = read_hepmc(args.input)
     if not events:
