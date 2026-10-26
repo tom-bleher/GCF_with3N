@@ -413,6 +413,10 @@ def detected_anywhere(d, role):
 def load(dirs):
     parts = [np.load(Path(r) / "analysis_events.npz") for r in dirs]
     keys = [k for k in parts[0].files if k != "meta"]
+    stale = {r: sorted(set(keys) - set(p.files)) for r, p in zip(dirs, parts) if set(keys) - set(p.files)}
+    if stale:  # Q2 slices extracted by different versions of this script
+        sys.exit("plots: these runs lack columns of " + str(dirs[0]) + "; re-run extract on all runs of the setting:\n"
+                 + "\n".join(f"  {r}: {', '.join(m[:5])}{' ...' if len(m) > 5 else ''}" for r, m in stale.items()))
     d = {k: np.concatenate([p[k] for p in parts]) for k in keys}
     if "evap_event" in d:  # per-product event index: offset by the events of the preceding runs
         off = np.cumsum([0] + [len(p["num"]) for p in parts[:-1]])
