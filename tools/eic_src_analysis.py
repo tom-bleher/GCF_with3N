@@ -248,6 +248,40 @@ def lab_to_irf(px, py, pz, a, p_nucleon, m_ion, crossing=0.025, mass=0.93892):
     return np.sqrt(x**2 + py**2 + zr**2)
 
 
+def cc1_2021_ratio(e_beam, k, p, is_p, m_n=0.93892):
+    """Per event sigma_cc1(as generated for PRC 105, 034001) / sigma_cc1(current), rest-frame vectors.
+
+    De Forest's cc1 as in eNCrossSection::sigmaccn (n = 1, Kelly form factors, mu_p = 2.79, mu_n = -1.91 as
+    in constants.hh). The paper's events were generated with the longitudinal factor Q^4/|q|^2, which
+    1a92ca1 (#33) fixed to (Q^2/|q|^2)^2; everything else in the weight is unchanged, so this ratio
+    reweights a sample to the paper's cross section. It matches the C++, current and with the old line,
+    to 1e-10 (#188). k: scattered electron, p: final leading nucleon (as QEGenerator passes vLead).
+    """
+    q = np.column_stack([-k[:, 0], -k[:, 1], e_beam - k[:, 2]])
+    q2v = (q**2).sum(1)
+    q2 = q2v - (e_beam - np.linalg.norm(k, axis=1)) ** 2
+    e = np.sqrt(m_n**2 + (p**2).sum(1))
+    eb = np.sqrt(m_n**2 + ((p - q) ** 2).sum(1))
+    q2b = q2v - (e - eb) ** 2
+    tau = q2 / (4 * m_n**2)
+    kelly = lambda a1, b1, b2, b3: (1 + a1 * tau) / (1 + b1 * tau + b2 * tau**2 + b3 * tau**3)  # noqa: E731
+    ge = np.where(is_p, kelly(-0.24, 10.98, 12.82, 21.97), 1.70 * tau / (1 + 3.3 * tau) / (1 + q2 / 0.71) ** 2)
+    gm = np.where(is_p, 2.79 * kelly(0.12, 10.97, 18.86, 6.55), -1.91 * kelly(2.33, 14.72, 24.20, 84.1))
+    f1, kf2 = (ge + gm * tau) / (1 + tau), (gm - ge) / (1 + tau)
+    x = f1**2 + q2b / (4 * m_n**2) * kf2**2
+    w_c = ((e + eb) ** 2 * x - q2v * (f1 + kf2) ** 2) / (4 * e * eb)
+    w_t = q2b * (f1 + kf2) ** 2 / (2 * eb * e)
+    p_perp = np.linalg.norm(np.cross(p, q), axis=1) / np.sqrt(q2v)
+    w_s = p_perp**2 * x / (e * eb)
+    w_i = -p_perp * (eb + e) * x / (e * eb)
+    t2 = np.tan(0.5 * np.arctan2(np.hypot(k[:, 0], k[:, 1]), k[:, 2])) ** 2
+    a_, b_ = np.cross(q, k), np.cross(q, p)
+    cphi = np.clip((a_ * b_).sum(1) / (np.linalg.norm(a_, axis=1) * np.linalg.norm(b_, axis=1)), -1, 1)
+    rest = ((q2 / (2 * q2v) + t2) * w_t + q2 / q2v * np.sqrt(q2 / q2v + t2) * w_i * cphi
+            + (q2 / q2v * cphi**2 + t2) * w_s)
+    return (q2**2 / q2v * w_c + rest) / ((q2 / q2v) ** 2 * w_c + rest)
+
+
 def boost_angles(p_irf, a, p_nucleon, m_ion):
     """Lab polar angle w.r.t. the ion beam [mrad] and lab momentum of rest-frame 3-momenta."""
     bg = a * p_nucleon / m_ion
@@ -294,6 +328,8 @@ def extract(run, jobs):
     out = {"num": num, "w_nb": g["weight"][num] / conv["attempts"], "q2": q2, "xb": xb}
     if run_kind == "DIS":
         out["lead_type"] = g["lead_type"][num]  # the struck nucleon (no final-state leading nucleon)
+    if run_kind == "2N":
+        out["cc1_2021_ratio"] = cc1_2021_ratio(e_irf, pe, g["pLead"][num], g["lead_type"][num] == 2212)
     z, a, m = {"C12": (6, 12, 11.174863), "d": (1, 2, 1.875613), "He4": (2, 4, 3.727379)}[beams["ion"]]
     for role, (pb, tb) in gen_roles.items():
         p = g[pb][num]
@@ -377,6 +413,10 @@ def detected_anywhere(d, role):
 def load(dirs):
     parts = [np.load(Path(r) / "analysis_events.npz") for r in dirs]
     keys = [k for k in parts[0].files if k != "meta"]
+    stale = {r: sorted(set(keys) - set(p.files)) for r, p in zip(dirs, parts) if set(keys) - set(p.files)}
+    if stale:  # Q2 slices extracted by different versions of this script
+        sys.exit("plots: these runs lack columns of " + str(dirs[0]) + "; re-run extract on all runs of the setting:\n"
+                 + "\n".join(f"  {r}: {', '.join(m[:5])}{' ...' if len(m) > 5 else ''}" for r, m in stale.items()))
     d = {k: np.concatenate([p[k] for p in parts]) for k in keys}
     if "evap_event" in d:  # per-product event index: offset by the events of the preceding runs
         off = np.cumsum([0] + [len(p["num"]) for p in parts[:-1]])
@@ -420,7 +460,7 @@ def wstats(x, w, ok, bins):
     return gen, acc, eff, err
 
 
-def plots(settings, outdir, lumi_nb_inv, transparency=None):
+def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -428,6 +468,13 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     data = {lab: load(dirs) for lab, dirs in settings.items()}
+    if cc1 == "2021":
+        # the paper's cross section (cc1 before the longitudinal fix of #33), for like-for-like comparison
+        for lab, (d, _) in data.items():
+            if "cc1_2021_ratio" not in d:
+                sys.exit(f"plots --cc1 2021: {lab} has no cc1_2021_ratio (2N runs only; re-run extract)")
+            d["w_nb"] = d["w_nb"] * d["cc1_2021_ratio"]
+        print("plots: weights reweighted to the cc1 cross section PRC 105, 034001 was generated with (before #33)")
     # the flat transparency stands in for FSI in PWIA runs; GENIE FSI runs already absorb nucleons
     # event by event, so they take 1 unless --transparency says otherwise
     if transparency is None:
@@ -447,13 +494,16 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
     scale = lumi_nb_inv * transparency
     summary = {}
 
-    # The figures follow the style of PRC 105, 034001 (Figs. 3-6). Figs. 3 and 4 show recoil and
-    # leading nucleons only; the paper's evaporation nucleons (from BeAGLE) are simulated only in
-    # --deexcite runs (Geant4 de-excitation of the A-2 remnant) and shown in figEvap below.
-    green, red, orange, magenta, brown = "#45c045", "#f0281e", "#ff9800", "#ee5fbf", "#9a5a1c"
+    # The figures follow the style of PRC 105, 034001 (Figs. 3-6). The paper's evaporation nucleons (from
+    # BeAGLE) exist only in --deexcite runs (BeAGLE/FLUKA or Geant4 de-excitation of the A-2 remnant);
+    # there Fig. 3 adds them scaled by 1/3 and Fig. 4 gets their column on the left, as in the paper,
+    # and figEvap below shows them in more detail.
+    green, red, orange, magenta, brown, blue_ev = "#45c045", "#f0281e", "#ff9800", "#ee5fbf", "#9a5a1c", "#1f3fe0"
     low_energy = {lab: metas[0]["beams"]["ion_momentum_per_nucleon_GeV"] < 75 for lab, (_, metas) in data.items()}
     for lab in data:
         summary.setdefault(lab, {})["transparency"] = transparency
+        summary[lab]["cc1"] = ("before the #33 fix, as PRC 105, 034001 was generated" if cc1 == "2021"
+                               else "current (longitudinal factor fixed in #33)")
 
     def place_label(ax, text, color, pts, anchor, taken, bw=0.18, bh=0.13, **kw):
         """Put text at the free spot nearest anchor (axes fractions): no data point inside its box."""
@@ -639,6 +689,14 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
             g = h > 0
             ax.errorbar(cen[g], h[g], xerr=hw3[g], yerr=e[g], fmt=mk, ms=4, color=c, elinewidth=1, capsize=0)
             curves[role], errs[role] = h, e
+        if "evap_pdg" in d:  # evaporation nucleons, scaled by 1/3 as in the paper
+            nuc = np.isin(d["evap_pdg"], (2212, 2112))
+            we = w[d["evap_event"][nuc]] / 3
+            h = np.histogram(d["evap_theta_mrad"][nuc], bins, weights=we)[0] / 1e3
+            e = np.sqrt(np.histogram(d["evap_theta_mrad"][nuc], bins, weights=we**2)[0]) / 1e3
+            g = h > 0
+            ax.errorbar(cen[g], h[g], xerr=hw3[g], yerr=e[g], fmt="s", ms=3.5, color=blue_ev, elinewidth=1, capsize=0)
+            curves["evap"], errs["evap"] = h, e
         ymax = 1.15 * max(float(np.max(v)) for v in curves.values())
         ax.set_xlim(0, 50)
         ax.set_ylim(0, ymax)
@@ -660,15 +718,18 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
         ax.text(0.92, 0.84, lab, transform=ax.transAxes, ha="right", fontsize=12, fontweight="bold")
         # direct labels in free space next to each curve (data points incl. error bars kept clear)
         pts = []
-        for role in ("rec", "lead"):
+        for role in curves:
             h, e = curves[role], errs[role]
             for y in (h, h + e, np.maximum(h - e, 0)):
                 g = h > 0
                 pts.append(np.column_stack([cen[g] / 50, y[g] / ymax]))
         pts = np.vstack(pts + [np.array([[0.92, 0.86], [0.85, 0.86]])])  # keep the setting tag clear
         taken = []
-        for role, c, text, anchor in (("rec", green, "Recoil\nNucleon", lambda k: (cen[k] / 50 + 0.14, 0.62 * curves["rec"][k] / ymax)),
-                                       ("lead", red, "Leading\nNucleon", lambda k: (cen[k] / 50, 0.25))):
+        labels = [("rec", green, "Recoil\nNucleon", lambda k: (cen[k] / 50 + 0.14, 0.62 * curves["rec"][k] / ymax)),
+                  ("lead", red, "Leading\nNucleon", lambda k: (cen[k] / 50, 0.25))]
+        if "evap" in curves:
+            labels.append(("evap", blue_ev, "Evaporation\nNucleon\n" + r"$\times$1/3", lambda k: (cen[k] / 50 + 0.08, 0.5)))
+        for role, c, text, anchor in labels:
             k = int(np.argmax(curves[role]))
             place_label(ax, text, c, pts, anchor(k), taken, fontsize=12, fontweight="bold")
         ax.set_ylabel("Events per bin", fontsize=13)
@@ -677,23 +738,33 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None):
     fig.savefig(outdir / "fig3_angles.pdf")
     plt.close(fig)
 
-    # Fig. 4: recoil momentum in the ion rest frame vs opening angle to the ion beam (jet map, empty bins white)
-    fig, axes = plt.subplots(len(data), 1, figsize=(4.6, 2.9 * len(data)), squeeze=False)
-    for ax, (lab, (d, _)) in zip(axes[:, 0], data.items()):
-        xmax = 15 if low_energy[lab] else 8
-        H, xe, ye = np.histogram2d(d["rec_theta_mrad"], d["rec_p_irf"], bins=[np.linspace(0, xmax, 61), np.linspace(0, 0.8, 41)],
-                                   weights=d["w_nb"] * lumi_nb_inv)
+    # Fig. 4: momentum in the ion rest frame vs opening angle to the ion beam (jet map, empty bins white):
+    # recoil nucleons, and evaporation nucleons on the left when the runs have them
+    def fig4_panel(ax, theta, p_irf, w, text, lab, xmax):
+        H, xe, ye = np.histogram2d(theta, p_irf, bins=[np.linspace(0, xmax, 61), np.linspace(0, 0.8, 41)], weights=w)
         ax.pcolormesh(xe, ye, np.ma.masked_less_equal(H, 0).T, cmap="jet", vmin=0, shading="flat", rasterized=True)
         ax.axhline(P_IRF_MIN, color="red", lw=2, ls=(0, (5, 3)))
         ax.text(0.05, 0.9, lab, transform=ax.transAxes, fontsize=15, va="top", color="#333333",
                 bbox=dict(facecolor="white", edgecolor="none", alpha=0.85, pad=2))
-        ax.text(0.95, 0.08, "Recoil\nNucleons", transform=ax.transAxes, fontsize=13, ha="right", va="bottom", color="#333333")
+        ax.text(0.95, 0.08, text, transform=ax.transAxes, fontsize=13, ha="right", va="bottom", color="#333333")
         ax.set_xticks(np.arange(0, xmax + 1, 5 if xmax >= 10 else 2))
         ax.set_xlim(0, xmax)
         ax.set_ylim(0, 0.8)
         ax.set_xlabel("Opening Angle [mrad]", fontsize=12, color="#333333")
         ax.set_ylabel(r"Momentum (IRF) [GeV/$c$]", fontsize=12, color="#333333")
         ax.tick_params(labelsize=11, colors="#333333")
+
+    evap4 = all("evap_pdg" in d for d, _ in data.values())  # the paper's left column: evaporation nucleons
+    fig, axes = plt.subplots(len(data), 2 if evap4 else 1, figsize=(9.2 if evap4 else 4.6, 2.9 * len(data)), squeeze=False)
+    for row, (lab, (d, _)) in enumerate(data.items()):
+        w = d["w_nb"] * lumi_nb_inv
+        panels = [(axes[row, -1], d["rec_theta_mrad"], d["rec_p_irf"], w, "Recoil\nNucleons")]
+        if evap4:
+            nuc = np.isin(d["evap_pdg"], (2212, 2112))
+            panels.insert(0, (axes[row, 0], d["evap_theta_mrad"][nuc], d["evap_p_irf"][nuc], w[d["evap_event"][nuc]],
+                              "Evaporation\nNucleons"))
+        for ax, th, pirf, wt, text in panels:
+            fig4_panel(ax, th, pirf, wt, text, lab, 15 if low_energy[lab] else 8)
     fig.tight_layout()
     fig.savefig(outdir / "fig4_pirf_vs_theta.pdf")
     plt.close(fig)
@@ -1167,6 +1238,9 @@ def main():
     p.add_argument("--lumi-fb", type=float, default=10.0, help="integrated luminosity per nucleus [fb^-1] (default 10)")
     p.add_argument("--transparency", type=float, help="flat nucleon transparency factor (default 0.5, or 1 for GENIE FSI "
                    "runs, from run.json)")
+    p.add_argument("--cc1", choices=("fixed", "2021"), default="fixed",
+                   help="cross section: fixed (current cc1, default) or 2021 (cc1 before the #33 fix, as PRC 105, "
+                        "034001 was generated; per-event reweighting, 2N runs)")
     b = sub.add_parser("band", help="GCF contact-uncertainty band of 12C runs by reweighting (no new simulation)")
     b.add_argument("--setting", action="append", required=True, help="LABEL=RUN_DIR[,RUN_DIR...] (Q2 slices of one setting)")
     b.add_argument("-o", "--outdir", required=True)
@@ -1186,7 +1260,7 @@ def main():
         if a.cmd == "band":
             band(settings, a.outdir, a.lumi_fb * 1e6, a.transparency, a.replicas, a.seed)
         else:
-            plots(settings, a.outdir, a.lumi_fb * 1e6, a.transparency)
+            plots(settings, a.outdir, a.lumi_fb * 1e6, a.transparency, a.cc1)
 
 
 if __name__ == "__main__":
