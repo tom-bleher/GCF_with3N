@@ -27,10 +27,13 @@
 #   --gen-args "ARGS"     extra generator flags. E* sampling (-M) is added for A > 4 SRC runs (4He runs
 #                         at E* = 0; Pybus et al. 2020, doi:10.1016/j.physletb.2020.135429, varied the
 #                         4He A-2 E* over 0-10 MeV as a systematic)
-#   --deexcite            de-excite the A-2 remnant with Geant4 (evaporation nucleons, light fragments,
-#                         photons) before the afterburner: tools/deexcite, built inside eic-shell with
-#                         cmake -S tools/deexcite -B tools/deexcite/build && cmake --build tools/deexcite/build
-#                         (genQE and genDIS, whose output carries the remnant)
+#   --deexcite [geant4|beagle]
+#                         de-excite the A-2 remnant (evaporation nucleons, light fragments, photons) before
+#                         the afterburner (genQE and genDIS, whose output carries the remnant):
+#                         geant4 (default) uses tools/deexcite, built inside eic-shell with
+#                         cmake -S tools/deexcite -B tools/deexcite/build && cmake --build tools/deexcite/build;
+#                         beagle uses tools/beagle_deexcite.py, BeAGLE with FLUKA as PRC 105, 034001 did
+#                         (needs BeAGLE built against FLUKA 4; see BEAGLESYS, FLUPRO, LHAPATH below)
 #   --no-cuts             convert all events instead of Q2 > 3, xB > 1.2
 #   --compress N          ROOT compression of sim/reco output (default 505 = ZSTD level 5, about a
 #                         third smaller than npsim/EICrecon's ZLIB 1; 0 keeps their output as is)
@@ -43,6 +46,9 @@
 #   EPIC_INSTALL      epic install prefix (required), e.g. ~/eic/dev/epic_craterlake_5x41/install
 #   EICRECON_INSTALL  EICrecon install prefix (required for reco)
 #   EIC_SHELL         eic-shell launcher (default ~/eic/eic-shell)
+#   BEAGLESYS, FLUPRO, LHAPATH
+#                     BeAGLE checkout, FLUKA 4 installation and LHAPDF 5 PDF sets for --deexcite beagle
+#                     (defaults ~/src/BeAGLE, ~/src/beagle-deps/fluka, ~/src/beagle-deps/lhapdf5/share/lhapdf/PDFsets)
 #   FIELDMAPS         directory linked as ./fieldmaps in every job (default ~/eic/fieldmaps)
 #   EPIC_CONFIG       detector config (default epic_craterlake_5x41 for 5x41, epic_craterlake_10x110_H2 for 10x110)
 #   FIELD             beamline field file swapped into the config (default fields/beamline_5x41_He4.xml for
@@ -83,7 +89,9 @@ while [[ $# -gt 0 ]]; do
     --generator) GEN=$2; shift 2 ;;
     --gen-args) GEN_ARGS=$2; shift 2 ;;
     --compress) COMPRESS=$2; shift 2 ;;
-    --deexcite) DEEX=1; shift ;;
+    --deexcite) DEEX=geant4
+                if [[ ${2:-} == geant4 || ${2:-} == beagle ]]; then DEEX=$2; shift; fi
+                shift ;;
     --stage) STAGE=$2; shift 2 ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
@@ -112,9 +120,17 @@ if [[ $STAGE == all || $STAGE == reco || $STAGE == resume ]]; then
   [[ -n ${EICRECON_INSTALL:-} && -f $EICRECON_INSTALL/bin/eicrecon-this.sh ]] || die "set EICRECON_INSTALL"
 fi
 DEEX_BIN=$GCF/tools/deexcite/build/deexcite
-if [[ $DEEX == 1 ]]; then
+: "${BEAGLESYS:=$HOME/src/BeAGLE}" "${FLUPRO:=$HOME/src/beagle-deps/fluka}" "${LHAPATH:=$HOME/src/beagle-deps/lhapdf5/share/lhapdf/PDFsets}"
+if [[ $DEEX != 0 ]]; then
   [[ $GEN == genQE || $GEN == genDIS ]] || die "--deexcite needs the A-2 remnant in the event: genQE or genDIS"
-  [[ -x $DEEX_BIN ]] || die "--deexcite: build tools/deexcite inside eic-shell first (see --help)"
+  if [[ $DEEX == geant4 ]]; then
+    [[ -x $DEEX_BIN ]] || die "--deexcite: build tools/deexcite inside eic-shell first (see --help)"
+  else
+    DEEX_BIN=$GCF/tools/beagle_deexcite.py
+    [[ -x $BEAGLESYS/BeAGLE ]] || die "--deexcite beagle: no BeAGLE executable in BEAGLESYS=$BEAGLESYS"
+    [[ -f $FLUPRO/data/nuclear.bin ]] || die "--deexcite beagle: no FLUKA data in FLUPRO=$FLUPRO"
+    [[ -f $LHAPATH/cteq6ll.LHpdf ]] || die "--deexcite beagle: no LHAPDF 5 sets in LHAPATH=$LHAPATH"
+  fi
 fi
 if [[ $STAGE == all ]]; then
   [[ -e $OUT ]] && die "$OUT exists; use a new directory or --stage to continue a run"
@@ -188,6 +204,7 @@ cd "\$OUT"
 STAGE=$STAGE CHUNK=$CHUNK JOBS=$JOBS RJOBS=$RJOBS RTHREADS=$RTHREADS COMPRESS=$COMPRESS SEED=$SEED FIELDMAPS="$FIELDMAPS"
 EPIC_INSTALL="$EPIC_INSTALL" EPIC_CONFIG="$EPIC_CONFIG" FIELD="$FIELD" AB_PRESET="$AB_PRESET"
 EICRECON_INSTALL="${EICRECON_INSTALL:-}" DEEX=$DEEX DEEX_BIN="$DEEX_BIN"
+export BEAGLESYS="$BEAGLESYS" FLUPRO="$FLUPRO" LHAPATH="$LHAPATH"
 EOF
   cat >> container_stage.sh <<'EOF'
 log() { echo "[$(date +%T)] $*" | tee -a run.log; }
@@ -252,10 +269,11 @@ if [[ $STAGE == all || $STAGE == sim ]]; then
   fi
   log "geometry: $EPIC_CONFIG with $(grep -o 'fields/beamline_[^"]*\.xml' geometry.xml)"
   AB_IN=gen.hepmc3
-  if [[ $DEEX == 1 ]]; then
-    # Geant4 de-excitation of the A-2 remnant; its products follow all other particles, so the
-    # analysis's role order (e', lead, recoil) is unchanged
-    "$DEEX_BIN" gen.hepmc3 gen_deex.hepmc3 --seed "$SEED" > deexcite.log 2>&1 || { log "deexcite failed (deexcite.log)"; exit 4; }
+  if [[ $DEEX != 0 ]]; then
+    # de-excitation of the A-2 remnant (Geant4 or BeAGLE); its products follow all other particles,
+    # so the analysis's role order (e', lead, recoil) is unchanged
+    DEEX_ARGS=(); [[ $DEEX == beagle ]] && DEEX_ARGS=(--jobs $(( JOBS < 16 ? JOBS : 16 )))
+    "$DEEX_BIN" gen.hepmc3 gen_deex.hepmc3 --seed "$SEED" "${DEEX_ARGS[@]}" > deexcite.log 2>&1 || { log "deexcite ($DEEX) failed (deexcite.log)"; exit 4; }
     log "$(grep '^deexcite:' deexcite.log)"
     AB_IN=gen_deex.hepmc3
   fi
