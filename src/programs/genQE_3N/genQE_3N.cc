@@ -32,6 +32,7 @@ void Usage()
        << "Optional flags:\n"
        << "-v: Verbose\n"
        << "-c: Specify eN cross section model (default cc1)\n"
+       << "-G: Nucleon form factors: kelly (default), ye or dipole\n"
        << "-A: Target mass number (default 12)\n"
        << "-Z: Target charge number (default 6)\n"
        << "-s: CM Gaussian width sigCM in GeV/c per component (default 0.15)\n"
@@ -64,7 +65,7 @@ bool init(int argc, char ** argv)
   UInt_t seed = 0;
 
   int c;
-  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vc:A:Z:s:C:S:h")) != -1)
+  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vc:A:Z:s:C:S:G:h")) != -1)
     switch(c)
       {
 
@@ -81,6 +82,13 @@ bool init(int argc, char ** argv)
 	else
 	  {
 	    cerr << "Invalid cross section designation. Allowed values are onshell, cc1 and cc2. Aborting...\n";
+	    return false;
+	  }
+	break;
+      case 'G':
+	if (!parse_ffModel(optarg,ffMod))
+	  {
+	    cerr << "Invalid form-factor model. Allowed values are kelly, ye and dipole. Aborting...\n";
 	    return false;
 	  }
 	break;

@@ -1,5 +1,6 @@
 #include <iostream>
 #include <math.h>
+#include <string>
 #include "eNCrossSection.hh"
 #include "helpers.hh"
 #include "constants.hh"
@@ -11,6 +12,38 @@ const double params_ye_GMp[13]={0.264142994136,-1.095306122120,1.218553781780,0.
 const double params_ye_GMn[13]={0.257758326959,-1.079540642058,1.182183812195,0.711015085833,-1.348080936796,-1.662444025208,2.624354426029,1.751234494568,-4.922300878888,3.197892727312,-0.712072389946,0.,0.};
 
 
+bool parse_ffModel(const char *name, ffModel &model)
+{
+  const std::string s(name);
+  if (s == "kelly") model = kelly;
+  else if (s == "ye") model = ye;
+  else if (s == "dipole") model = dipole;
+  else return false;
+  return true;
+}
+
+const char *ffModel_name(ffModel model)
+{
+  switch (model)
+    {
+    case dipole: return "dipole";
+    case kelly: return "kelly";
+    case ye: return "ye";
+    }
+  return "unknown";
+}
+
+const char *csMethod_name(csMethod method)
+{
+  switch (method)
+    {
+    case onshell: return "onshell";
+    case cc1: return "cc1";
+    case cc2: return "cc2";
+    }
+  return "unknown";
+}
+
 eNCrossSection::eNCrossSection()
 {
   // Set defaults
@@ -20,7 +53,8 @@ eNCrossSection::eNCrossSection()
 
 eNCrossSection::eNCrossSection(csMethod thisMeth, ffModel thisMod)
 {
-  std::cerr << "eNCrossSection: you have selected configuration: " << thisMeth << " " << thisMod <<"\n";
+  std::cerr << "eNCrossSection: cross section " << csMethod_name(thisMeth)
+            << ", form factors " << ffModel_name(thisMod) << "\n";
   myModel=thisMod;
   myMethod=thisMeth;
 }

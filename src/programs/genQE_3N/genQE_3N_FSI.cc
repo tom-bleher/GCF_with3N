@@ -43,6 +43,7 @@ void Usage()
        << "Optional flags:\n"
        << "-v: Verbose\n"
        << "-c: Specify eN cross section model (default cc1)\n"
+       << "-G: Nucleon form factors: kelly (default), ye or dipole\n"
        << "-f: FSI model (hN or hA, default hN)\n"
        << "-A: Target mass number (default 12)\n"
        << "-Z: Target charge number (default 6)\n"
@@ -95,7 +96,7 @@ bool init(int argc, char ** argv)
   UInt_t seed = 0;
 
   int c;
-  while ((c = getopt(argc-numargs+1, &argv[numargs-1], "vc:f:A:Z:s:C:nIt:q:K:S:h")) != -1)
+  while ((c = getopt(argc-numargs+1, &argv[numargs-1], "vc:f:A:Z:s:C:nIt:q:K:S:G:h")) != -1)
     switch (c) {
       case 'v':
         verbose = true; break;
@@ -104,6 +105,9 @@ bool init(int argc, char ** argv)
         else if ((strcmp(optarg,"cc1") == 0) || (atoi(optarg) == 1)) csMeth = cc1;
         else if ((strcmp(optarg,"cc2") == 0) || (atoi(optarg) == 2)) csMeth = cc2;
         else { cerr << "Invalid cross section. Allowed: onshell, cc1, cc2.\n"; return false; }
+        break;
+      case 'G':
+        if (!parse_ffModel(optarg, ffMod)) { cerr << "Invalid form-factor model. Allowed: kelly, ye, dipole.\n"; return false; }
         break;
       case 'f':
         if (strcmp(optarg,"hN") == 0 || strcmp(optarg,"HN") == 0) fsiModel = kHN2018;
