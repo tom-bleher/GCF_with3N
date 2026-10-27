@@ -58,6 +58,10 @@ DelRNucleon         double  Yes   mult. factor for nucleon de-Broglie wavelength
     <param type="double" name="INUKE-FermiMomentum">     0.250 </param>
 
     <param type="bool"   name="INUKE-DoFermi">           true  </param>
+    <!-- Read but not used by HAIntranuke2018 in R-3_06_02 or R-3_08_00: the hA
+         compound fate (kIHAFtCmp) is drawn from the fate tables whatever
+         this says, so true/false give identical events.  Kept at the
+         upstream value (true).  See #156. -->
     <param type="bool"   name="INUKE-DoCompoundNucleus"> true  </param>
     <param type="bool"   name="INUKE-XsecNNCorr"> true </param>
 
