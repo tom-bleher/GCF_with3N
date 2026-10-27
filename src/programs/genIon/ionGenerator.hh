@@ -14,6 +14,8 @@ class ionGenerator: public gcfGenerator
   ionGenerator(double E, gcfNucleus * thisInfo, NNCrossSection * thisCS, TRandom3 * thisRand);
   ~ionGenerator();
   void generate_event(double &weight, int &lead_type, int &rec_type, TLorentzVector &v3_target, TLorentzVector &v4_target, TLorentzVector &vRec_target, TLorentzVector &vAm2_target);
+  double get_s_nominal();
+  void print_pp_summary();
   
  private:
   NNCrossSection * myCS;
@@ -23,6 +25,10 @@ class ionGenerator: public gcfGenerator
   double p1;
   TVector3 v1;
   TLorentzVector v1_target;
+
+  // Events and weight for which the pp s lies below or above the pp data
+  long nCalls_pp, nLow_pp, nHigh_pp;
+  double sumW_pp, sumWLow_pp, sumWHigh_pp;
   
 };
 
