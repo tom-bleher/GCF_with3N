@@ -16,7 +16,7 @@ with the electron and the ion as status-4 beams. Feed it to the afterburner
 (abconv) for the crossing angle and beam effects, then to npsim:
 
     tools/gcf2hepmc.py gen.root gen.hepmc3 --beams 5x41 --ion C12 --paper-cuts
-    abconv -p ip6_eAu_41x5 -f hepmc3 -o ab gen.hepmc3
+    abconv -p ip6_hidiv_41x5 -f hepmc3 -o ab gen.hepmc3   # light-ion stand-in, see run_eic_sim.sh
     npsim --compactFile geometry.xml --inputFiles ab.hepmc --outputFile sim.edm4hep.root -N -1
 
 Supported inputs (detected from the tree):
