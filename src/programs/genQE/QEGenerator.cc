@@ -141,6 +141,12 @@ void QEGenerator::generate_event(double &weight, int &lead_type, int &rec_type, 
   vk_int_target.SetVect(vk_int);
   vk_int_target.SetT(Ek_int);
 
+  if (!in_xB_nu_window(QSq, Ebeam_int - Ek_int))
+    {
+      weight=0.;
+      return;
+    }
+
   q_target = vbeam_int_target - vk_int_target;
 
   vLead_target = v1_target + vbeam_int_target - vk_int_target;
@@ -278,6 +284,11 @@ void QEGenerator::generate_event_lightcone(double &weight, int &lead_type, int &
     }
 
   double Ek_int = Ebeam_int - omega;
+  if (!in_xB_nu_window(QSq, omega))
+    {
+      weight=0.;
+      return;
+    }
   double cosThetak = 1. - QSq/(2.*Ebeam_int*Ek_int);
 
   if (fabs(cosThetak) > 1.)
