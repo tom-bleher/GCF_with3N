@@ -53,12 +53,16 @@
 #   EPIC_CONFIG       detector config (default epic_craterlake_5x41 for 5x41, epic_craterlake_10x110_H2 for 10x110)
 #   FIELD             beamline field file swapped into the config (default fields/beamline_5x41_He4.xml for
 #                     5x41; none for 10x110, whose H2 config already has the Z/A = 1/2 field)
-#   AB_PRESET         abconv preset (default ip6_eAu_41x5 / ip6_eAu_110x10). abconv has no light-ion
-#                     preset, so C12, d and He4 use the eAu ones, an approximation: 25 mrad crossing
-#                     angle plus 0.1 mrad vertical, the eAu ion divergence and bunch length (vertex z
-#                     spread 58 mm rms at 41x5), no momentum spread. PRC 105, 034001
-#                     (doi:10.1103/PhysRevC.105.034001) applied only the crossing angle and
-#                     parametrized smearing. Names are case sensitive (abconv's help
+#   AB_PRESET         abconv preset (default ip6_hidiv_41x5 / ip6_eAu_110x10). abconv has no light-ion
+#                     preset, so C12, d and He4 borrow one, an approximation: 25 mrad crossing angle
+#                     plus 0.1 mrad vertical, that preset's ion divergence and bunch length, no
+#                     momentum spread. At 5x41 the stand-in is the 41 GeV proton beam (7.5 cm bunch,
+#                     vertex z spread about 38 mm rms): ip6_eAu_41x5's 11.6 cm is the Au (and Pb)
+#                     value at 41 GeV/u and the longest of any preset, where p, d, 3He, Cu, Ru and Au
+#                     at 100-166 GeV/u all use 6-7.5 cm; with it, 17% of 5x41 Q2 12-25 events lose the
+#                     electron track (vertex z < -100 mm misses the vertex and Si barrel layers, #190).
+#                     PRC 105, 034001 (doi:10.1103/PhysRevC.105.034001) applied only the crossing
+#                     angle and parametrized smearing. Names are case sensitive (abconv's help
 #                     lists ip6_eau_41x5, which it rejects); ab.hepmc's beam metadata (ion_beam_pdg 11,
 #                     ion_beam_energy 18) is wrong, and run.json records the preset used.
 #
@@ -103,7 +107,7 @@ die() { echo "run_eic_sim: $*" >&2; exit 2; }
 [[ $Q2 =~ ^[0-9.]+:[0-9.]+$ ]] && awk -F: '{exit !($1 >= 0 && $2 > $1)}' <<< "$Q2" || die "--q2 must be MIN:MAX with 0 <= MIN < MAX"
 case "$ION" in C12) Z=6 N=6 ;; d) Z=1 N=1 ;; He4) Z=2 N=2 ;; *) die "--ion must be C12, d or He4 (Z/A = 1/2)" ;; esac
 case "$BEAMS" in
-  5x41)   : "${EPIC_CONFIG:=epic_craterlake_5x41}" "${FIELD=fields/beamline_5x41_He4.xml}" "${AB_PRESET:=ip6_eAu_41x5}" ;;
+  5x41)   : "${EPIC_CONFIG:=epic_craterlake_5x41}" "${FIELD=fields/beamline_5x41_He4.xml}" "${AB_PRESET:=ip6_hidiv_41x5}" ;;
   10x110) : "${EPIC_CONFIG:=epic_craterlake_10x110_H2}" "${FIELD=}" "${AB_PRESET:=ip6_eAu_110x10}" ;;
   *) die "--beams must be 5x41 or 10x110 (the light-ion lattices in epic)" ;;
 esac
@@ -252,6 +256,10 @@ RECO_FLAGS=(
   -PRPOTS:ForwardRomanPotRecParticles:requireBeamProton=false
   -PFOFFMTRK:ForwardOffMRecParticles:requireBeamProton=false
   -PFOFFMTRK:ForwardOffMRecParticles:requireMatchingMatrix=false
+  # match barrel ScFi and imaging clusters by eta/phi only: at the backward barrel end the imaging
+  # layers see about a third of the shower, so the stock 50% energy check drops the ScFi cluster and
+  # the electron has no cluster (5x41 Q2 3-5: 96 -> 201 of 300 identified; eic/EICrecon#2995, #190)
+  -PBEMC:EcalBarrelClustersWithoutShapes:energyRelTolerance=-1
 )
 reco() {
   local out=$LOCAL/reco_$1.edm4eic.root
@@ -309,6 +317,7 @@ if [[ $STAGE == all || $STAGE == reco || $STAGE == resume ]]; then
   [[ $STAGE == resume ]] && for f in chunk_*.hepmc; do  # re-reconstruct chunks whose sim was redone
     i=${f//[!0-9]/}; [[ sim_$i.edm4hep.root -nt exit_reco_$i ]] && rm -f "exit_reco_$i"; done
   source "$EICRECON_INSTALL/bin/eicrecon-this.sh"
+  printf '%s\n' "${RECO_FLAGS[@]}" > reco_flags.txt
   log "eicrecon: $(command -v eicrecon), $RJOBS parallel, $RTHREADS threads/job"
   for_chunks reco "$RJOBS" || log "WARNING: eicrecon failures (see exit_reco_*)"
 fi
@@ -369,7 +378,8 @@ run = {
     "converter": json.loads((o / "gen.hepmc3.json").read_text()) if (o / "gen.hepmc3.json").exists() else None,
     "deexcitation": json.loads((o / "gen_deex.hepmc3.json").read_text()) if (o / "gen_deex.hepmc3.json").exists() else None,
     "epic": {"install": epic, "config": config, "field_swap": field or None, "git": git(epic)},
-    "eicrecon": {"install": eicrecon or None, "git": git(eicrecon) if eicrecon else None},
+    "eicrecon": {"install": eicrecon or None, "git": git(eicrecon) if eicrecon else None,
+                 "flags": (o / "reco_flags.txt").read_text().split() if (o / "reco_flags.txt").exists() else None},
     "abconv_preset": preset,
     "container_image": image,
     "container": info,

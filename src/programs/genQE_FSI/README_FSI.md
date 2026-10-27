@@ -206,7 +206,7 @@ printf 'QSq 3 25\n' > ps_eic.txt
 ./build/genQE 6 6 $E gen.root 200000 -P ps_eic.txt -M          # PRC 105, 034001 settings (doi:10.1103/PhysRevC.105.034001)
 ../../../tools/gcf2hepmc.py gen.root gen.hepmc3 --beams 5x41 --ion C12 --paper-cuts
 # inside eic-shell:
-abconv -p ip6_eAu_41x5 -f hepmc3 -o ab gen.hepmc3
+abconv -p ip6_hidiv_41x5 -f hepmc3 -o ab gen.hepmc3   # 41 GeV proton beam as the light-ion stand-in (tools/run_eic_sim.sh)
 npsim --compactFile geometry.xml --inputFiles ab.hepmc --outputFile sim.edm4hep.root -N -1
 ```
 
