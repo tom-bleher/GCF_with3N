@@ -187,6 +187,15 @@ void QEGenerator::generate_event_lightcone(double &weight, int &lead_type, int &
 
 void QEGenerator::generate_event_lightcone(double &weight, int &lead_type, int &rec_type, TLorentzVector& vk_target, TLorentzVector &vLead_target, TLorentzVector &vRec_target, TLorentzVector &vAm2_target, double &Estar)
 {
+  TVector3 vRel_target;
+  TLorentzVector q_target;
+  generate_event_lightcone(weight,lead_type,rec_type,vk_target,vLead_target,vRec_target,vAm2_target,vRel_target,q_target,Estar);
+}
+
+// Also returns the pair relative momentum (p1 - p2)/2 and the vertex momentum
+// transfer, the same quantities generate_event returns.
+void QEGenerator::generate_event_lightcone(double &weight, int &lead_type, int &rec_type, TLorentzVector& vk_target, TLorentzVector &vLead_target, TLorentzVector &vRec_target, TLorentzVector &vAm2_target, TVector3 &vRel_target, TLorentzVector &q_target, double &Estar)
+{
   // Start with weight 1. Only multiply terms to weight. If trouble, set weight=0.
   weight = 1.;
 
@@ -321,6 +330,9 @@ void QEGenerator::generate_event_lightcone(double &weight, int &lead_type, int &
   vAm2_target.SetVect(vAm2);
   vAm2_target.SetT(EAm2);
   
+  q_target = vbeam_int_target - vk_int_target;
+  vRel_target = 0.5*(v1 - vRec);
+
   vLead_target = v1_target + vbeam_int_target - vk_int_target;
   TVector3 vLead = vLead_target.Vect();
   double Elead = vLead_target.T();
