@@ -18,13 +18,19 @@
 //   vtx_valid               int      1 if vtx_* hold the interaction vertex
 //   vtx_x vtx_y vtx_z       double   vertex inside the nucleus (fm)
 //   res_px res_py res_pz res_E  double  residual nucleus (before FSI)
+//   coulomb_dE              double   Delta E_C (GeV) of a Coulomb correction
+//                                    applied to e_* and the charged nuc_*
+//                                    (q * Delta E_C each); 0 = none. gcf_fsi
+//                                    takes it off before the cascade and
+//                                    applies it to part_* after.
 //
 // plus, per file: TH1D "hAttempts" (1 bin, total generation attempts
 // including rejected ones; hadd sums it) and a TNamed per stage with
 // provenance (command line, seed, git version).
 //
 // gcf_fsi only needs nuc_pdg and nuc_px/py/pz/E, and target_A/target_Z
-// (or the --target option); everything else is optional and passed through.
+// (or the --target option); everything else is optional and passed through
+// (coulomb_dE is read when present).
 
 #include "TLorentzVector.h"
 #include "TTree.h"
@@ -47,6 +53,7 @@ struct EventBuffers {
   int vtx_valid = 0;
   double vtx_x = 0., vtx_y = 0., vtx_z = 0.;
   double res_px = 0., res_py = 0., res_pz = 0., res_E = 0.;
+  double coulombDE = 0.;
 
   void Book(TTree *t) {
     t->Branch("weight", &weight, "weight/D");
@@ -71,6 +78,7 @@ struct EventBuffers {
     t->Branch("res_py", &res_py, "res_py/D");
     t->Branch("res_pz", &res_pz, "res_pz/D");
     t->Branch("res_E", &res_E, "res_E/D");
+    t->Branch("coulomb_dE", &coulombDE, "coulomb_dE/D");
   }
 
   void ClearParticles() {

@@ -104,7 +104,9 @@ GENERATE = [
         unit="GeV/c", help="Default 0.25.", advanced=True),
     Opt("rad", "bool", "--rad", False, models=["2N", "MF"], label="Radiation (peaking approx.)", advanced=True),
     Opt("coulomb", "bool", "--coulomb", False, models=["2N", "MF"], label="Coulomb correction",
-        help="Applied at generation, i.e. before FSI.", advanced=True),
+        help="e' and the generated protons are stored corrected; with FSI, gcf_fsi "
+        "applies the hadron shift after the cascade instead (p, pi+ +dE_C, pi- -dE_C).",
+        advanced=True),
     Opt("phase_space", "str", "--phase-space", None, models=["2N", "MF"],
         label="Phase-space file", help="gcfGenerator phase-space limits file.", advanced=True),
 ]
