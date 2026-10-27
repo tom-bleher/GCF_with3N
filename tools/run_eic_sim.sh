@@ -17,8 +17,9 @@
 #   --seed S              genQE seed (default 1); npsim chunk i uses S*100000 + i + 1
 #   --max-events N        convert at most N events (smoke tests)
 #   --chunk-size N        events per npsim/eicrecon job (default 500)
-#   --jobs N              parallel npsim jobs (default 64; ~1.8 GB each)
-#   --reco-jobs N         parallel eicrecon jobs (default 40; ~2.9 GB each with one thread)
+#   --jobs N              parallel npsim jobs (default 64; up to ~2.5 GB each)
+#   --reco-jobs N         parallel eicrecon jobs (default 40; up to ~3.1 GB each with one thread). Queue
+#                         runs one after another: two at these defaults need more memory than the machine has
 #   --reco-threads N      eicrecon threads per job (default 1)
 #   --generator G         genQE (default; SRC pairs, no FSI) or genQE_FSI (GENIE FSI; with
 #                         --gen-args "-n" no FSI, with "-F 0.25" single-nucleon mean field),
@@ -325,12 +326,17 @@ fi
 # versions and inputs for run.json
 mm=$(ls work_*/calibrations/materials-map.cbor 2>/dev/null | head -1)
 {
-  echo "container=$(grep -o 'Container.*' /etc/jug_info 2>/dev/null | head -1)"
-  echo "jug_info=$(head -1 /etc/jug_info 2>/dev/null)"
+  # the image (eic_xl nightly tags move) and the Spack versions it was built with
+  echo "container_image=${APPTAINER_CONTAINER:-${SINGULARITY_CONTAINER:-}}"
+  echo "container_from=$(sed -n 's/.*deffile\.from": "\([^"]*\)".*/\1/p' /.singularity.d/labels.json 2>/dev/null)"
+  echo "container_build_date=$(sed -n 's/.*build-date": "\([^"]*\)".*/\1/p' /.singularity.d/labels.json 2>/dev/null)"
+  echo "jug_info_sha256=$(sha256sum /etc/jug_info 2>/dev/null | cut -c1-64)"
+  for p in dd4hep npsim geant4 acts podio edm4hep edm4eic; do
+    echo "container_$p=$(grep -oE " $p@[^~+ ]+" /etc/jug_info 2>/dev/null | head -1 | cut -d@ -f2)"
+  done
   echo "abconv=$(abconv -v 2>&1 | tail -1)"
   echo "geant4=$(geant4-config --version 2>/dev/null)"
   echo "root=$(root-config --version 2>/dev/null)"
-  echo "dd4hep=${DD4hepINSTALL:-}"
   echo "detector_path=$DETECTOR_PATH"
   echo "geometry_sha256=$(sha256sum geometry.xml | cut -c1-64)"
   echo "material_map=${mm:+$(readlink -f "$mm")}"
