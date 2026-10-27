@@ -17,7 +17,11 @@
 #   --seed S              genQE seed (default 1); npsim chunk i uses S*100000 + i + 1
 #   --max-events N        convert at most N events (smoke tests)
 #   --chunk-size N        events per npsim/eicrecon job (default 500)
-#   --jobs N              parallel npsim jobs (default 64; up to ~2.5 GB each)
+#   --jobs N              parallel npsim jobs (default 64; up to ~2.5 GB each single-threaded)
+#   --sim-threads N       Geant4 threads per npsim job (default 1). Many jobs of a few threads use the
+#                         machine best: 32 jobs x 8 threads ran 1.3x the events/s of 70 single-threaded
+#                         jobs at about half the memory (~2.9 GB per job), with the same physics (#194);
+#                         a single job with 32 threads is far less efficient
 #   --reco-jobs N         parallel eicrecon jobs (default 40; up to ~3.1 GB each with one thread). Queue
 #                         runs one after another: two at these defaults need more memory than the machine has
 #   --reco-threads N      eicrecon threads per job (default 1)
@@ -76,7 +80,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 GCF=$(cd "$HERE/.." && pwd)
 
-BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 RJOBS=40 RTHREADS=1 CUTS="--paper-cuts" STAGE=all GEN=genQE GEN_ARGS="" COMPRESS=505 DEEX=0
+BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 STHREADS=1 RJOBS=40 RTHREADS=1 CUTS="--paper-cuts" STAGE=all GEN=genQE GEN_ARGS="" COMPRESS=505 DEEX=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --beams) BEAMS=$2; shift 2 ;;
@@ -88,6 +92,7 @@ while [[ $# -gt 0 ]]; do
     --max-events) MAXEV=$2; shift 2 ;;
     --chunk-size) CHUNK=$2; shift 2 ;;
     --jobs) JOBS=$2; shift 2 ;;
+    --sim-threads) STHREADS=$2; shift 2 ;;
     --reco-jobs) RJOBS=$2; shift 2 ;;
     --reco-threads) RTHREADS=$2; shift 2 ;;
     --no-cuts) CUTS=""; shift ;;
@@ -206,7 +211,7 @@ if [[ $STAGE != gen && $STAGE != record ]]; then
 set -uo pipefail
 OUT="$OUT"
 cd "\$OUT"
-STAGE=$STAGE CHUNK=$CHUNK JOBS=$JOBS RJOBS=$RJOBS RTHREADS=$RTHREADS COMPRESS=$COMPRESS SEED=$SEED FIELDMAPS="$FIELDMAPS"
+STAGE=$STAGE CHUNK=$CHUNK JOBS=$JOBS STHREADS=$STHREADS RJOBS=$RJOBS RTHREADS=$RTHREADS COMPRESS=$COMPRESS SEED=$SEED FIELDMAPS="$FIELDMAPS"
 EPIC_INSTALL="$EPIC_INSTALL" EPIC_CONFIG="$EPIC_CONFIG" FIELD="$FIELD" AB_PRESET="$AB_PRESET"
 EICRECON_INSTALL="${EICRECON_INSTALL:-}" DEEX=$DEEX DEEX_BIN="$DEEX_BIN"
 export BEAGLESYS="$BEAGLESYS" FLUPRO="$FLUPRO" LHAPATH="$LHAPATH"
@@ -247,8 +252,12 @@ land() { # local_file final_path
 }
 sim() {
   local out=$LOCAL/sim_$1.edm4hep.root
+  # the chunk's exact event count: with -1, multithreaded npsim reads past the end of the input
+  # and crashes, losing the events in flight (#194)
+  local n; n=$(grep -c '^E ' "../chunk_$1.hepmc")
   npsim --compactFile ../geometry.xml --inputFiles "../chunk_$1.hepmc" --outputFile "$out" \
-    --numberOfEvents -1 --random.seed $((SEED * 100000 + 10#$1 + 1)) > "../npsim_$1.log" 2>&1 &&
+    --numberOfEvents "$n" --numberOfThreads "$STHREADS" --random.seed $((SEED * 100000 + 10#$1 + 1)) \
+    > "../npsim_$1.log" 2>&1 &&
   land "$out" "../sim_$1.edm4hep.root"
 }
 RECO_FLAGS=(
@@ -311,7 +320,7 @@ if [[ $STAGE == resume ]]; then
   log "resume: $(grep -lxF 0 exit_sim_* 2>/dev/null | wc -l) of $(ls chunk_*.hepmc | wc -l) chunks already simulated"
 fi
 if [[ $STAGE == all || $STAGE == sim || $STAGE == resume ]]; then
-  log "npsim: $(ls chunk_*.hepmc | wc -l) chunks of $CHUNK, $JOBS parallel"
+  log "npsim: $(ls chunk_*.hepmc | wc -l) chunks of $CHUNK, $JOBS parallel, $STHREADS threads/job"
   for_chunks sim "$JOBS" || log "WARNING: npsim failures (see exit_sim_*)"
 fi
 if [[ $STAGE == all || $STAGE == reco || $STAGE == resume ]]; then
@@ -349,11 +358,12 @@ EOF
 fi
 
 # ---------------------------------------------------------------- run record
-python3 - "$OUT" "$EPIC_INSTALL" "${EICRECON_INSTALL:-}" "$BEAMS" "$ION" "$SEED" "$CHUNK" "$EPIC_CONFIG" "$FIELD" "$AB_PRESET" "$EIC_SHELL" <<'PY'
+python3 - "$OUT" "$EPIC_INSTALL" "${EICRECON_INSTALL:-}" "$BEAMS" "$ION" "$SEED" "$CHUNK" "$EPIC_CONFIG" "$FIELD" "$AB_PRESET" "$EIC_SHELL" \
+  "$STHREADS" "$RTHREADS" <<'PY'
 import json, re, subprocess, sys
 from datetime import datetime
 from pathlib import Path
-out, epic, eicrecon, beams, ion, seed, chunk, config, field, preset, shell = sys.argv[1:]
+out, epic, eicrecon, beams, ion, seed, chunk, config, field, preset, shell, sthreads, rthreads = sys.argv[1:]
 o = Path(out)
 def git(path):
     src = Path(path).resolve().parent if path else None
@@ -376,6 +386,7 @@ if expected_mm.exists():
 count = lambda pat, val: sum((p.read_text().strip() == val) for p in o.glob(pat))
 run = {
     "beams": beams, "ion": ion, "genQE_seed": int(seed), "chunk_size": int(chunk),
+    "threads_per_job": {"npsim": int(sthreads), "eicrecon": int(rthreads)},
     "generator": (o / "generator_short.txt").read_text().split() if (o / "generator_short.txt").exists()
                  else (o / "generator.txt").read_text().split() if (o / "generator.txt").exists() else ["genQE", "-M"],
     "generator_command": (o / "generator.txt").read_text().strip() if (o / "generator_short.txt").exists() else None,
