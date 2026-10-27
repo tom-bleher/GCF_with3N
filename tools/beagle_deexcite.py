@@ -17,8 +17,8 @@ alternative to tools/deexcite (Geant4) with the same input, output layout and JS
     events (which do not carry it) work too.
   * BeAGLE runs at nuclear-reaction level 2: the remnant goes to FLUKA (DT_FLUKAIT), nothing is
     rescattered. FLUKA conserves the remnant's energy to the keV level BeAGLE writes, and its
-    momentum to about 1e-4 of itself (up to ~0.2 MeV/c), where Geant4 is exact; both are far below
-    the detector resolution. The products are boosted back and appended as status 1 after all other
+    momentum typically to a few hundredths of an MeV/c (rare events reach 1-2 MeV/c), where Geant4 is
+    exact; both are far below the detector resolution. The products are boosted back and appended as status 1 after all other
     particles; the remnant becomes a status 3 entry with the products as daughters, exactly as
     tools/deexcite does (see its header for why status 3).
 
@@ -302,6 +302,7 @@ def main():
     mult = {"n": Counter(), "p": Counter()}
     estars = []
     max_de_rest = max_dp_rest = max_dp = max_negative = 0.0
+    n_dp_above_1mev = 0
     n_jobs = 0
     if todo:
         z_t, a_t = ion_za(beams["ion"][2])
@@ -341,7 +342,9 @@ def main():
                     stats["violations"] += 1
                 tot = [sum(x[1][c] for x in rest) for c in range(4)]
                 max_de_rest = max(max_de_rest, abs(tot[3] - r["rem_irf"][3]))
-                max_dp_rest = max(max_dp_rest, *(abs(a - b) for a, b in zip(tot[:3], r["rem_irf"][:3])))
+                dp_rest = max(abs(a - b) for a, b in zip(tot[:3], r["rem_irf"][:3]))
+                max_dp_rest = max(max_dp_rest, dp_rest)
+                n_dp_above_1mev += dp_rest > 1e-3
                 lab = [(pdg, boost_z(p, s["beta"]), m) for pdg, p, m in rest]
                 tot_lab = [sum(x[1][c] for x in lab) for c in range(4)]
                 max_dp = max(max_dp, *(abs(a - b) for a, b in zip(tot_lab, s["rem"][3])))
@@ -404,6 +407,7 @@ def main():
         "max_4momentum_imbalance_rest_frame_MeV": 1e3 * max(max_de_rest, max_dp_rest),
         "max_energy_imbalance_ion_rest_frame_MeV": 1e3 * max_de_rest,
         "max_momentum_imbalance_ion_rest_frame_MeV": 1e3 * max_dp_rest,
+        "events_momentum_imbalance_above_1MeV": n_dp_above_1mev,
         "rest_frame": "ion rest frame (BeAGLE's frame), not the remnant's",
         "max_4momentum_imbalance_lab_GeV": max_dp,
         "A_or_Z_not_conserved": stats["violations"],
@@ -412,12 +416,16 @@ def main():
     }
     Path(args.json or args.output + ".json").write_text(json.dumps(info, indent=2) + "\n")
     print(f"deexcite: {len(events)} events, {n_rem} remnants, mean E* {1e3 * info['mean_Estar_GeV']:.3f} MeV, "
-          f"max imbalance {1e3 * max_de_rest:.4f} MeV in energy, {1e3 * max_dp_rest:.4f} MeV in momentum (ion rest frame), "
+          f"max imbalance {1e3 * max_de_rest:.4f} MeV in energy, {1e3 * max_dp_rest:.4f} MeV in momentum (ion rest frame; "
+          f"{n_dp_above_1mev} events above 1 MeV/c), "
           f"A/Z not conserved in {stats['violations']}; {stats['negative']} below the ground state "
           f"(max {1e3 * max_negative:.3f} MeV) [BeAGLE/FLUKA]")
     # FLUKA conserves the remnant's energy to the keV level BeAGLE writes, but its break-up
-    # conserves momentum only to about 1e-4 of the remnant's momentum (up to ~0.2 MeV/c here)
-    if stats["violations"] or max_de_rest > 5e-5 or max_dp_rest > 1e-3:
+    # conserves momentum only approximately: for 12C (49,958 remnants) the imbalance is 0.024 MeV/c
+    # at the median and 0.27 MeV/c at the 99.99th percentile, with rare outliers above 1 MeV/c
+    # (one at 1.3 MeV/c, #196). Fail only on a real bookkeeping error, far above that tail; the
+    # detector resolution for these nucleons is tens of MeV/c.
+    if stats["violations"] or max_de_rest > 5e-5 or max_dp_rest > 5e-3:
         print("beagle_deexcite: conservation check failed", file=sys.stderr)
         sys.exit(4)
 
