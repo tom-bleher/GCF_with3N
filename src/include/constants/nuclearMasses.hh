@@ -18,7 +18,11 @@ const double m_11B = 11.0093054 * mU - 5*me;
 const double m_11C = 11.0114336 * mU - 6*me;
 const double m_10C = 10.016853 * mU - 6*me;
 const double m_12C = 12. * mU - 6*me;
+const double m_14C = 14.00324198862 * mU - 6*me; // AME2020
 const double m_14N = 14.0030740048 * mU - 7*me;
+const double m_14O = 14.008596706 * mU - 8*me;   // AME2020
+const double m_15N = 15.00010889827 * mU - 7*me; // AME2020
+const double m_15O = 15.003065636 * mU - 8*me;   // AME2020
 const double m_16O = 15.99491461956 * mU - 8*me;
 
 const double m_25Na = 24.9899540 * mU - 11*me;

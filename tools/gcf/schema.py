@@ -14,13 +14,14 @@ MODELS = ["3N", "2N", "MF"]
 # 3N wave functions (Faddeev 3He densities): name -> table number of gcf_generate.
 WAVE_FUNCTIONS_3N = ["AV18", "AV18+UIX", "AV18+TM", "CDBonn", "CDBonn+TM",
                      "AV18-pD", "AV18+UIX-pD", "AV18+TM-pD", "CDBonn-pD", "CDBonn+TM-pD"]
-NN_INTERACTIONS = ["AV18", "N2LO", "N2LO12", "N3LO", "AV4", "NV"]
+# N3LO has phi^2 tables in gcfSRC but no contacts, so it is not offered.
+NN_INTERACTIONS = ["AV18", "N2LO", "N2LO12", "AV4", "NV"]
 
 # Targets whose masses (and, for 3N, the residual's) are in the generators' tables.
 TARGETS = {
     "3N": [(3, 2, "3He"), (4, 2, "4He"), (6, 3, "6Li"), (12, 6, "12C"), (14, 7, "14N")],
     "2N": [(2, 1, "2H"), (3, 1, "3H"), (3, 2, "3He"), (4, 2, "4He"), (6, 3, "6Li"), (12, 6, "12C"),
-           (27, 13, "27Al"), (40, 18, "40Ar"), (40, 20, "40Ca"), (56, 26, "56Fe"), (208, 82, "208Pb")],
+           (16, 8, "16O"), (27, 13, "27Al"), (40, 18, "40Ar"), (40, 20, "40Ca"), (56, 26, "56Fe"), (208, 82, "208Pb")],
 }
 TARGETS["MF"] = TARGETS["2N"]
 
