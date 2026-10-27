@@ -306,7 +306,7 @@ bool gcfSRC::set_Contacts_SS_r()
 	  Cpn0=0.0 * ( A * 0.5);
 	  d_Cpn0=0.0 * ( A * 0.5);
 	  Cpn1=3.878 * ( A * 0.5);
-	  d_Cpn1=0.390 * ( A * 0.5);
+	  d_Cpn1=0.045 * ( A * 0.5);
 	  return true;
 	}
     }
@@ -419,7 +419,7 @@ bool gcfSRC::set_Contacts_SS_r()
 	  d_Cnn0=0.0 * ( A * 0.5);
 	  Cpn0=0.234 * ( A * 0.5);
 	  d_Cpn0=0.053 * ( A * 0.5);
-	  Cpn1=1.637 * ( A * 0.5);
+	  Cpn1=4.637 * ( A * 0.5);
 	  d_Cpn1=0.573 * ( A * 0.5);
 	  return true;
 	}
@@ -707,7 +707,7 @@ bool gcfSRC::set_Contacts_SS_k()
 	  Cpn0=0.0 * ( A * 0.5);
 	  d_Cpn0=0.0 * ( A * 0.5);
 	  Cpn1=3.840 * ( A * 0.5);
-	  d_Cpn1=0.398 * ( A * 0.5);
+	  d_Cpn1=0.103 * ( A * 0.5);
 	  return true;
 	}
     }
@@ -931,7 +931,7 @@ bool gcfSRC::set_Contacts_SS_k()
 	  Cpp0=0.668 * ( A * 0.5);
 	  d_Cpp0=0.104 * ( A * 0.5);
 	  Cnn0=0.668 * ( A * 0.5);
-	  d_Cnn0=0.105 * ( A * 0.5);
+	  d_Cnn0=0.104 * ( A * 0.5);
 	  Cpn0=0.749 * ( A * 0.5);
 	  d_Cpn0=0.168 * ( A * 0.5);
 	  Cpn1=8.650 * ( A * 0.5);
@@ -1045,8 +1045,13 @@ bool gcfSRC::set_Contacts_deut()
 
 bool gcfSRC::set_Contacts_EG2()
 {
-  // C1 is in percent per A/2 (Weiss et al., PLB 780, 211, Table I,
-  // doi:10.1016/j.physletb.2018.01.061), like the SS sets
+  // R01 values are the central values of the C_pp^{s=0}/C_np^{s=1} ratios fitted
+  // to EG2 (e,e'pp)/(e,e'p) data in Schmidt et al., Nature 578, 540 (2020),
+  // Extended Data Table 1, doi:10.1038/s41586-020-2021-6. For Pb the code applies
+  // R01 to Cpn0 and scales Cpp0/Cnn0 by Z/N; whether that matches the fit is open (#155).
+  // C1 is in percent per A/2, the units of the SS sets. The value 16 has no
+  // stated source; it is near the 12C AV18 k-space C_pn^{s=1} = 16.8 +- 0.8 of
+  // Weiss et al., PLB 780, 211 (2018), Table I, doi:10.1016/j.physletb.2018.01.061.
 
   if ((Z==6) && (N==6))
     {
