@@ -4,9 +4,10 @@
 //
 //   deexcite IN.hepmc3 OUT.hepmc3 [--seed S] [--json OUT.json]
 //
-// Every final-state (status 1) nucleus with A >= 3 is taken as an excited remnant: its excitation
-// energy is E* = m - M_gs(Z, A), with m its HepMC generated mass (GCF writes the A-2 mass including
-// the sampled E*) and M_gs the Geant4 ground-state mass. The nucleus is broken up in its rest frame
+// Every final-state (status 1) nucleus with A >= 3 is taken as an excited remnant. Its excitation
+// energy is the particle attribute "estar" when set (gcf2hepmc.py writes it for genQE_FSI's residual
+// nucleus, #210), else E* = m - M_gs(Z, A), with m its HepMC generated mass (GCF writes the A-2 mass
+// including the sampled E*); M_gs is the Geant4 ground-state mass. The nucleus is broken up in its rest frame
 // and the products are boosted back with its velocity, so energy and momentum are conserved
 // exactly. The products are appended as status 1, after all other particles, so the order of the
 // other final-state particles is unchanged. The remnant is kept as a status 3 (documentation) entry
@@ -24,6 +25,7 @@
 #include <string>
 #include <vector>
 
+#include "HepMC3/Attribute.h"
 #include "HepMC3/GenEvent.h"
 #include "HepMC3/GenParticle.h"
 #include "HepMC3/GenVertex.h"
@@ -93,7 +95,7 @@ int main(int argc, char** argv) {
   if (reader.failed()) { std::cerr << "deexcite: cannot read " << in << "\n"; return 3; }
   WriterAscii* writer = nullptr;
 
-  long n_events = 0, n_remnants = 0, n_negative = 0, n_violations = 0;
+  long n_events = 0, n_remnants = 0, n_negative = 0, n_violations = 0, n_estar_attr = 0;
   double sum_estar = 0, max_estar = 0, max_dp = 0, max_dp_rest = 0, max_negative = 0;
   std::map<int, long> products;                 // PDG -> count
   std::map<std::string, std::map<int, long>> mult;  // "n"/"p" -> multiplicity -> events
@@ -114,7 +116,11 @@ int main(int argc, char** argv) {
       const FourVector P = r->momentum();
       const double m_in = r->is_generated_mass_set() ? r->generated_mass() : P.m();
       const double m_gs = G4NucleiProperties::GetNuclearMass(a, z) / GeV;
-      double estar = m_in - m_gs;
+      // gcf2hepmc.py writes genQE_FSI's residual nucleus with an approximate mass and its E* as the attribute
+      // 'estar' (#210): take E* from there and the ground state from Geant4
+      const auto attr = r->attribute<DoubleAttribute>("estar");
+      if (attr) n_estar_attr++;
+      double estar = attr ? attr->value() : m_in - m_gs;
       if (estar < 0) { n_negative++; max_negative = std::max(max_negative, -estar); estar = 0; }
       const double m_star = m_gs + estar;
       n_remnants++; sum_estar += estar; max_estar = std::max(max_estar, estar);
@@ -122,7 +128,9 @@ int main(int argc, char** argv) {
       // break up at rest (MeV), then boost back with the remnant's velocity
       G4Fragment frag(a, z, G4LorentzVector(0, 0, 0, m_star * GeV));
       G4ReactionProductVector* prods = handler->BreakItUp(frag);
-      const double ex = P.px() / P.e(), ey = P.py() / P.e(), ez = P.pz() / P.e();
+      // the remnant's velocity; with an 'estar' attribute from its momentum and m_star, so momentum is conserved
+      const double e_star = attr ? std::sqrt(P.px() * P.px() + P.py() * P.py() + P.pz() * P.pz() + m_star * m_star) : P.e();
+      const double ex = P.px() / e_star, ey = P.py() / e_star, ez = P.pz() / e_star;
       G4LorentzVector sum, rest;
       int sum_a = 0, sum_z = 0;
       auto v = std::make_shared<GenVertex>(r->production_vertex() ? r->production_vertex()->position() : FourVector());
@@ -155,9 +163,10 @@ int main(int argc, char** argv) {
       // at 41 GeV/u, 117 at 110 GeV/u) scales that up in the lab
       max_dp_rest = std::max({max_dp_rest, std::fabs(rest.px()), std::fabs(rest.py()), std::fabs(rest.pz()),
                               std::fabs(rest.e() - m_star * GeV)});  // MeV
-      const double scale = m_star / m_in;  // only differs from 1 for clamped E* < 0
+      const double scale = attr ? 1.0 : m_star / m_in;  // only differs from 1 for clamped E* < 0
       max_dp = std::max({max_dp, std::fabs(sum.px() / GeV - P.px() * scale), std::fabs(sum.py() / GeV - P.py() * scale),
-                         std::fabs(sum.pz() / GeV - P.pz() * scale), std::fabs(sum.e() / GeV - P.e() * scale)});
+                         std::fabs(sum.pz() / GeV - P.pz() * scale),
+                         std::fabs(sum.e() / GeV - (attr ? e_star : P.e() * scale))});
       r->set_status(3);  // history only; the products are the final state (see the header)
       evt.add_vertex(v);
       for (auto& gp : outs) v->add_particle_out(gp);
@@ -170,7 +179,7 @@ int main(int argc, char** argv) {
 
   std::ofstream js(json);
   js << "{\n  \"input\": \"" << in << "\",\n  \"output\": \"" << out << "\",\n  \"seed\": " << seed
-     << ",\n  \"geant4\": \"" << G4Version << "\",\n  \"events\": " << n_events << ",\n  \"remnants\": " << n_remnants
+     << ",\n  \"geant4\": \"" << G4Version << "\",\n  \"events\": " << n_events << ",\n  \"remnants\": " << n_remnants << ",\n  \"remnants_with_estar_attribute\": " << n_estar_attr
      << ",\n  \"mean_Estar_GeV\": " << (n_remnants ? sum_estar / n_remnants : 0) << ",\n  \"max_Estar_GeV\": " << max_estar
      << ",\n  \"remnants_below_ground_state\": " << n_negative << ",\n  \"max_below_ground_state_GeV\": " << max_negative
      << ",\n  \"max_4momentum_imbalance_rest_frame_MeV\": " << max_dp_rest << ",\n  \"max_4momentum_imbalance_lab_GeV\": " << max_dp << ",\n  \"A_or_Z_not_conserved\": " << n_violations << ",\n  \"products_by_pdg\": {";
