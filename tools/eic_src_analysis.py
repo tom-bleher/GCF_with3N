@@ -223,6 +223,16 @@ def extract_file(sim_path):
         if f"{zn}/{zn}.energy" in keys:
             rbr += [f"{zn}/{zn}.energy"] + [f"{zn}/{zn}.momentum.{c}" for c in "xyz"]
         r = rt.arrays(rbr, library="ak")
+        # ZDC re-reconstructed with tools/rereco_zdc.sh (#212): its side file replaces the reco file's ZDC
+        zdc_path = sim_path.with_name(sim_path.name.replace("sim_", "zdc_").replace(".edm4hep.", ".edm4eic."))
+        if zdc_path.exists():
+            zb = [b for b in rbr if b.startswith(tuple([f"_{c}_sim/" for c in ZDC_CLUSTERS] + [f"{zn}/"]))]
+            z = uproot.open(zdc_path)["events"].arrays(["EventHeader/EventHeader.eventNumber"] + zb, library="ak")
+            if not np.array_equal(ak.to_numpy(ak.firsts(z["EventHeader/EventHeader.eventNumber"])),
+                                  ak.to_numpy(ak.firsts(r["EventHeader/EventHeader.eventNumber"]))):
+                raise ValueError(f"{zdc_path}: events differ from {reco_path}")
+            for b in zb:
+                r = ak.with_field(r, z[b], b)
         r_index = {int(n[0]): k for k, n in enumerate(r["EventHeader/EventHeader.eventNumber"])}
 
     rows = []
@@ -484,7 +494,8 @@ def extract(run, jobs):
                 out[f"{role}_{kind}_p_irf"] = lab_to_irf(*v, a, beams["ion_momentum_per_nucleon_GeV"], m)
     meta = {"run": str(run), "kind": run_kind, "beams": beams, "attempts": conv["attempts"], "cuts": conv["cuts"],
             "events": len(num), "q2_range": json.loads((run / "run.json").read_text()).get("q2_range_GeV2")
-            if (run / "run.json").exists() else None}
+            if (run / "run.json").exists() else None,
+            "zdc_reco": json.loads((run / "zdc_reco.json").read_text()) if (run / "zdc_reco.json").exists() else None}
     np.savez_compressed(run / "analysis_events.npz", meta=json.dumps(meta), **out)
     need = {"2N": 3, "3N": 4, "DIS": 2}[run_kind]  # e' + nucleons (mean field: e' + one nucleon)
     bad = int(np.sum((out["n_primaries"] < need) & (out.get("rec_type", np.ones(len(num))) != 0)))
