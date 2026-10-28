@@ -421,6 +421,8 @@ def load(dirs):
     if "evap_event" in d:  # per-product event index: offset by the events of the preceding runs
         off = np.cumsum([0] + [len(p["num"]) for p in parts[:-1]])
         d["evap_event"] = np.concatenate([p["evap_event"] + o for p, o in zip(parts, off)])
+    if "evap_pdg" in d and not len(d["evap_pdg"]):  # no A-2 remnant (e.g. e+d): no evaporation panels (#202)
+        d = {k: v for k, v in d.items() if not k.startswith("evap_")}
     metas = [json.loads(str(p["meta"])) for p in parts]
     return d, metas
 
