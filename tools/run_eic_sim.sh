@@ -291,6 +291,12 @@ RECO_FLAGS=(
   # layers see about a third of the shower, so the stock 50% energy check drops the ScFi cluster and
   # the electron has no cluster (5x41 Q2 3-5: 96 -> 201 of 300 identified; eic/EICrecon#2995, #190)
   -PBEMC:EcalBarrelClustersWithoutShapes:energyRelTolerance=-1
+  # ZDC HCal imaging clusters: the stock thresholds (25 MeV seed, 50 MeV and 10 hits per cluster) are tuned for
+  # ~100 GeV neutrons and drop most 20-60 GeV (5x41) recoil-neutron showers (ZDC neutral found for 20-72%);
+  # these give 99-100% at 20-130 GeV with no fake neutrals in beam-gas-mixed events (#212)
+  -PZDC:HcalFarForwardZDCImagingProtoClusters:minClusterCenterEdep=0.005
+  -PZDC:HcalFarForwardZDCImagingProtoClusters:minClusterEdep=0.010
+  -PZDC:HcalFarForwardZDCImagingProtoClusters:minClusterNhits=3
 )
 reco() {
   local out=$LOCAL/reco_$1.edm4eic.root
