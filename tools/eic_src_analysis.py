@@ -228,9 +228,13 @@ def extract_file(sim_path):
         if zdc_path.exists():
             zb = [b for b in rbr if b.startswith(tuple([f"_{c}_sim/" for c in ZDC_CLUSTERS] + [f"{zn}/"]))]
             z = uproot.open(zdc_path)["events"].arrays(["EventHeader/EventHeader.eventNumber"] + zb, library="ak")
-            if not np.array_equal(ak.to_numpy(ak.firsts(z["EventHeader/EventHeader.eventNumber"])),
-                                  ak.to_numpy(ak.firsts(r["EventHeader/EventHeader.eventNumber"]))):
+            # align by event number: a reco file written by multithreaded eicrecon has the events in another order
+            zn_ = ak.to_numpy(ak.firsts(z["EventHeader/EventHeader.eventNumber"]))
+            rn_ = ak.to_numpy(ak.firsts(r["EventHeader/EventHeader.eventNumber"]))
+            if len(zn_) != len(rn_) or set(zn_.tolist()) != set(rn_.tolist()):
                 raise ValueError(f"{zdc_path}: events differ from {reco_path}")
+            pos = {int(n): i for i, n in enumerate(zn_)}
+            z = z[np.array([pos[int(n)] for n in rn_])]
             for b in zb:
                 r = ak.with_field(r, z[b], b)
         r_index = {int(n[0]): k for k, n in enumerate(r["EventHeader/EventHeader.eventNumber"])}
