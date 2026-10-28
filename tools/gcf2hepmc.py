@@ -61,10 +61,72 @@ IONS = {
     "C12": (6, 12, 12.0 * M_U - 6 * M_E),
 }
 PDG_MASS = {11: M_E, 2212: M_P, 2112: M_N}
+PDG_CHARGE = {2212: 1, 2112: 0, 211: 1, -211: -1, 111: 0, 22: 0}  # what genQE_FSI's GENIE cascade emits
+# Ground-state nuclear masses [GeV] of the pre-cascade remnants (A-1, A-2 of 12C), as in nuclearMasses.hh
+M_GS = {(4, 10): 10.013534 * M_U - 4 * M_E, (5, 10): 10.0129370 * M_U - 5 * M_E, (6, 10): 10.016853 * M_U - 6 * M_E,
+        (5, 11): 11.0093054 * M_U - 5 * M_E, (6, 11): 11.0114336 * M_U - 6 * M_E}
+# Residual nucleus after GENIE's cascade (#210): one hole per extra nucleon the cascade removed, each adding
+# E_F - T_h of excitation, T_h drawn from a Fermi gas with GENIE's k_F (INUKE-FermiMomentum of the override)
+K_F_GENIE = 0.250
 
 
 def ion_pdg(z, a):
     return 1000000000 + 10000 * z + 10 * a
+
+
+def liquid_drop_mass(z, a):
+    """Approximate nuclear mass [GeV] (Weizsaecker), for the HepMC record of a residual whose exact E* travels
+    in the 'estar' attribute: tools/deexcite takes the ground state from Geant4."""
+    n = a - z
+    b = (15.75 * a - 17.8 * a ** (2 / 3) - 0.711 * z * (z - 1) / a ** (1 / 3) - 23.7 * (n - z) ** 2 / a) * 1e-3
+    return z * M_P + n * M_N - max(b, 0.0)
+
+
+def cascade_residual(z_t, a_t, m_t, omega, q, lead, rec, p_am2, parts, rng):
+    """The residual nucleus of a genQE_FSI event after GENIE's cascade (#210), in the rest frame.
+
+    (Z, A) from baryon number and charge, momentum from momentum conservation (GENIE drops its own residual).
+    GENIE hN does not conserve energy for it, so E* is modelled: the pre-cascade E* of the GCF remnant, exact from
+    the generator's conserved kinematics (on-shell nucleons of mass M_N_GCF), plus E_F - T_h per extra nucleon the
+    cascade removed. lead and rec are (pdg, p) of the generated nucleons (rec pdg 0: mean field, no recoil); parts
+    the final hadrons as (pdg, px, py, pz, E, m). Returns (particles as (pdg, px, py, pz, E, m, estar or None),
+    info) or raises ValueError for a hadron of unknown charge."""
+    gen = [x for x in (lead, rec) if x[0]]
+    z_pre = z_t - sum(pdg == 2212 for pdg, _ in gen)
+    a_pre = a_t - len(gen)
+    e_pre = m_t + omega - sum(math.sqrt(M_N_GCF**2 + p @ p) for _, p in gen)
+    estar_pre = math.sqrt(max(e_pre**2 - p_am2 @ p_am2, 0.0)) - M_GS[(z_pre, a_pre)]
+    unknown = [p[0] for p in parts if p[0] not in PDG_CHARGE]
+    if unknown:
+        raise ValueError(f"hadrons of unknown charge {unknown}")
+    a_res = a_t - sum(p[0] in (2212, 2112) for p in parts)
+    z_res = z_t - sum(PDG_CHARGE[p[0]] for p in parts)
+    p_res = q - np.array([sum(p[i] for p in parts) for i in (1, 2, 3)])
+    holes = max(a_pre - a_res, 0)
+    e_f = K_F_GENIE**2 / (2 * M_N)
+    t_h = (K_F_GENIE * rng.random(holes) ** (1 / 3)) ** 2 / (2 * M_N)
+    estar = estar_pre + float(np.sum(e_f - t_h))
+    info = {"za": (z_res, a_res), "holes": holes, "estar_pre": estar_pre, "estar": estar}
+    if a_res <= 0:
+        return [], info
+    if a_res == 1 and z_res in (0, 1):
+        pdg = 2212 if z_res else 2112
+        m = PDG_MASS[pdg]
+        return [(pdg, *p_res, math.sqrt(m * m + p_res @ p_res), m, None)], info
+    if a_res == 2 and z_res == 1:  # deuteron, at its ground state (tools/deexcite takes A >= 3)
+        m = 2.01410178 * M_U - M_E
+        return [(ion_pdg(1, 2), *p_res, math.sqrt(m * m + p_res @ p_res), m, None)], info
+    if a_res == 2 or not 0 <= z_res <= a_res or (a_res >= 3 and z_res in (0, a_res)):
+        # unbound: pp, nn, or all-neutron / all-proton clusters; split into nucleons sharing the momentum
+        out = []
+        for k in range(a_res):
+            pdg = 2212 if k < z_res else 2112
+            m, pk = PDG_MASS[pdg], p_res / a_res
+            out.append((pdg, *pk, math.sqrt(m * m + pk @ pk), m, None))
+        info["split"] = True
+        return out, info
+    m = liquid_drop_mass(z_res, a_res) + max(estar, 0.0)
+    return [(ion_pdg(z_res, a_res), *p_res, math.sqrt(m * m + p_res @ p_res), m, estar)], info
 
 
 def parse_args():
@@ -235,6 +297,7 @@ def main():
     events = []
     balance = 0.0
     skipped_remnant = {}
+    res_stats = {"species": {}, "holes": [], "estar": [], "estar_pre": [], "split": 0}
     d_above_pn = 0  # deuteron remnants (4He pn pairs) given a mass above the p + n threshold by E* (-M, -E)
     if kind == "genQE":
         a = {b: t[b].array(library="np", entry_start=sl.start, entry_stop=sl.stop)
@@ -294,11 +357,29 @@ def main():
     else:
         b = {n: t[n].array(library="np", entry_start=sl.start, entry_stop=sl.stop)
              for n in ("part_pdg", "part_px", "part_py", "part_pz", "part_E")}
+        # genQE_FSI (SRC pair, or one nucleon with -F) keeps the generated kinematics: write the residual nucleus
+        residual = {"pLead", "pRec", "pAm2", "q", "lead_type", "rec_type"} <= names and not args.no_remnant
+        if residual:
+            g = {n: t[n].array(library="np", entry_start=sl.start, entry_stop=sl.stop)
+                 for n in ("pLead", "pRec", "pAm2", "q", "lead_type", "rec_type")}
+            z, a_num, m_a = IONS[args.ion]
+            rng = np.random.default_rng((seed or 0) * 1000 + 210)
         for i in idx:
             parts = [(11, *k[i, :3], math.hypot(np.linalg.norm(k[i, :3]), M_E), M_E)]
             for pdg, px, py, pz, e in zip(*(b[n][i] for n in ("part_pdg", "part_px", "part_py", "part_pz", "part_E"))):
                 m2 = e * e - (px * px + py * py + pz * pz)
                 parts.append((int(pdg), px, py, pz, e, math.sqrt(max(m2, 0.0))))
+            if residual:
+                res, rinfo = cascade_residual(z, a_num, m_a, e_run - k[i, 3], g["q"][i],
+                                              (int(g["lead_type"][i]), g["pLead"][i]), (int(g["rec_type"][i]), g["pRec"][i]),
+                                              g["pAm2"][i], parts[1:], rng)
+                key = f"Z={rinfo['za'][0]},A={rinfo['za'][1]}"
+                res_stats["species"][key] = res_stats["species"].get(key, 0) + 1
+                res_stats["holes"].append(rinfo["holes"])
+                res_stats["estar"].append(rinfo["estar"])
+                res_stats["estar_pre"].append(rinfo["estar_pre"])
+                res_stats["split"] += bool(rinfo.get("split"))
+                parts.extend(res)
             events.append(parts)
 
     # Beams: the rest-frame beams transformed with the same map as the final state.
@@ -313,8 +394,11 @@ def main():
     with open(args.output, "w") as out:
         out.write("HepMC::Version 3.02.02\nHepMC::Asciiv3-START_EVENT_LISTING\n")
         for i, parts in zip(idx, events):
-            out.write(f"E {i + sl.start} 1 {len(parts) + 2}\nU GEV MM\nW {w[i]:.10e}\n{beams}")
-            for j, (pdg, px, py, pz, e, m) in enumerate(parts):
+            # particle attributes go in the event header, before the particles (HepMC3 ReaderAscii): the residual
+            # nucleus' E* for tools/deexcite (#210)
+            attrs = "".join(f"A {j + 3} estar {p[6]:.10e}\n" for j, p in enumerate(parts) if len(p) > 6 and p[6] is not None)
+            out.write(f"E {i + sl.start} 1 {len(parts) + 2}\nU GEV MM\nW {w[i]:.10e}\n{attrs}{beams}")
+            for j, (pdg, px, py, pz, e, m, *_) in enumerate(parts):
                 lx, ly, lz, le = frame(px, py, pz, e)
                 out.write(f"P {j + 3} -1 {pdg} {fmt(lx, ly, lz, le, m)} 1\n")
                 n_part[pdg] = n_part.get(pdg, 0) + 1
@@ -341,7 +425,16 @@ def main():
         "attempts": attempts,
         "sum_weight_written": float(w[idx].sum()),
         "sigma_written_nb": float(w[idx].sum() / attempts) if attempts else None,
-        "remnant": None if kind not in ("genQE", "genDIS") or args.no_remnant else "A-2 nucleus with generator mass (incl. E*)",
+        "remnant": ("residual nucleus after GENIE's cascade: (Z, A) and momentum from conservation, E* = pre-cascade E* "
+                    f"+ (E_F - T_h) per extra hole, k_F = {K_F_GENIE} GeV/c; E* in the HepMC attribute 'estar' (#210)"
+                    if res_stats["estar"] else
+                    None if kind not in ("genQE", "genDIS") or args.no_remnant else "A-2 nucleus with generator mass (incl. E*)"),
+        "residual": {"by_species": dict(sorted(res_stats["species"].items(), key=lambda x: -x[1])),
+                     "mean_holes": float(np.mean(res_stats["holes"])),
+                     "mean_estar_pre_GeV": float(np.mean(res_stats["estar_pre"])),
+                     "mean_estar_GeV": float(np.mean(res_stats["estar"])),
+                     "estar_pre_below_zero": int(np.sum(np.array(res_stats["estar_pre"]) < 0)),
+                     "split_into_nucleons": res_stats["split"]} if res_stats["estar"] else None,
         "struck_system": "not written (genDIS hadronic system is unhadronized)" if kind == "genDIS" else None,
         "remnant_skipped_unbound": skipped_remnant,
         "deuteron_remnants_above_pn_threshold": d_above_pn,

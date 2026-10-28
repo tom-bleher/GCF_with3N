@@ -34,11 +34,21 @@
 #                         4He A-2 E* over 0-10 MeV as a systematic)
 #   --deexcite [geant4|beagle]
 #                         de-excite the A-2 remnant (evaporation nucleons, light fragments, photons) before
-#                         the afterburner (genQE and genDIS, whose output carries the remnant):
+#                         the afterburner (genQE and genDIS, whose output carries the remnant; genQE_FSI with
+#                         geant4 only: its residual nucleus after GENIE's cascade comes with E* as a HepMC
+#                         attribute, #210, and BeAGLE's GCF interface needs the 2N event layout):
 #                         geant4 (default) uses tools/deexcite, built inside eic-shell with
 #                         cmake -S tools/deexcite -B tools/deexcite/build && cmake --build tools/deexcite/build;
 #                         beagle uses tools/beagle_deexcite.py, BeAGLE with FLUKA as PRC 105, 034001 did
 #                         (needs BeAGLE built against FLUKA 4; see BEAGLESYS, FLUPRO, LHAPATH below)
+#   --genie-compound on|off
+#                         GENIE hN compound-nucleus / pre-equilibrium fate for genQE_FSI and genQE_3N_FSI
+#                         (default off: GENIE R-3_08_00 withdrew it as experimental, #156). Applied as a copy of
+#                         the hN override in OUT/genie_xml placed first on GXMLPATH, so the repository default
+#                         (which the CLAS paper production uses) is untouched; recorded in run.json
+#   --no-beam-nucleon     do not add the per-nucleon beam proton after abconv (tools/add_beam_nucleon.py, #158).
+#                         With it EICrecon's beam-dependent outputs (InclusiveKinematics*, HadronicFinalState) are
+#                         filled; the Roman Pot / OMD matrix reconstruction is not valid for Z/A = 1/2 beams either way
 #   --no-cuts             convert all events instead of Q2 > 3, xB > 1.2
 #   --compress N          ROOT compression of sim/reco output (default 505 = ZSTD level 5, about a
 #                         third smaller than npsim/EICrecon's ZLIB 1; 0 keeps their output as is)
@@ -80,7 +90,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 GCF=$(cd "$HERE/.." && pwd)
 
-BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 STHREADS=1 RJOBS=40 RTHREADS=1 CUTS="--paper-cuts" STAGE=all GEN=genQE GEN_ARGS="" COMPRESS=505 DEEX=0
+BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 STHREADS=1 RJOBS=40 RTHREADS=1 CUTS="--paper-cuts" STAGE=all GEN=genQE GEN_ARGS="" COMPRESS=505 DEEX=0 GCOMP=off BEAM_NUCLEON=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --beams) BEAMS=$2; shift 2 ;;
@@ -103,11 +113,14 @@ while [[ $# -gt 0 ]]; do
                 if [[ ${2:-} == geant4 || ${2:-} == beagle ]]; then DEEX=$2; shift; fi
                 shift ;;
     --stage) STAGE=$2; shift 2 ;;
+    --genie-compound) GCOMP=$2; shift 2 ;;
+    --no-beam-nucleon) BEAM_NUCLEON=0; shift ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
 die() { echo "run_eic_sim: $*" >&2; exit 2; }
+[[ $GCOMP == on || $GCOMP == off ]] || die "--genie-compound must be on or off"
 [[ -n $BEAMS && -n $ION && -n $OUT ]] || die "--beams, --ion and --out are required (see --help)"
 [[ $STAGE == all || $STAGE == gen ]] && [[ -z $ATTEMPTS ]] && die "--attempts is required"
 [[ $Q2 =~ ^[0-9.]+:[0-9.]+$ ]] && awk -F: '{exit !($1 >= 0 && $2 > $1)}' <<< "$Q2" || die "--q2 must be MIN:MAX with 0 <= MIN < MAX"
@@ -132,7 +145,8 @@ fi
 DEEX_BIN=$GCF/tools/deexcite/build/deexcite
 : "${BEAGLESYS:=$HOME/src/BeAGLE}" "${FLUPRO:=$HOME/src/beagle-deps/fluka}" "${LHAPATH:=$HOME/src/beagle-deps/lhapdf5/share/lhapdf/PDFsets}"
 if [[ $DEEX != 0 ]]; then
-  [[ $GEN == genQE || $GEN == genDIS ]] || die "--deexcite needs the A-2 remnant in the event: genQE or genDIS"
+  [[ $GEN == genQE || $GEN == genDIS || ( $GEN == genQE_FSI && $DEEX == geant4 ) ]] \
+    || die "--deexcite needs a remnant in the event: genQE or genDIS, or genQE_FSI with geant4"
   if [[ $DEEX == geant4 ]]; then
     [[ -x $DEEX_BIN ]] || die "--deexcite: build tools/deexcite inside eic-shell first (see --help)"
   else
@@ -171,7 +185,14 @@ if [[ $STAGE == all || $STAGE == gen ]]; then
   ESTAR="-M"; { (( Z + N <= 4 )) || [[ $GEN == genQE_3N_FSI || " $GEN_ARGS " == *" -F "* ]]; } && ESTAR=""
   if [[ $GEN == genQE_FSI || $GEN == genQE_3N_FSI ]]; then
     F=$GCF/src/programs/genQE_FSI
-    export GXMLPATH="$F/config/genie_override:$GENIE/config/G18_10a:$GENIE/config" GMSGCONF="$F/config/quiet_messenger.xml"
+    # the hN compound-nucleus fate (#156) set explicitly in a run-local copy of the override, first on GXMLPATH
+    mkdir -p genie_xml
+    val=$([[ $GCOMP == on ]] && echo true || echo false)
+    sed -E "s|(name=\"INUKE-DoCompoundNucleus\">)[[:space:]]*(true\|false)[[:space:]]*<|\1 $val <|" \
+      "$F/config/genie_override/HNIntranuke2018.xml" > genie_xml/HNIntranuke2018.xml
+    grep -q "INUKE-DoCompoundNucleus\"> $val <" genie_xml/HNIntranuke2018.xml || die "could not set INUKE-DoCompoundNucleus in genie_xml"
+    echo "compound_nucleus=$GCOMP" > genie_override.txt
+    export GXMLPATH="$OUT/genie_xml:$F/config/genie_override:$GENIE/config/G18_10a:$GENIE/config" GMSGCONF="$F/config/quiet_messenger.xml"
   fi
   CONV_ARGS=()
   case "$GEN" in
@@ -213,7 +234,7 @@ OUT="$OUT"
 cd "\$OUT"
 STAGE=$STAGE CHUNK=$CHUNK JOBS=$JOBS STHREADS=$STHREADS RJOBS=$RJOBS RTHREADS=$RTHREADS COMPRESS=$COMPRESS SEED=$SEED FIELDMAPS="$FIELDMAPS"
 EPIC_INSTALL="$EPIC_INSTALL" EPIC_CONFIG="$EPIC_CONFIG" FIELD="$FIELD" AB_PRESET="$AB_PRESET"
-EICRECON_INSTALL="${EICRECON_INSTALL:-}" DEEX=$DEEX DEEX_BIN="$DEEX_BIN"
+EICRECON_INSTALL="${EICRECON_INSTALL:-}" DEEX=$DEEX DEEX_BIN="$DEEX_BIN" BEAM_NUCLEON=$BEAM_NUCLEON GCF="$GCF"
 export BEAGLESYS="$BEAGLESYS" FLUPRO="$FLUPRO" LHAPATH="$LHAPATH"
 EOF
   cat >> container_stage.sh <<'EOF'
@@ -297,6 +318,11 @@ if [[ $STAGE == all || $STAGE == sim ]]; then
   fi
   abconv -p "$AB_PRESET" -f hepmc3 --plot-off -o ab "$AB_IN" > abconv.log 2>&1 || { log "abconv failed"; exit 4; }
   log "abconv $AB_PRESET: $(grep -c '^E ' ab.hepmc) events"
+  if [[ $BEAM_NUCLEON == 1 ]]; then  # the per-nucleon beam proton EICrecon needs (#158); abconv takes two beams only
+    python3 "$GCF/tools/add_beam_nucleon.py" ab.hepmc ab_nucleon.hepmc > add_beam_nucleon.log 2>&1 \
+      && mv ab_nucleon.hepmc ab.hepmc || { log "add_beam_nucleon failed (add_beam_nucleon.log)"; exit 4; }
+    log "$(tail -1 add_beam_nucleon.log)"
+  fi
   rm -f chunk_*.hepmc
   awk -v per="$CHUNK" '
     /^HepMC::Asciiv3-END/ { next }
@@ -394,10 +420,14 @@ run = {
     "gcf": (o / "gcf_version.txt").read_text().split() if (o / "gcf_version.txt").exists() else None,
     "converter": json.loads((o / "gen.hepmc3.json").read_text()) if (o / "gen.hepmc3.json").exists() else None,
     "deexcitation": json.loads((o / "gen_deex.hepmc3.json").read_text()) if (o / "gen_deex.hepmc3.json").exists() else None,
+    "genie": ({"hN_compound_nucleus": (o / "genie_override.txt").read_text().split("=", 1)[1].strip(),
+               "override": str(o / "genie_xml" / "HNIntranuke2018.xml")} if (o / "genie_override.txt").exists() else None),
     "epic": {"install": epic, "config": config, "field_swap": field or None, "git": git(epic)},
     "eicrecon": {"install": eicrecon or None, "git": git(eicrecon) if eicrecon else None,
                  "flags": (o / "reco_flags.txt").read_text().split() if (o / "reco_flags.txt").exists() else None},
     "abconv_preset": preset,
+    "beam_nucleon": ((o / "add_beam_nucleon.log").exists() and "status-4 active-nucleon proton added after abconv (#158); "
+                     "Roman Pot / OMD matrix reconstruction not valid for Z/A = 1/2 beams") or None,
     "container_image": image,
     "container": info,
     "material_map_matches_epic_checkout": (info.get("material_map_sha256") == exp_sha) if exp_sha and info.get("material_map_sha256") else None,
