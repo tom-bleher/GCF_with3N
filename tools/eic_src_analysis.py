@@ -760,7 +760,8 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
                                  "mf_q2_reach_100_per_GeV2": float(bins[1:][h >= 100].max()) if (h >= 100).any() else None})
             c, mk = (red, "o") if low_energy[lab] else ("#1029ff", "s")
             g = h > 0
-            ax.plot(cen7[g], h[g], ls="none", marker=mk, ms=5, color=c)
+            e7 = np.sqrt(np.histogram(d["q2"][ok], bins, weights=w[ok] ** 2)[0])  # statistical error, sum w^2
+            ax.errorbar(cen7[g], h[g], yerr=e7[g], ls="none", marker=mk, ms=5, color=c, elinewidth=1, capsize=0)
             for col, suffix in e_id_columns(d):  # open markers: the electron identified (e_id, else EICrecon's)
                 oke = kin & d[col] & detected_anywhere(d, "lead")
                 he = np.histogram(d["q2"][oke], bins, weights=w[oke])[0]
@@ -768,7 +769,9 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
                                      f"mf_q2_reach_100_per_GeV2_e_identified{suffix}":
                                          float(bins[1:][he >= 100].max()) if (he >= 100).any() else None})
                 if not suffix:
-                    ax.plot(cen7[he > 0], he[he > 0], ls="none", marker=mk, ms=5, mfc="none", color=c)
+                    ee = np.sqrt(np.histogram(d["q2"][oke], bins, weights=w[oke] ** 2)[0])
+                    ax.errorbar(cen7[he > 0], he[he > 0], yerr=ee[he > 0], ls="none", marker=mk, ms=5, mfc="none", color=c,
+                                elinewidth=1, capsize=0)
             curves7[lab] = (h, c)
         ax.set_yscale("log")
         ax.set_xlim(1, 25)
@@ -1006,7 +1009,9 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
         summary[lab]["q2_reach_100_per_GeV2"] = float(bins[1:][h >= 100].max()) if (h >= 100).any() else None
         c, mk = (red, "o") if low_energy[lab] else ("#1029ff", "s")
         g = h > 0
-        ax.plot(cen5[g], h[g], ls="none", marker=mk, ms=5, color=c)
+        e5 = np.sqrt(np.histogram(d["q2"][m], bins, weights=(d["w_nb"][m] * scale[lab]) ** 2)[0])  # statistical, sum w^2
+        ax.errorbar(cen5[g], h[g], yerr=e5[g], ls="none", marker=mk, ms=5, color=c, elinewidth=1, capsize=0)
+        summary[lab]["fig5_stat_error_per_bin"] = e5.tolist()
         curves5[lab] = (h, c)
         for col, suffix in e_id_columns(d):  # open markers: also the electron identified (e_id, else EICrecon's)
             me = m & d[col]
@@ -1014,7 +1019,9 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
             summary[lab][f"q2_reach_100_per_GeV2_e_identified{suffix}"] = float(bins[1:][he >= 100].max()) if (he >= 100).any() else None
             summary[lab][f"recoil_tagged_fraction_e_identified{suffix}"] = float(he.sum() / h.sum()) if h.sum() else None
             if not suffix:
-                ax.plot(cen5[he > 0], he[he > 0], ls="none", marker=mk, ms=5, mfc="none", color=c)
+                ee = np.sqrt(np.histogram(d["q2"][me], bins, weights=(d["w_nb"][me] * scale[lab]) ** 2)[0])
+                ax.errorbar(cen5[he > 0], he[he > 0], yerr=ee[he > 0], ls="none", marker=mk, ms=5, mfc="none", color=c,
+                            elinewidth=1, capsize=0)
     ax.set_yscale("log")
     ax.set_xlim(1, 25)
     lo = min(float(np.min(h[h > 0])) for h, _ in curves5.values())
@@ -1309,24 +1316,32 @@ CONTACTS_SS_K = {"C12": {"Cpp0": (1.140, 0.210), "Cnn0": (1.140, 0.210), "Cpn0":
 GEV_FM = 0.1973  # src/include/constants.hh
 
 
-def av18_phi_sq():
-    """AV18 pn spin-0 and spin-1 |phi|^2 tables (src/libraries/nucleus/universal_functions/AV18.hh)."""
+def av18_phi_sq(names=("AV18_pn0", "AV18_pn1")):
+    """AV18 |phi|^2 tables (src/libraries/nucleus/universal_functions/AV18.hh): pn spin-0 and spin-1 by default;
+    gcfSRC uses AV18_pp0 for both pp and nn."""
     import re
     text = (Path(__file__).resolve().parent.parent / "src/libraries/nucleus/universal_functions/AV18.hh").read_text()
     tab = {}
-    for name in ("AV18_pn0", "AV18_pn1"):
+    for name in names:
         body = re.search(name + r"\[100\]\s*=\s*\{([^}]*)\}", text).group(1)
         tab[name] = np.array([float(x) for x in body.replace("\n", "").split(",") if x.strip()])
         assert len(tab[name]) == 100
-    return tab["AV18_pn0"], tab["AV18_pn1"]
+    return tuple(tab[n] for n in names)
 
 
-def phi_sq(table, k):
-    """gcfSRC::get_phiSq without its constant normalization (ratios at equal k only)."""
+def phi_sq(table, k, log=False):
+    """gcfSRC::get_phiSq without its constant normalization (ratios at equal k only); log=True interpolates
+    log-linearly between the 0.1 fm^-1 grid points instead (#120)."""
     b = np.asarray(k) / GEV_FM / 0.1
     i = np.clip(np.floor(b).astype(int), 1, 99)
     x = b - i
-    v = x * table[i] + (1 - x) * table[i - 1]
+    if log:
+        lo, hi = table[i - 1], table[i]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            v = np.where((lo > 0) & (hi > 0), np.exp(x * np.log(np.where(hi > 0, hi, 1)) + (1 - x) * np.log(np.where(lo > 0, lo, 1))),
+                         x * hi + (1 - x) * lo)
+    else:
+        v = x * table[i] + (1 - x) * table[i - 1]
     return np.where((b >= 1) & (b <= 100), v, 0.0)
 
 
@@ -1473,6 +1488,101 @@ def band(settings, outdir, lumi_nb_inv, transparency, n_rep, seed):
     print(f"wrote {outdir}/figband_q2.pdf figband_recoil_spectra.pdf figband_relative.pdf summary.json")
 
 
+def interpolation_ratio(d, k, ion):
+    """Per-event weight factor S_log(k_rel) / S_lin(k_rel): the pair-momentum distribution with log-linear instead
+    of gcfSRC's linear interpolation of the |phi|^2 tables (#120). 12C: pp and nn from AV18_pp0, pn from the contact
+    mix C_pn0 |phi_pn0|^2 + C_pn1 |phi_pn1|^2; d: the pn spin-1 table alone."""
+    t0, t1, tpp = av18_phi_sq(("AV18_pn0", "AV18_pn1", "AV18_pp0"))
+    lin = {n: phi_sq(t, k) for n, t in (("pn0", t0), ("pn1", t1), ("pp", tpp))}
+    log = {n: phi_sq(t, k, log=True) for n, t in (("pn0", t0), ("pn1", t1), ("pp", tpp))}
+    with np.errstate(divide="ignore", invalid="ignore"):
+        if ion == "d":
+            r = log["pn1"] / lin["pn1"]
+        else:
+            c = {n: v[0] for n, v in CONTACTS_SS_K["C12"].items()}
+            same = d["lead_type"] == d["rec_type"]
+            r_pn = (c["Cpn0"] * log["pn0"] + c["Cpn1"] * log["pn1"]) / (c["Cpn0"] * lin["pn0"] + c["Cpn1"] * lin["pn1"])
+            r = np.where(same, log["pp"] / lin["pp"], r_pn)
+    return np.where(np.isfinite(r), r, 1.0)
+
+
+def variants(settings, outdir, lumi_nb_inv):
+    """Generator-model variants of the PWIA SRC results by exact per-event reweighting (no new simulation), with
+    statistical errors: the cc1 prescription PRC 105, 034001 was generated with (cc1_2021_ratio, before #33), and
+    log-linear interpolation of the |phi|^2 tables (#120). For each: the recoil-tagged Fig. 5 yield per Q2 bin with
+    its error sqrt(sum w^2), the Q2 reach (last bin with >= 100 events), sigma after the p_IRF cut and the recoil
+    acceptances; the transparency is the plots default per run (run_transparency)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    bins = np.arange(3, 25.5, 1.0)
+    cen = 0.5 * (bins[1:] + bins[:-1])
+    summary = {"method": "exact per-event reweighting of the simulated events; errors from sum(w^2)",
+               "variants": {"cc1_2021": "cc1 before the #33 longitudinal fix (the cross section PRC 105, 034001 used)",
+                            "phiSq_loglinear": "log-linear interpolation of the AV18 |phi|^2 tables (#120)"}}
+    fig, axes = plt.subplots(1, len(settings), figsize=(5.2 * len(settings), 3.8), squeeze=False, sharey=True)
+    for ax, (lab, dirs) in zip(axes[0], settings.items()):
+        d, metas = load(dirs)
+        ion = metas[0]["beams"]["ion"]
+        if any(m_.get("kind", "2N") != "2N" for m_ in metas) or ion not in ("C12", "d"):
+            sys.exit("variants: 12C or d SRC-pair (genQE) runs only")
+        if any(has_fsi(r) for r in dirs):
+            sys.exit("variants: PWIA runs only (the reweighting needs the generated pair)")
+        trans = {run_transparency(r)[0] for r in dirs}
+        if len(trans) != 1:
+            sys.exit(f"variants: the runs of {lab} need different transparencies")
+        scale = lumi_nb_inv * trans.pop()
+        k = np.concatenate([np.linalg.norm(uproot.open(Path(r) / "gen.root")["genT"]["pRel"].array(library="np")
+                                           [np.load(Path(r) / "analysis_events.npz")["num"]], axis=1) for r in dirs])
+        w0 = d["w_nb"]
+        ws = {"nominal": w0, "cc1_2021": w0 * d["cc1_2021_ratio"], "phiSq_loglinear": w0 * interpolation_ratio(d, k, ion)}
+        cut = d["rec_p_irf"] > P_IRF_MIN
+        tag = cut & detected(d, "rec", "hit")
+        out = {}
+        h0 = None
+        for name, w in ws.items():
+            h = np.histogram(d["q2"][tag], bins, weights=w[tag] * scale)[0]
+            e = np.sqrt(np.histogram(d["q2"][tag], bins, weights=(w[tag] * scale) ** 2)[0])
+            n_eff = np.divide(h**2, e**2, out=np.zeros_like(h), where=e > 0)
+            acc = {}
+            for code, nm in ((2212, "p"), (2112, "n")):
+                m = cut & (d["rec_type"] == code)
+                acc[nm] = float(w[m & tag].sum() / w[m].sum()) if w[m].sum() else None
+            out[name] = {"sigma_nb_cuts_pIRF": float(w[cut].sum()), "tagged_events": float(w[tag].sum() * scale),
+                         "q2_reach_100_per_GeV2": float(bins[1:][h >= 100].max()) if (h >= 100).any() else None,
+                         "recoil_acceptance_hit": acc, "q2_bins": bins.tolist(), "events_per_bin": h.tolist(),
+                         "stat_error_per_bin": e.tolist(), "effective_events_per_bin": n_eff.tolist()}
+            if name == "nominal":
+                h0, e0 = h, e
+                g = h0 > 0
+                ax.fill_between(cen[g], 1 - (e0 / h0)[g], 1 + (e0 / h0)[g], color="#bbbbbb", alpha=0.6, lw=0,
+                                label="nominal, statistical error")
+            else:
+                g = h0 > 0
+                ax.plot(cen[g], (h / np.where(h0 > 0, h0, 1))[g], marker="o" if name == "cc1_2021" else "s", ms=4, lw=1,
+                        label={"cc1_2021": "cc1 as in PRC 105 (before #33)", "phiSq_loglinear": "log-linear |phi|^2 (#120)"}[name])
+                out[name]["relative_to_nominal"] = {"sigma": out[name]["sigma_nb_cuts_pIRF"] / out["nominal"]["sigma_nb_cuts_pIRF"] - 1,
+                                                    "tagged": out[name]["tagged_events"] / out["nominal"]["tagged_events"] - 1}
+        summary[lab] = out
+        ax.axhline(1, color=MUTED, lw=0.8)
+        ax.set_xlim(3, 25)
+        ax.set_title(f"{ion} {lab}", fontsize=12)
+        ax.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=12, loc="right")
+        ax.tick_params(direction="in", which="both", top=True, right=True, labelsize=11)
+        print(f"{lab}: " + "; ".join(f"{n}: reach {v['q2_reach_100_per_GeV2']}, tagged {v['tagged_events']:.4g}"
+                                     + (f" ({100 * v['relative_to_nominal']['tagged']:+.1f}%)" if "relative_to_nominal" in v else "")
+                                     for n, v in out.items()))
+    axes[0, 0].set_ylabel("recoil-tagged yield / nominal", fontsize=12)
+    axes[0, 0].legend(frameon=False, fontsize=9, loc="upper left")
+    fig.tight_layout()
+    fig.savefig(outdir / "figvariants_q2.pdf")
+    (outdir / "variants.json").write_text(json.dumps(summary, indent=2) + "\n")
+    print(f"wrote {outdir}/figvariants_q2.pdf variants.json")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1496,6 +1606,11 @@ def main():
     b.add_argument("--transparency", type=float, default=0.5, help="flat nucleon transparency factor (default 0.5, "
                    "the 12C value of PRC 105, 034001)")
     b.add_argument("--replicas", type=int, default=1000)
+    v = sub.add_parser("variants", help="generator-model variants (cc1 2021, |phi|^2 interpolation) of 12C/d PWIA runs by "
+                       "reweighting, with statistical errors")
+    v.add_argument("--setting", action="append", required=True, help="LABEL=RUN_DIR[,RUN_DIR...] (Q2 slices of one setting)")
+    v.add_argument("-o", "--outdir", required=True)
+    v.add_argument("--lumi-fb", type=float, default=10.0, help="integrated luminosity per nucleus [fb^-1] (default 10)")
     b.add_argument("--seed", type=int, default=1)
     a = ap.parse_args()
     if a.cmd == "extract":
@@ -1508,6 +1623,8 @@ def main():
             settings[lab] = dirs.split(",")
         if a.cmd == "band":
             band(settings, a.outdir, a.lumi_fb * 1e6, a.transparency, a.replicas, a.seed)
+        elif a.cmd == "variants":
+            variants(settings, a.outdir, a.lumi_fb * 1e6)
         else:
             plots(settings, a.outdir, a.lumi_fb * 1e6, a.transparency, a.cc1)
 
