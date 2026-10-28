@@ -546,6 +546,13 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
             c, mk = (red, "o") if low_energy[lab] else ("#1029ff", "s")
             g = h > 0
             ax.plot(cen7[g], h[g], ls="none", marker=mk, ms=5, color=c)
+            if "e_reco" in d:  # open markers: the electron identified by EICrecon (ReconstructedElectrons)
+                oke = kin & d["e_reco"] & detected_anywhere(d, "lead")
+                he = np.histogram(d["q2"][oke], bins, weights=w[oke])[0]
+                summary[lab].update({"mf_e_identified_and_nucleon_detected": float(w[oke].sum() / w[kin].sum()),
+                                     "mf_q2_reach_100_per_GeV2_e_identified":
+                                         float(bins[1:][he >= 100].max()) if (he >= 100).any() else None})
+                ax.plot(cen7[he > 0], he[he > 0], ls="none", marker=mk, ms=5, mfc="none", color=c)
             curves7[lab] = (h, c)
         ax.set_yscale("log")
         ax.set_xlim(1, 25)
@@ -554,6 +561,9 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
             h, c = curves7[lab]
             k = 12 if i == 0 else 3
             ax.text(cen7[k], max(h[k], 1e-3) * (9 if i == 0 else 0.2), lab, color=c, fontsize=15, ha="center", va="center")
+        if any("e_reco" in d for d, _ in data.values()):
+            ax.text(0.97, 0.95, "filled: electron truth-matched\nopen: electron identified", transform=ax.transAxes,
+                    fontsize=9, ha="right", va="top", color="#444444")
         frame(ax)
         ax.set_ylabel("Events per bin", fontsize=13, loc="top")
         ax.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="right")
@@ -782,6 +792,12 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
         g = h > 0
         ax.plot(cen5[g], h[g], ls="none", marker=mk, ms=5, color=c)
         curves5[lab] = (h, c)
+        if "e_reco" in d:  # open markers: also the electron identified by EICrecon (ReconstructedElectrons)
+            me = m & d["e_reco"]
+            he = np.histogram(d["q2"][me], bins, weights=d["w_nb"][me] * scale)[0]
+            summary[lab]["q2_reach_100_per_GeV2_e_identified"] = float(bins[1:][he >= 100].max()) if (he >= 100).any() else None
+            summary[lab]["recoil_tagged_fraction_e_identified"] = float(he.sum() / h.sum()) if h.sum() else None
+            ax.plot(cen5[he > 0], he[he > 0], ls="none", marker=mk, ms=5, mfc="none", color=c)
     ax.set_yscale("log")
     ax.set_xlim(1, 25)
     lo = min(float(np.min(h[h > 0])) for h, _ in curves5.values())
@@ -793,6 +809,9 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
         h, c = curves5[lab]
         k = 12 if i == 0 else 3
         ax.text(cen5[k], h[k] * (9 if i == 0 else 0.2), lab, color=c, fontsize=15, ha="center", va="center")
+    if any("e_reco" in d for d, _ in data.values()):
+        ax.text(0.97, 0.95, "filled: no electron requirement (as PRC 105)\nopen: electron identified", transform=ax.transAxes,
+                fontsize=9, ha="right", va="top", color="#444444")
     frame(ax)
     ax.set_ylabel("Events per bin", fontsize=13, loc="top")
     ax.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="right")
