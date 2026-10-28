@@ -328,6 +328,11 @@ def main():
                 sys.exit(f"beagle_deexcite: {path} has {len(bev)} events, expected {len(block)}")
             for i, final in zip(block, bev):
                 r, s = recs[i], sels[i]
+                if not all(math.isfinite(v) for _, p, m in final for v in (*p, m)):
+                    # BeAGLE/FLUKA occasionally returns a NaN fragment (#198); Geant4 dies on it silently.
+                    # Keep that remnant undecayed (status 1, no products), as runs without --deexcite do.
+                    stats["nonfinite"] += 1
+                    continue
                 # BeAGLE copies e', the struck system and the recoil through unchanged; the rest is the remnant's
                 rest = list(final)
                 for want in r["irf"]:
@@ -411,6 +416,7 @@ def main():
         "rest_frame": "ion rest frame (BeAGLE's frame), not the remnant's",
         "max_4momentum_imbalance_lab_GeV": max_dp,
         "A_or_Z_not_conserved": stats["violations"],
+        "events_nonfinite_kept_undecayed": stats["nonfinite"],
         "products_by_pdg": {str(p): n for p, n in sorted(products.items())},
         "events_by_multiplicity": {k: {str(m): n for m, n in sorted(v.items())} for k, v in mult.items()},
     }
@@ -419,7 +425,8 @@ def main():
           f"max imbalance {1e3 * max_de_rest:.4f} MeV in energy, {1e3 * max_dp_rest:.4f} MeV in momentum (ion rest frame; "
           f"{n_dp_above_1mev} events above 1 MeV/c), "
           f"A/Z not conserved in {stats['violations']}; {stats['negative']} below the ground state "
-          f"(max {1e3 * max_negative:.3f} MeV) [BeAGLE/FLUKA]")
+          f"(max {1e3 * max_negative:.3f} MeV); {stats['nonfinite']} with non-finite BeAGLE output kept undecayed "
+          f"[BeAGLE/FLUKA]")
     # FLUKA conserves the remnant's energy to the keV level BeAGLE writes, but its break-up
     # conserves momentum only approximately: for 12C (49,958 remnants) the imbalance is 0.024 MeV/c
     # at the median and 0.27 MeV/c at the 99.99th percentile, with rare outliers above 1 MeV/c
