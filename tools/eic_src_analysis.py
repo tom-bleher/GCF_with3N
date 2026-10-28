@@ -52,6 +52,12 @@ CENTRAL_CLUSTERS = ["LFHCALClusterAssociations", "EcalEndcapPClusterAssociations
                     "HcalEndcapPInsertClusterAssociations", "B0ECalClusterAssociations",
                     "EcalBarrelClusterAssociations", "HcalBarrelClusterAssociations"]
 STATION_GAP_MM = 30.0
+CALO_E_FRAC_MIN = 0.05  # calorimeter detection: deposited energy / the nucleon's true energy (#206)
+
+
+def cluster_of(assoc):
+    """Cluster collection of a cluster-association collection (B0ECalClusterAssociations -> B0ECalClusters)."""
+    return assoc.replace("ClusterAssociations", "Clusters")
 P_IRF_MIN = 0.3  # GeV/c, the paper's cut against evaporation nucleons
 ROLES = ("lead", "rec")
 
@@ -140,6 +146,8 @@ def extract_file(sim_path):
         assoc = ["B0TrackerCKFTrackAssociations", "ReconstructedChargedParticleAssociations"]
         assoc += [c for c in ZDC_CLUSTERS + CENTRAL_CLUSTERS if f"_{c}_sim/_{c}_sim.index" in keys]
         rbr += [f"_{c}_sim/_{c}_sim.index" for c in assoc]
+        rbr += [b for c in assoc if c in CENTRAL_CLUSTERS
+                for b in (f"{c}/{c}.weight", f"_{c}_rec/_{c}_rec.index", f"{cluster_of(c)}/{cluster_of(c)}.energy")]
         rbr += ["ScatteredElectronsTruth_objIdx/ScatteredElectronsTruth_objIdx.index",
                 "ReconstructedElectrons_objIdx/ReconstructedElectrons_objIdx.index",
                 "_ReconstructedChargedParticleAssociations_rec/_ReconstructedChargedParticleAssociations_rec.index"]
@@ -212,6 +220,21 @@ def extract_file(sim_path):
                             m = sim_of(c)
                             hit |= bool(np.any(ranc[m[m >= 0]] == j)) if len(m) else False
                     row[f"{role}_{group}"] = hit
+                # energy the nucleon left in the central calorimeters (association weight = its share of the
+                # cluster energy), the B0 ECal apart: there a neutron's shower is mostly not contained (#206)
+                for col, cols in (("calo_e", [c for c in CENTRAL_CLUSTERS if c != "B0ECalClusterAssociations"]),
+                                  ("b0ecal_e", ["B0ECalClusterAssociations"])):
+                    e = 0.0
+                    for c in cols:
+                        if f"{c}/{c}.weight" in r.fields:
+                            m = sim_of(c)
+                            own = (m >= 0)
+                            own[own] = ranc[m[own]] == j
+                            if own.any():
+                                ce = ak.to_numpy(r[f"{cluster_of(c)}/{cluster_of(c)}.energy"][q])
+                                ci = ak.to_numpy(r[f"_{c}_rec/_{c}_rec.index"][q])[own]
+                                e += float((ak.to_numpy(r[f"{c}/{c}.weight"][q])[own] * ce[ci]).sum())
+                    row[f"{role}_{col}"] = e
                 # true lab momentum (after the afterburner) and the reconstructed one: the linked charged
                 # particle (B0 or central track), else the ZDC neutron for a ZDC-detected neutron
                 if j >= 0:
@@ -405,9 +428,24 @@ def detected(d, role, level):
     return np.where(is_p, p_ok, n_ok)
 
 
-def detected_anywhere(d, role):
-    """Far-forward (hit level) or central/B0 reconstruction (charged particle or cluster)."""
-    return detected(d, role, "hit") | d[f"{role}_charged"] | d[f"{role}_central_cluster"]
+def calo_detected(d, role, b0ecal):
+    """Calorimeter detection: the nucleon left at least CALO_E_FRAC_MIN of its energy in the central
+    calorimeters, or (b0ecal) in the B0 ECal. Runs extracted before #206 only have 'any cluster'."""
+    if f"{role}_calo_e" not in d:
+        return d[f"{role}_central_cluster"]
+    e_true = np.sqrt(d[f"{role}_true_p_lab_mag"] ** 2 + 0.93892**2)
+    ok = d[f"{role}_calo_e"] >= CALO_E_FRAC_MIN * e_true
+    return ok | (d[f"{role}_b0ecal_e"] >= CALO_E_FRAC_MIN * e_true) if b0ecal else ok
+
+
+def detected_anywhere(d, role, b0ecal=True):
+    """Far-forward (hit level), a reconstructed charged particle, or a calorimeter deposit (calo_detected)."""
+    return detected(d, role, "hit") | d[f"{role}_charged"] | calo_detected(d, role, b0ecal)
+
+
+def momentum_measured(d, role):
+    """A reconstructed momentum is linked to the nucleon: a charged particle (B0 or central track) or the ZDC neutron."""
+    return np.isfinite(d[f"{role}_reco_p_lab_mag"]) if f"{role}_reco_p_lab_mag" in d else np.zeros(len(d["w_nb"]), bool)
 
 
 def load(dirs):
@@ -542,8 +580,12 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
             kin = (d["q2"] > 3) & (d["pmiss"] < 0.3) & (d["emiss"] < 0.08)
             ok = kin & d["e_truth_matched"] & detected_anywhere(d, "lead")
             h = np.histogram(d["q2"][ok], bins, weights=w[ok])[0]
+            only_b0ecal = ok & ~detected_anywhere(d, "lead", b0ecal=False)
             summary[lab].update({"mf_sigma_nb_cuts": float(d["w_nb"][kin].sum()),
                                  "mf_e_and_nucleon_detected": float(w[ok].sum() / w[kin].sum()),
+                                 "mf_e_and_nucleon_detected_only_by_B0ECal": float(w[only_b0ecal].sum() / w[kin].sum()),
+                                 "mf_e_and_nucleon_momentum_measured":
+                                     float(w[ok & momentum_measured(d, "lead")].sum() / w[kin].sum()),
                                  "mf_q2_reach_100_per_GeV2": float(bins[1:][h >= 100].max()) if (h >= 100).any() else None})
             c, mk = (red, "o") if low_energy[lab] else ("#1029ff", "s")
             g = h > 0
@@ -1052,6 +1094,8 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
         w = d["w_nb"]
         rec_ok = detected(d, "rec", "hit")
         lead_ok = detected_anywhere(d, "lead")
+        lead_no_b0ecal = detected_anywhere(d, "lead", b0ecal=False)
+        lead_p = momentum_measured(d, "lead")
         e_ok = d["e_truth_matched"] if "e_truth_matched" in d else np.ones(len(w), bool)
         sigma = float(w[m0].sum())
         summary[lab]["sigma_nb_cuts_pIRF"] = sigma
@@ -1062,10 +1106,15 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
             if not m.any():
                 continue
             f = lambda ok: float(w[m & ok].sum() / w[m].sum())  # noqa: E731
+            # lead: detected anywhere; of it, only through the B0 ECal (presence, no momentum); with a measured momentum
             summary[lab][f"pair_{pair}"] = {"weight_fraction": float(w[m].sum() / sigma), "recoil": f(rec_ok),
-                                            "lead": f(lead_ok), "triple_e_lead_rec": f(rec_ok & lead_ok & e_ok)}
+                                            "lead": f(lead_ok), "lead_only_B0ECal": f(lead_ok & ~lead_no_b0ecal),
+                                            "lead_momentum_measured": f(lead_p),
+                                            "triple_e_lead_rec": f(rec_ok & lead_ok & e_ok),
+                                            "triple_e_lead_momentum_rec": f(rec_ok & lead_p & e_ok)}
             lines.append(f"{lab:8s} {pair}  share {w[m].sum() / sigma:5.3f}  recoil {f(rec_ok):5.2f}  "
-                         f"lead {f(lead_ok):5.2f}  e+lead+recoil {f(rec_ok & lead_ok & e_ok):5.2f}")
+                         f"lead {f(lead_ok):5.2f} (only B0 ECal {f(lead_ok & ~lead_no_b0ecal):4.2f}, momentum {f(lead_p):4.2f})  "
+                         f"e+lead+recoil {f(rec_ok & lead_ok & e_ok):5.2f} (lead momentum {f(rec_ok & lead_p & e_ok):4.2f})")
     (outdir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     (outdir / "pairs.txt").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
