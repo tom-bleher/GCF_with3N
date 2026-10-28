@@ -55,6 +55,19 @@ STATION_GAP_MM = 30.0
 CALO_E_FRAC_MIN = 0.05  # calorimeter detection: deposited energy / the nucleon's true energy (#206)
 
 
+# Electron identification (#207). EICrecon's ReconstructedElectrons asks E(clusters[0])/p in [0.9, 1.2], which loses
+# the backward electron where the EEMC meets the barrel (track eta -1.83 to -1.68: the shower is split between the
+# EEMC rim, barrel ScFi clusters the merger leaves out of EcalBarrelClusters, the nHCal and passive material) and
+# in the barrel, whose ScFi energy scale is 6-10% high. Here E = EEMC clusters + barrel ScFi clusters / scale(eta)
+# within E_ID_CONE of the track's first cluster, with an eta-dependent E/p window. Calibrated with e-/pi- guns
+# (2-12 GeV, eta -2.3 to -0.5) through the prod5 chain: epic 9ebb627fd, EICrecon b2e3d493, energyRelTolerance=-1.
+E_ID_CONE = 0.15  # rad, from the seed cluster's position
+BARREL_SCALE_ETA = (-1.575, -1.425, -1.275, -1.125, -0.975, -0.825, -0.675, -0.525)
+BARREL_SCALE = (1.063, 1.069, 1.077, 1.081, 1.076, 1.087, 1.093, 1.104)  # median E_ScFi/p_true, e- 4-12 GeV
+E_ID_TRANSITION = (-1.83, -1.68)  # track eta
+E_ID_WINDOW = {"eemc": (0.9, 1.2), "transition": (0.5, 1.2), "barrel": (0.85, 1.2)}
+
+
 def cluster_of(assoc):
     """Cluster collection of a cluster-association collection (B0ECalClusterAssociations -> B0ECalClusters)."""
     return assoc.replace("ClusterAssociations", "Clusters")
@@ -120,6 +133,46 @@ def final_nucleons(gen_path, nums):
     return out
 
 
+def electron_eop(r, q, rp_i, ids):
+    """E/p of reconstructed particle rp_i in reco event q for the electron ID (#207), and its track eta; (nan, eta)
+    without a backward seed cluster. ids: collection ID -> name (podio_metadata)."""
+    RP = "ReconstructedParticles"
+    pv = np.array([float(r[f"{RP}/{RP}.momentum.{c}"][q][rp_i]) for c in "xyz"])
+    p = float(np.linalg.norm(pv))
+    eta = float(-np.log(np.tan(0.5 * np.arccos(pv[2] / p)))) if p > 0 else np.nan
+    cb = int(r[f"{RP}/{RP}.clusters_begin"][q][rp_i])
+    if int(r[f"{RP}/{RP}.clusters_end"][q][rp_i]) == cb:
+        return np.nan, eta
+    seed_col = ids.get(int(r[f"_{RP}_clusters/_{RP}_clusters.collectionID"][q][cb]))
+    if seed_col not in ("EcalEndcapNClusters", "EcalBarrelClusters"):
+        return np.nan, eta
+    si = int(r[f"_{RP}_clusters/_{RP}_clusters.index"][q][cb])
+    seed = np.array([float(r[f"{seed_col}/{seed_col}.position.{c}"][q][si]) for c in "xyz"])
+    e = 0.0
+    for col in ("EcalEndcapNClusters", "EcalBarrelScFiClusters"):
+        en = ak.to_numpy(r[f"{col}/{col}.energy"][q])
+        if not len(en):
+            continue
+        pos = np.stack([ak.to_numpy(r[f"{col}/{col}.position.{c}"][q]) for c in "xyz"], 1)
+        cosang = pos @ seed / (np.linalg.norm(pos, axis=1) * np.linalg.norm(seed))
+        near = cosang > np.cos(E_ID_CONE)
+        if col == "EcalBarrelScFiClusters":
+            ceta = -np.log(np.tan(0.5 * np.arccos(pos[near, 2] / np.linalg.norm(pos[near], axis=1))))
+            e += float((en[near] / np.interp(ceta, BARREL_SCALE_ETA, BARREL_SCALE)).sum())
+        else:
+            e += float(en[near].sum())
+    return e / p, eta
+
+
+def electron_id(eop, eta):
+    """The E/p window of the electron ID by track eta (#207)."""
+    lo_t, hi_t = E_ID_TRANSITION
+    region = np.where(eta < lo_t, "eemc", np.where(eta < hi_t, "transition", "barrel"))
+    lo = np.vectorize(lambda k: E_ID_WINDOW[k][0])(region)
+    hi = np.vectorize(lambda k: E_ID_WINDOW[k][1])(region)
+    return np.isfinite(eop) & (eop >= lo) & (eop <= hi)
+
+
 def extract_file(sim_path):
     """Per-event detection flags of the leading and recoil nucleon for one sim/reco chunk."""
     sim_path = Path(sim_path)
@@ -153,6 +206,18 @@ def extract_file(sim_path):
                 "_ReconstructedChargedParticleAssociations_rec/_ReconstructedChargedParticleAssociations_rec.index"]
         rbr += [f"MCParticles/MCParticles.momentum.{c}" for c in "xyz"]
         rbr += [f"ReconstructedChargedParticles/ReconstructedChargedParticles.momentum.{c}" for c in "xyz"]
+        # electron ID (#207): reconstructed particles with their clusters, and the backward calorimeter clusters
+        RP = "ReconstructedParticles"
+        rbr += [f"{RP}/{RP}.charge", f"{RP}/{RP}.clusters_begin", f"{RP}/{RP}.clusters_end",
+                f"_{RP}_clusters/_{RP}_clusters.index", f"_{RP}_clusters/_{RP}_clusters.collectionID",
+                "_ReconstructedParticleAssociations_sim/_ReconstructedParticleAssociations_sim.index",
+                "_ReconstructedParticleAssociations_rec/_ReconstructedParticleAssociations_rec.index"]
+        rbr += [f"{RP}/{RP}.momentum.{c}" for c in "xyz"]
+        rbr += [f"{col}/{col}.{v}" for col in ("EcalEndcapNClusters", "EcalBarrelScFiClusters", "EcalBarrelClusters")
+                for v in ("energy", "position.x", "position.y", "position.z")]
+        ti = uproot.open(reco_path)["podio_metadata"]["events___CollectionTypeInfo"].arrays(library="np")
+        ids = dict(zip(np.concatenate(ti["events___CollectionTypeInfo.collectionID"]).tolist(),
+                       np.concatenate(ti["events___CollectionTypeInfo.name"]).tolist()))
         zn = "ReconstructedHcalFarForwardZDCNeutrals"
         if f"{zn}/{zn}.energy" in keys:
             rbr += [f"{zn}/{zn}.energy"] + [f"{zn}/{zn}.momentum.{c}" for c in "xyz"]
@@ -208,6 +273,19 @@ def extract_file(sim_path):
             row["reco"] = ridx is not None
             row["e_truth_matched"] = len(r["ScatteredElectronsTruth_objIdx/ScatteredElectronsTruth_objIdx.index"][q]) > 0
             row["e_reco"] = len(r["ReconstructedElectrons_objIdx/ReconstructedElectrons_objIdx.index"][q]) > 0
+            # electron ID (#207): any negative reconstructed particle passing; E/p of the truth electron's one
+            RP = "ReconstructedParticles"
+            chg = ak.to_numpy(r[f"{RP}/{RP}.charge"][q])
+            cand = [electron_eop(r, q, i, ids) for i in np.flatnonzero(chg < 0)]
+            row["e_id"] = bool(cand and electron_id(*map(np.array, zip(*cand))).any())
+            row["e_eop"], row["e_eta_reco"] = np.nan, np.nan
+            je = np.flatnonzero((rst == 1) & (ak.to_numpy(r[mc[1]][q]) == 11))
+            if len(je):
+                sim_ = ak.to_numpy(r["_ReconstructedParticleAssociations_sim/_ReconstructedParticleAssociations_sim.index"][q])
+                hit_ = np.flatnonzero(sim_ == je[0])
+                if len(hit_):
+                    ri = int(r["_ReconstructedParticleAssociations_rec/_ReconstructedParticleAssociations_rec.index"][q][hit_[0]])
+                    row["e_eop"], row["e_eta_reco"] = electron_eop(r, q, ri, ids)
             for role in ev_roles:
                 j = ridx[role] if ridx else -2
                 sim_of = lambda c: ak.to_numpy(r[f"_{c}_sim/_{c}_sim.index"][q])  # noqa: E731
@@ -395,7 +473,7 @@ def extract(run, jobs):
             r.pop("evap", None)
     keys = sorted({k for r in rows for k in r if k != "num"})
     for k in keys:
-        mom = k.endswith(("_px", "_py", "_pz"))
+        mom = k.endswith(("_px", "_py", "_pz", "_eop", "_eta_reco"))  # NaN when absent
         out[k] = np.array([r.get(k, np.nan if mom else False) for r in rows])
     for role in ("lead", "rec", "rec2"):
         for kind in ("true", "reco"):
@@ -441,6 +519,21 @@ def calo_detected(d, role, b0ecal):
 def detected_anywhere(d, role, b0ecal=True):
     """Far-forward (hit level), a reconstructed charged particle, or a calorimeter deposit (calo_detected)."""
     return detected(d, role, "hit") | d[f"{role}_charged"] | calo_detected(d, role, b0ecal)
+
+
+def e_id_columns(d):
+    """(column, summary-key suffix) of the electron identifications in d: the analysis' own e_id (#207) plotted,
+    EICrecon's ReconstructedElectrons (e_reco) kept for comparison; e_reco alone for runs extracted before #207."""
+    if "e_id" in d:
+        return [("e_id", ""), ("e_reco", "_ReconstructedElectrons")]
+    return [("e_reco", "")] if "e_reco" in d else []
+
+
+def e_id_note(data):
+    """Legend note naming the electron identification of the open markers."""
+    if all("e_id" in d for d, _ in data.values()):
+        return " (E/p, EEMC + barrel ScFi)"
+    return " (EICrecon ReconstructedElectrons)"
 
 
 def momentum_measured(d, role):
@@ -590,13 +683,14 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
             c, mk = (red, "o") if low_energy[lab] else ("#1029ff", "s")
             g = h > 0
             ax.plot(cen7[g], h[g], ls="none", marker=mk, ms=5, color=c)
-            if "e_reco" in d:  # open markers: the electron identified by EICrecon (ReconstructedElectrons)
-                oke = kin & d["e_reco"] & detected_anywhere(d, "lead")
+            for col, suffix in e_id_columns(d):  # open markers: the electron identified (e_id, else EICrecon's)
+                oke = kin & d[col] & detected_anywhere(d, "lead")
                 he = np.histogram(d["q2"][oke], bins, weights=w[oke])[0]
-                summary[lab].update({"mf_e_identified_and_nucleon_detected": float(w[oke].sum() / w[kin].sum()),
-                                     "mf_q2_reach_100_per_GeV2_e_identified":
+                summary[lab].update({f"mf_e_identified_and_nucleon_detected{suffix}": float(w[oke].sum() / w[kin].sum()),
+                                     f"mf_q2_reach_100_per_GeV2_e_identified{suffix}":
                                          float(bins[1:][he >= 100].max()) if (he >= 100).any() else None})
-                ax.plot(cen7[he > 0], he[he > 0], ls="none", marker=mk, ms=5, mfc="none", color=c)
+                if not suffix:
+                    ax.plot(cen7[he > 0], he[he > 0], ls="none", marker=mk, ms=5, mfc="none", color=c)
             curves7[lab] = (h, c)
         ax.set_yscale("log")
         ax.set_xlim(1, 25)
@@ -606,7 +700,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
             k = 12 if i == 0 else 3
             ax.text(cen7[k], max(h[k], 1e-3) * (9 if i == 0 else 0.2), lab, color=c, fontsize=15, ha="center", va="center")
         if any("e_reco" in d for d, _ in data.values()):
-            ax.text(0.97, 0.95, "filled: electron truth-matched\nopen: electron identified", transform=ax.transAxes,
+            ax.text(0.97, 0.95, "filled: electron truth-matched\nopen: electron identified" + e_id_note(data), transform=ax.transAxes,
                     fontsize=9, ha="right", va="top", color="#444444")
         frame(ax)
         ax.set_ylabel("Events per bin", fontsize=13, loc="top")
@@ -836,12 +930,13 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
         g = h > 0
         ax.plot(cen5[g], h[g], ls="none", marker=mk, ms=5, color=c)
         curves5[lab] = (h, c)
-        if "e_reco" in d:  # open markers: also the electron identified by EICrecon (ReconstructedElectrons)
-            me = m & d["e_reco"]
+        for col, suffix in e_id_columns(d):  # open markers: also the electron identified (e_id, else EICrecon's)
+            me = m & d[col]
             he = np.histogram(d["q2"][me], bins, weights=d["w_nb"][me] * scale)[0]
-            summary[lab]["q2_reach_100_per_GeV2_e_identified"] = float(bins[1:][he >= 100].max()) if (he >= 100).any() else None
-            summary[lab]["recoil_tagged_fraction_e_identified"] = float(he.sum() / h.sum()) if h.sum() else None
-            ax.plot(cen5[he > 0], he[he > 0], ls="none", marker=mk, ms=5, mfc="none", color=c)
+            summary[lab][f"q2_reach_100_per_GeV2_e_identified{suffix}"] = float(bins[1:][he >= 100].max()) if (he >= 100).any() else None
+            summary[lab][f"recoil_tagged_fraction_e_identified{suffix}"] = float(he.sum() / h.sum()) if h.sum() else None
+            if not suffix:
+                ax.plot(cen5[he > 0], he[he > 0], ls="none", marker=mk, ms=5, mfc="none", color=c)
     ax.set_yscale("log")
     ax.set_xlim(1, 25)
     lo = min(float(np.min(h[h > 0])) for h, _ in curves5.values())
@@ -854,7 +949,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
         k = 12 if i == 0 else 3
         ax.text(cen5[k], h[k] * (9 if i == 0 else 0.2), lab, color=c, fontsize=15, ha="center", va="center")
     if any("e_reco" in d for d, _ in data.values()):
-        ax.text(0.97, 0.95, "filled: no electron requirement (as PRC 105)\nopen: electron identified", transform=ax.transAxes,
+        ax.text(0.97, 0.95, "filled: no electron requirement (as PRC 105)\nopen: electron identified" + e_id_note(data), transform=ax.transAxes,
                 fontsize=9, ha="right", va="top", color="#444444")
     frame(ax)
     ax.set_ylabel("Events per bin", fontsize=13, loc="top")
