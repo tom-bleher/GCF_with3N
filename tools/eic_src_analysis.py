@@ -925,7 +925,9 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
         fig, ax = plt.subplots(figsize=(6.6, 4.0))
         pb = np.arange(10, 205, 10.0)
         for lab, (d, _) in data.items():
-            for code, name, col, mk in ((2112, "Neutron", "#1029ff", "s"), (2212, "Proton", red if low_energy[lab] else "#d2a679", "o")):
+            # one colour per setting and species, so the two settings' neutrons stay apart (#204)
+            for code, name, col, mk in ((2112, "Neutron", "#1029ff" if low_energy[lab] else "#00a0c0", "s"),
+                                        (2212, "Proton", red if low_energy[lab] else "#d2a679", "o")):
                 m = (d["rec_final_pdg"] == code) & np.isfinite(d["rec_reco_p_lab_mag"]) & (d["rec_p_irf"] > P_IRF_MIN)
                 pt, rel = d["rec_true_p_lab_mag"][m], (d["rec_reco_p_lab_mag"][m] - d["rec_true_p_lab_mag"][m]) / d["rec_true_p_lab_mag"][m]
                 xs, ys, es = [], [], []
@@ -940,13 +942,13 @@ def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
                     summary[lab][f"recoil {name.lower()} dp/p (68% half-width)"] = float(np.median(ys))
                     summary[lab][f"recoil {name.lower()} dp/p bias (median)"] = float(np.median(rel)) if len(rel) else None
         ax.set_xlim(0, 210)
-        ax.set_ylim(0, None)
+        ax.set_ylim(0, 1.6 * ax.get_ylim()[1])  # headroom: the note and the legend sit above the points
         frame(ax)
         ax.set_xlabel(r"p [GeV/$c$]", fontsize=13, loc="right")
         ax.set_ylabel(r"$\Delta$p/p (68% half-width)", fontsize=13, loc="top")
         ax.text(0.03, 0.95, r"recoil nucleons, $p_\mathrm{IRF} > 0.3$ GeV/$c$; protons: B0 tracks, neutrons: ZDC",
                 transform=ax.transAxes, fontsize=9, va="top", color=MUTED)
-        ax.legend(frameon=False, fontsize=10, loc="lower right")
+        ax.legend(frameon=False, fontsize=10, loc="upper right", bbox_to_anchor=(1.0, 0.9))
         fig.tight_layout()
         fig.savefig(outdir / "fig2_resolution.pdf")
         plt.close(fig)
