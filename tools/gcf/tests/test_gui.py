@@ -6,8 +6,10 @@
 Browser tests are skipped without selenium and Firefox.
 """
 
+import shutil
 import subprocess
 import sys
+import tempfile
 import time
 import unittest
 from pathlib import Path
@@ -193,15 +195,22 @@ class TestCommandLine(unittest.TestCase):
 
 
 class TestProvenance(unittest.TestCase):
-    def test_version_matches_the_tree(self):
-        """The stages record the code they were built from, not a stale configure-time stamp."""
-        harness.need_binaries()
-        header = harness.runner.BIN_DIR / "gcf_version.h"
-        if not header.exists():
-            self.skipTest("binaries were not built by this tree's CMake")
+    def test_version_stamp_matches_the_tree(self):
+        """WriteVersion.cmake records the commit of the tree it runs on, and only
+        rewrites the file when the version changes."""
+        if not shutil.which("cmake"):
+            self.skipTest("no cmake")
         head = subprocess.run(["git", "-C", str(REPO), "describe", "--always", "--tags"],
                               capture_output=True, text=True).stdout.strip()
-        self.assertIn(head, header.read_text())
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "gcf_version.h"
+            command = ["cmake", f"-DSRC_ROOT={REPO / 'src'}", f"-DOUT={out}", "-P",
+                       str(REPO / "src/programs/gcf_stages/WriteVersion.cmake")]
+            subprocess.run(command, check=True)
+            self.assertIn(head, out.read_text())
+            stamp = out.stat().st_mtime_ns
+            subprocess.run(command, check=True)
+            self.assertEqual(out.stat().st_mtime_ns, stamp)
 
 
 if __name__ == "__main__":
