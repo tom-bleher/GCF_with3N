@@ -4,6 +4,12 @@
 cmake_minimum_required (VERSION 3.6)
 set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake_modules")
 find_package(ROOT REQUIRED)
+# genCCQE and genPhoto call TH1::GetRandom(TRandom*), added in ROOT 6.24.
+# FindROOT.cmake ignores a version argument, so check root-config's here.
+string(REPLACE "/" "." ROOT_VERSION_DOTTED "${ROOTVERSION}")
+if(ROOT_VERSION_DOTTED VERSION_LESS 6.24)
+    message(FATAL_ERROR "ROOT ${ROOTVERSION} found; ROOT >= 6.24 is required")
+endif()
 
 project (GCF_Generator_Suite)
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 #
 # run_natalie_validation.sh — small (2M) samples for the staged validation of
-# the Wright et al. recreation. Each stage changes exactly ONE thing so its
-# effect on the effective transparencies and on Figs 5/8/10 is attributable:
+# the Wright et al. (doi:10.48550/arXiv.2104.05090) recreation. Each stage
+# changes exactly ONE thing so its effect on the effective transparencies and
+# on Figs 5/8/10 is attributable:
 #
 #   fixed : k_rel > kF                (current behaviour)
 #   local : k_rel > kF(r)             (Wright's onset)

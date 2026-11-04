@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 #
 # run_natalie_overnight.sh — full production + all figures for the
-# Wright et al. (arXiv:2104.05090) reproduction, in one detached run.
+# Wright et al. (arXiv:2104.05090, doi:10.48550/arXiv.2104.05090) reproduction,
+# in one detached run.
 #
 # Launch with:
 #   setsid nohup bash run_natalie_overnight.sh > natalie_overnight.log 2>&1 < /dev/null &

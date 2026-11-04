@@ -17,18 +17,38 @@
 #   --seed S              genQE seed (default 1); npsim chunk i uses S*100000 + i + 1
 #   --max-events N        convert at most N events (smoke tests)
 #   --chunk-size N        events per npsim/eicrecon job (default 500)
-#   --jobs N              parallel npsim jobs (default 64; ~1.8 GB each)
-#   --reco-jobs N         parallel eicrecon jobs (default 40; ~2.9 GB each with one thread)
+#   --jobs N              parallel npsim jobs (default 64; up to ~2.5 GB each single-threaded)
+#   --sim-threads N       Geant4 threads per npsim job (default 1). Many jobs of a few threads use the
+#                         machine best: 32 jobs x 8 threads ran 1.3x the events/s of 70 single-threaded
+#                         jobs at about half the memory (~2.9 GB per job), with the same physics (#194);
+#                         a single job with 32 threads is far less efficient
+#   --reco-jobs N         parallel eicrecon jobs (default 40; up to ~3.1 GB each with one thread). Queue
+#                         runs one after another: two at these defaults need more memory than the machine has
 #   --reco-threads N      eicrecon threads per job (default 1)
 #   --generator G         genQE (default; SRC pairs, no FSI) or genQE_FSI (GENIE FSI; with
 #                         --gen-args "-n" no FSI, with "-F 0.25" single-nucleon mean field),
 #                         genDIS (DIS off an SRC pair, CT18NN PDFs; use --no-cuts), or genQE_3N_FSI
 #                         (3N SRC; --attempts is then the number of accepted events; "-n" for no FSI)
-#   --gen-args "ARGS"     extra generator flags. E* sampling (-M) is added for A > 2 SRC runs
-#   --deexcite            de-excite the A-2 remnant with Geant4 (evaporation nucleons, light fragments,
-#                         photons) before the afterburner: tools/deexcite, built inside eic-shell with
-#                         cmake -S tools/deexcite -B tools/deexcite/build && cmake --build tools/deexcite/build
-#                         (genQE and genDIS, whose output carries the remnant)
+#   --gen-args "ARGS"     extra generator flags. E* sampling (-M) is added for A > 4 SRC runs (4He runs
+#                         at E* = 0; Pybus et al. 2020, doi:10.1016/j.physletb.2020.135429, varied the
+#                         4He A-2 E* over 0-10 MeV as a systematic)
+#   --deexcite [geant4|beagle]
+#                         de-excite the A-2 remnant (evaporation nucleons, light fragments, photons) before
+#                         the afterburner (genQE and genDIS, whose output carries the remnant; genQE_FSI with
+#                         geant4 only: its residual nucleus after GENIE's cascade comes with E* as a HepMC
+#                         attribute, #210, and BeAGLE's GCF interface needs the 2N event layout):
+#                         geant4 (default) uses tools/deexcite, built inside eic-shell with
+#                         cmake -S tools/deexcite -B tools/deexcite/build && cmake --build tools/deexcite/build;
+#                         beagle uses tools/beagle_deexcite.py, BeAGLE with FLUKA as PRC 105, 034001 did
+#                         (needs BeAGLE built against FLUKA 4; see BEAGLESYS, FLUPRO, LHAPATH below)
+#   --genie-compound on|off
+#                         GENIE hN compound-nucleus / pre-equilibrium fate for genQE_FSI and genQE_3N_FSI
+#                         (default off: GENIE R-3_08_00 withdrew it as experimental, #156). Applied as a copy of
+#                         the hN override in OUT/genie_xml placed first on GXMLPATH, so the repository default
+#                         (which the CLAS paper production uses) is untouched; recorded in run.json
+#   --no-beam-nucleon     do not add the per-nucleon beam proton after abconv (tools/add_beam_nucleon.py, #158).
+#                         With it EICrecon's beam-dependent outputs (InclusiveKinematics*, HadronicFinalState) are
+#                         filled; the Roman Pot / OMD matrix reconstruction is not valid for Z/A = 1/2 beams either way
 #   --no-cuts             convert all events instead of Q2 > 3, xB > 1.2
 #   --compress N          ROOT compression of sim/reco output (default 505 = ZSTD level 5, about a
 #                         third smaller than npsim/EICrecon's ZLIB 1; 0 keeps their output as is)
@@ -41,11 +61,25 @@
 #   EPIC_INSTALL      epic install prefix (required), e.g. ~/eic/dev/epic_craterlake_5x41/install
 #   EICRECON_INSTALL  EICrecon install prefix (required for reco)
 #   EIC_SHELL         eic-shell launcher (default ~/eic/eic-shell)
+#   BEAGLESYS, FLUPRO, LHAPATH
+#                     BeAGLE checkout, FLUKA 4 installation and LHAPDF 5 PDF sets for --deexcite beagle
+#                     (defaults ~/src/BeAGLE, ~/src/beagle-deps/fluka, ~/src/beagle-deps/lhapdf5/share/lhapdf/PDFsets)
 #   FIELDMAPS         directory linked as ./fieldmaps in every job (default ~/eic/fieldmaps)
 #   EPIC_CONFIG       detector config (default epic_craterlake_5x41 for 5x41, epic_craterlake_10x110_H2 for 10x110)
 #   FIELD             beamline field file swapped into the config (default fields/beamline_5x41_He4.xml for
 #                     5x41; none for 10x110, whose H2 config already has the Z/A = 1/2 field)
-#   AB_PRESET         abconv preset (default ip6_eAu_41x5 / ip6_eAu_110x10)
+#   AB_PRESET         abconv preset (default ip6_hidiv_41x5 / ip6_eAu_110x10). abconv has no light-ion
+#                     preset, so C12, d and He4 borrow one, an approximation: 25 mrad crossing angle
+#                     plus 0.1 mrad vertical, that preset's ion divergence and bunch length, no
+#                     momentum spread. At 5x41 the stand-in is the 41 GeV proton beam (7.5 cm bunch,
+#                     vertex z spread about 38 mm rms): ip6_eAu_41x5's 11.6 cm is the Au (and Pb)
+#                     value at 41 GeV/u and the longest of any preset, where p, d, 3He, Cu, Ru and Au
+#                     at 100-166 GeV/u all use 6-7.5 cm; with it, 17% of 5x41 Q2 12-25 events lose the
+#                     electron track (vertex z < -100 mm misses the vertex and Si barrel layers, #190).
+#                     PRC 105, 034001 (doi:10.1103/PhysRevC.105.034001) applied only the crossing
+#                     angle and parametrized smearing. Names are case sensitive (abconv's help
+#                     lists ip6_eau_41x5, which it rejects); ab.hepmc's beam metadata (ion_beam_pdg 11,
+#                     ion_beam_energy 18) is wrong, and run.json records the preset used.
 #
 # The run directory gets gen.root, gen.hepmc3 (+ .json), ab.hepmc, geometry.xml, chunk_*.hepmc,
 # sim_*.edm4hep.root, reco_*.edm4eic.root, per-job logs and exit codes, and run.json with the
@@ -56,7 +90,7 @@ set -euo pipefail
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 GCF=$(cd "$HERE/.." && pwd)
 
-BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 RJOBS=40 RTHREADS=1 CUTS="--paper-cuts" STAGE=all GEN=genQE GEN_ARGS="" COMPRESS=505 DEEX=0
+BEAMS="" ION="" ATTEMPTS="" OUT="" Q2="3:25" SEED=1 MAXEV="" CHUNK=500 JOBS=64 STHREADS=1 RJOBS=40 RTHREADS=1 CUTS="--paper-cuts" STAGE=all GEN=genQE GEN_ARGS="" COMPRESS=505 DEEX=0 GCOMP=off BEAM_NUCLEON=1
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --beams) BEAMS=$2; shift 2 ;;
@@ -68,25 +102,31 @@ while [[ $# -gt 0 ]]; do
     --max-events) MAXEV=$2; shift 2 ;;
     --chunk-size) CHUNK=$2; shift 2 ;;
     --jobs) JOBS=$2; shift 2 ;;
+    --sim-threads) STHREADS=$2; shift 2 ;;
     --reco-jobs) RJOBS=$2; shift 2 ;;
     --reco-threads) RTHREADS=$2; shift 2 ;;
     --no-cuts) CUTS=""; shift ;;
     --generator) GEN=$2; shift 2 ;;
     --gen-args) GEN_ARGS=$2; shift 2 ;;
     --compress) COMPRESS=$2; shift 2 ;;
-    --deexcite) DEEX=1; shift ;;
+    --deexcite) DEEX=geant4
+                if [[ ${2:-} == geant4 || ${2:-} == beagle ]]; then DEEX=$2; shift; fi
+                shift ;;
     --stage) STAGE=$2; shift 2 ;;
+    --genie-compound) GCOMP=$2; shift 2 ;;
+    --no-beam-nucleon) BEAM_NUCLEON=0; shift ;;
     -h|--help) sed -n '2,/^set -euo/p' "$0" | sed '$d'; exit 0 ;;
     *) echo "unknown option $1" >&2; exit 2 ;;
   esac
 done
 die() { echo "run_eic_sim: $*" >&2; exit 2; }
+[[ $GCOMP == on || $GCOMP == off ]] || die "--genie-compound must be on or off"
 [[ -n $BEAMS && -n $ION && -n $OUT ]] || die "--beams, --ion and --out are required (see --help)"
 [[ $STAGE == all || $STAGE == gen ]] && [[ -z $ATTEMPTS ]] && die "--attempts is required"
 [[ $Q2 =~ ^[0-9.]+:[0-9.]+$ ]] && awk -F: '{exit !($1 >= 0 && $2 > $1)}' <<< "$Q2" || die "--q2 must be MIN:MAX with 0 <= MIN < MAX"
 case "$ION" in C12) Z=6 N=6 ;; d) Z=1 N=1 ;; He4) Z=2 N=2 ;; *) die "--ion must be C12, d or He4 (Z/A = 1/2)" ;; esac
 case "$BEAMS" in
-  5x41)   : "${EPIC_CONFIG:=epic_craterlake_5x41}" "${FIELD=fields/beamline_5x41_He4.xml}" "${AB_PRESET:=ip6_eAu_41x5}" ;;
+  5x41)   : "${EPIC_CONFIG:=epic_craterlake_5x41}" "${FIELD=fields/beamline_5x41_He4.xml}" "${AB_PRESET:=ip6_hidiv_41x5}" ;;
   10x110) : "${EPIC_CONFIG:=epic_craterlake_10x110_H2}" "${FIELD=}" "${AB_PRESET:=ip6_eAu_110x10}" ;;
   *) die "--beams must be 5x41 or 10x110 (the light-ion lattices in epic)" ;;
 esac
@@ -103,9 +143,18 @@ if [[ $STAGE == all || $STAGE == reco || $STAGE == resume ]]; then
   [[ -n ${EICRECON_INSTALL:-} && -f $EICRECON_INSTALL/bin/eicrecon-this.sh ]] || die "set EICRECON_INSTALL"
 fi
 DEEX_BIN=$GCF/tools/deexcite/build/deexcite
-if [[ $DEEX == 1 ]]; then
-  [[ $GEN == genQE || $GEN == genDIS ]] || die "--deexcite needs the A-2 remnant in the event: genQE or genDIS"
-  [[ -x $DEEX_BIN ]] || die "--deexcite: build tools/deexcite inside eic-shell first (see --help)"
+: "${BEAGLESYS:=$HOME/src/BeAGLE}" "${FLUPRO:=$HOME/src/beagle-deps/fluka}" "${LHAPATH:=$HOME/src/beagle-deps/lhapdf5/share/lhapdf/PDFsets}"
+if [[ $DEEX != 0 ]]; then
+  [[ $GEN == genQE || $GEN == genDIS || ( $GEN == genQE_FSI && $DEEX == geant4 ) ]] \
+    || die "--deexcite needs a remnant in the event: genQE or genDIS, or genQE_FSI with geant4"
+  if [[ $DEEX == geant4 ]]; then
+    [[ -x $DEEX_BIN ]] || die "--deexcite: build tools/deexcite inside eic-shell first (see --help)"
+  else
+    DEEX_BIN=$GCF/tools/beagle_deexcite.py
+    [[ -x $BEAGLESYS/BeAGLE ]] || die "--deexcite beagle: no BeAGLE executable in BEAGLESYS=$BEAGLESYS"
+    [[ -f $FLUPRO/data/nuclear.bin ]] || die "--deexcite beagle: no FLUKA data in FLUPRO=$FLUPRO"
+    [[ -f $LHAPATH/cteq6ll.LHpdf ]] || die "--deexcite beagle: no LHAPDF 5 sets in LHAPATH=$LHAPATH"
+  fi
 fi
 if [[ $STAGE == all ]]; then
   [[ -e $OUT ]] && die "$OUT exists; use a new directory or --stage to continue a run"
@@ -126,12 +175,24 @@ if [[ $STAGE == all || $STAGE == gen ]]; then
   E_IRF=$("$GCF/tools/gcf2hepmc.py" --beams "$BEAMS" --ion "$ION" --print-ebeam-irf)
   printf 'QSq %s %s\n' "${Q2%%:*}" "${Q2##*:}" > ps.txt
   case "$GEN" in genQE|genQE_FSI|genDIS|genQE_3N_FSI) ;; *) die "--generator must be genQE, genQE_FSI, genDIS or genQE_3N_FSI" ;; esac
-  # E* of the A-2 remnant (-M) only exists for an SRC pair in a nucleus with A > 2: for the
-  # deuteron it would give the empty remnant a mass, and the mean field (-F) has no pair.
-  ESTAR="-M"; { (( Z + N <= 2 )) || [[ " $GEN_ARGS " == *" -F "* ]]; } && ESTAR=""
+  # E* of the A-2 remnant (-M) only exists for an SRC pair in a nucleus with A > 4: for the
+  # deuteron it would give the empty remnant a mass, and for 4He it would turn the A-2 = 2 pn
+  # remnant into a deuteron with mass m_d + E* (about 17 MeV), which does not exist; pp and nn are
+  # unbound either way. E* = 0 is the edge of the 0-10 MeV band Pybus et al. 2020 (4He(e,e'pN) with
+  # GCF, arXiv:2003.02318, doi:10.1016/j.physletb.2020.135429) used as a systematic for the 4He
+  # A-2 system, which gcfNucleus mirrors with Estar_max = 0.010 under -r; that band is not applied
+  # here. The mean field (-F) has no pair, and genQE_3N_FSI has no -M.
+  ESTAR="-M"; { (( Z + N <= 4 )) || [[ $GEN == genQE_3N_FSI || " $GEN_ARGS " == *" -F "* ]]; } && ESTAR=""
   if [[ $GEN == genQE_FSI || $GEN == genQE_3N_FSI ]]; then
     F=$GCF/src/programs/genQE_FSI
-    export GXMLPATH="$F/config/genie_override:$GENIE/config/G18_10a:$GENIE/config" GMSGCONF="$F/config/quiet_messenger.xml"
+    # the hN compound-nucleus fate (#156) set explicitly in a run-local copy of the override, first on GXMLPATH
+    mkdir -p genie_xml
+    val=$([[ $GCOMP == on ]] && echo true || echo false)
+    sed -E "s|(name=\"INUKE-DoCompoundNucleus\">)[[:space:]]*(true\|false)[[:space:]]*<|\1 $val <|" \
+      "$F/config/genie_override/HNIntranuke2018.xml" > genie_xml/HNIntranuke2018.xml
+    grep -q "INUKE-DoCompoundNucleus\"> $val <" genie_xml/HNIntranuke2018.xml || die "could not set INUKE-DoCompoundNucleus in genie_xml"
+    echo "compound_nucleus=$GCOMP" > genie_override.txt
+    export GXMLPATH="$OUT/genie_xml:$F/config/genie_override:$GENIE/config/G18_10a:$GENIE/config" GMSGCONF="$F/config/quiet_messenger.xml"
   fi
   CONV_ARGS=()
   case "$GEN" in
@@ -171,9 +232,10 @@ if [[ $STAGE != gen && $STAGE != record ]]; then
 set -uo pipefail
 OUT="$OUT"
 cd "\$OUT"
-STAGE=$STAGE CHUNK=$CHUNK JOBS=$JOBS RJOBS=$RJOBS RTHREADS=$RTHREADS COMPRESS=$COMPRESS SEED=$SEED FIELDMAPS="$FIELDMAPS"
+STAGE=$STAGE CHUNK=$CHUNK JOBS=$JOBS STHREADS=$STHREADS RJOBS=$RJOBS RTHREADS=$RTHREADS COMPRESS=$COMPRESS SEED=$SEED FIELDMAPS="$FIELDMAPS"
 EPIC_INSTALL="$EPIC_INSTALL" EPIC_CONFIG="$EPIC_CONFIG" FIELD="$FIELD" AB_PRESET="$AB_PRESET"
-EICRECON_INSTALL="${EICRECON_INSTALL:-}" DEEX=$DEEX DEEX_BIN="$DEEX_BIN"
+EICRECON_INSTALL="${EICRECON_INSTALL:-}" DEEX=$DEEX DEEX_BIN="$DEEX_BIN" BEAM_NUCLEON=$BEAM_NUCLEON GCF="$GCF"
+export BEAGLESYS="$BEAGLESYS" FLUPRO="$FLUPRO" LHAPATH="$LHAPATH"
 EOF
   cat >> container_stage.sh <<'EOF'
 log() { echo "[$(date +%T)] $*" | tee -a run.log; }
@@ -211,8 +273,12 @@ land() { # local_file final_path
 }
 sim() {
   local out=$LOCAL/sim_$1.edm4hep.root
+  # the chunk's exact event count: with -1, multithreaded npsim reads past the end of the input
+  # and crashes, losing the events in flight (#194)
+  local n; n=$(grep -c '^E ' "../chunk_$1.hepmc")
   npsim --compactFile ../geometry.xml --inputFiles "../chunk_$1.hepmc" --outputFile "$out" \
-    --numberOfEvents -1 --random.seed $((SEED * 100000 + 10#$1 + 1)) > "../npsim_$1.log" 2>&1 &&
+    --numberOfEvents "$n" --numberOfThreads "$STHREADS" --random.seed $((SEED * 100000 + 10#$1 + 1)) \
+    > "../npsim_$1.log" 2>&1 &&
   land "$out" "../sim_$1.edm4hep.root"
 }
 RECO_FLAGS=(
@@ -221,6 +287,16 @@ RECO_FLAGS=(
   -PRPOTS:ForwardRomanPotRecParticles:requireBeamProton=false
   -PFOFFMTRK:ForwardOffMRecParticles:requireBeamProton=false
   -PFOFFMTRK:ForwardOffMRecParticles:requireMatchingMatrix=false
+  # match barrel ScFi and imaging clusters by eta/phi only: at the backward barrel end the imaging
+  # layers see about a third of the shower, so the stock 50% energy check drops the ScFi cluster and
+  # the electron has no cluster (5x41 Q2 3-5: 96 -> 201 of 300 identified; eic/EICrecon#2995, #190)
+  -PBEMC:EcalBarrelClustersWithoutShapes:energyRelTolerance=-1
+  # ZDC HCal imaging clusters: the stock thresholds (25 MeV seed, 50 MeV and 10 hits per cluster) are tuned for
+  # ~100 GeV neutrons and drop most 20-60 GeV (5x41) recoil-neutron showers (ZDC neutral found for 20-72%);
+  # these give 99-100% at 20-130 GeV with no fake neutrals in beam-gas-mixed events (#212)
+  -PZDC:HcalFarForwardZDCImagingProtoClusters:minClusterCenterEdep=0.005
+  -PZDC:HcalFarForwardZDCImagingProtoClusters:minClusterEdep=0.010
+  -PZDC:HcalFarForwardZDCImagingProtoClusters:minClusterNhits=3
 )
 reco() {
   local out=$LOCAL/reco_$1.edm4eic.root
@@ -238,15 +314,21 @@ if [[ $STAGE == all || $STAGE == sim ]]; then
   fi
   log "geometry: $EPIC_CONFIG with $(grep -o 'fields/beamline_[^"]*\.xml' geometry.xml)"
   AB_IN=gen.hepmc3
-  if [[ $DEEX == 1 ]]; then
-    # Geant4 de-excitation of the A-2 remnant; its products follow all other particles, so the
-    # analysis's role order (e', lead, recoil) is unchanged
-    "$DEEX_BIN" gen.hepmc3 gen_deex.hepmc3 --seed "$SEED" > deexcite.log 2>&1 || { log "deexcite failed (deexcite.log)"; exit 4; }
+  if [[ $DEEX != 0 ]]; then
+    # de-excitation of the A-2 remnant (Geant4 or BeAGLE); its products follow all other particles,
+    # so the analysis's role order (e', lead, recoil) is unchanged
+    DEEX_ARGS=(); [[ $DEEX == beagle ]] && DEEX_ARGS=(--jobs $(( JOBS < 16 ? JOBS : 16 )))
+    "$DEEX_BIN" gen.hepmc3 gen_deex.hepmc3 --seed "$SEED" "${DEEX_ARGS[@]}" > deexcite.log 2>&1 || { log "deexcite ($DEEX) failed (deexcite.log)"; exit 4; }
     log "$(grep '^deexcite:' deexcite.log)"
     AB_IN=gen_deex.hepmc3
   fi
   abconv -p "$AB_PRESET" -f hepmc3 --plot-off -o ab "$AB_IN" > abconv.log 2>&1 || { log "abconv failed"; exit 4; }
   log "abconv $AB_PRESET: $(grep -c '^E ' ab.hepmc) events"
+  if [[ $BEAM_NUCLEON == 1 ]]; then  # the per-nucleon beam proton EICrecon needs (#158); abconv takes two beams only
+    python3 "$GCF/tools/add_beam_nucleon.py" ab.hepmc ab_nucleon.hepmc > add_beam_nucleon.log 2>&1 \
+      && mv ab_nucleon.hepmc ab.hepmc || { log "add_beam_nucleon failed (add_beam_nucleon.log)"; exit 4; }
+    log "$(tail -1 add_beam_nucleon.log)"
+  fi
   rm -f chunk_*.hepmc
   awk -v per="$CHUNK" '
     /^HepMC::Asciiv3-END/ { next }
@@ -270,13 +352,14 @@ if [[ $STAGE == resume ]]; then
   log "resume: $(grep -lxF 0 exit_sim_* 2>/dev/null | wc -l) of $(ls chunk_*.hepmc | wc -l) chunks already simulated"
 fi
 if [[ $STAGE == all || $STAGE == sim || $STAGE == resume ]]; then
-  log "npsim: $(ls chunk_*.hepmc | wc -l) chunks of $CHUNK, $JOBS parallel"
+  log "npsim: $(ls chunk_*.hepmc | wc -l) chunks of $CHUNK, $JOBS parallel, $STHREADS threads/job"
   for_chunks sim "$JOBS" || log "WARNING: npsim failures (see exit_sim_*)"
 fi
 if [[ $STAGE == all || $STAGE == reco || $STAGE == resume ]]; then
   [[ $STAGE == resume ]] && for f in chunk_*.hepmc; do  # re-reconstruct chunks whose sim was redone
     i=${f//[!0-9]/}; [[ sim_$i.edm4hep.root -nt exit_reco_$i ]] && rm -f "exit_reco_$i"; done
   source "$EICRECON_INSTALL/bin/eicrecon-this.sh"
+  printf '%s\n' "${RECO_FLAGS[@]}" > reco_flags.txt
   log "eicrecon: $(command -v eicrecon), $RJOBS parallel, $RTHREADS threads/job"
   for_chunks reco "$RJOBS" || log "WARNING: eicrecon failures (see exit_reco_*)"
 fi
@@ -284,12 +367,17 @@ fi
 # versions and inputs for run.json
 mm=$(ls work_*/calibrations/materials-map.cbor 2>/dev/null | head -1)
 {
-  echo "container=$(grep -o 'Container.*' /etc/jug_info 2>/dev/null | head -1)"
-  echo "jug_info=$(head -1 /etc/jug_info 2>/dev/null)"
+  # the image (eic_xl nightly tags move) and the Spack versions it was built with
+  echo "container_image=${APPTAINER_CONTAINER:-${SINGULARITY_CONTAINER:-}}"
+  echo "container_from=$(sed -n 's/.*deffile\.from": "\([^"]*\)".*/\1/p' /.singularity.d/labels.json 2>/dev/null)"
+  echo "container_build_date=$(sed -n 's/.*build-date": "\([^"]*\)".*/\1/p' /.singularity.d/labels.json 2>/dev/null)"
+  echo "jug_info_sha256=$(sha256sum /etc/jug_info 2>/dev/null | cut -c1-64)"
+  for p in dd4hep npsim geant4 acts podio edm4hep edm4eic; do
+    echo "container_$p=$(grep -oE " $p@[^~+ ]+" /etc/jug_info 2>/dev/null | head -1 | cut -d@ -f2)"
+  done
   echo "abconv=$(abconv -v 2>&1 | tail -1)"
   echo "geant4=$(geant4-config --version 2>/dev/null)"
   echo "root=$(root-config --version 2>/dev/null)"
-  echo "dd4hep=${DD4hepINSTALL:-}"
   echo "detector_path=$DETECTOR_PATH"
   echo "geometry_sha256=$(sha256sum geometry.xml | cut -c1-64)"
   echo "material_map=${mm:+$(readlink -f "$mm")}"
@@ -302,11 +390,12 @@ EOF
 fi
 
 # ---------------------------------------------------------------- run record
-python3 - "$OUT" "$EPIC_INSTALL" "${EICRECON_INSTALL:-}" "$BEAMS" "$ION" "$SEED" "$CHUNK" "$EPIC_CONFIG" "$FIELD" "$AB_PRESET" "$EIC_SHELL" <<'PY'
+python3 - "$OUT" "$EPIC_INSTALL" "${EICRECON_INSTALL:-}" "$BEAMS" "$ION" "$SEED" "$CHUNK" "$EPIC_CONFIG" "$FIELD" "$AB_PRESET" "$EIC_SHELL" \
+  "$STHREADS" "$RTHREADS" <<'PY'
 import json, re, subprocess, sys
 from datetime import datetime
 from pathlib import Path
-out, epic, eicrecon, beams, ion, seed, chunk, config, field, preset, shell = sys.argv[1:]
+out, epic, eicrecon, beams, ion, seed, chunk, config, field, preset, shell, sthreads, rthreads = sys.argv[1:]
 o = Path(out)
 def git(path):
     src = Path(path).resolve().parent if path else None
@@ -329,6 +418,7 @@ if expected_mm.exists():
 count = lambda pat, val: sum((p.read_text().strip() == val) for p in o.glob(pat))
 run = {
     "beams": beams, "ion": ion, "genQE_seed": int(seed), "chunk_size": int(chunk),
+    "threads_per_job": {"npsim": int(sthreads), "eicrecon": int(rthreads)},
     "generator": (o / "generator_short.txt").read_text().split() if (o / "generator_short.txt").exists()
                  else (o / "generator.txt").read_text().split() if (o / "generator.txt").exists() else ["genQE", "-M"],
     "generator_command": (o / "generator.txt").read_text().strip() if (o / "generator_short.txt").exists() else None,
@@ -336,9 +426,14 @@ run = {
     "gcf": (o / "gcf_version.txt").read_text().split() if (o / "gcf_version.txt").exists() else None,
     "converter": json.loads((o / "gen.hepmc3.json").read_text()) if (o / "gen.hepmc3.json").exists() else None,
     "deexcitation": json.loads((o / "gen_deex.hepmc3.json").read_text()) if (o / "gen_deex.hepmc3.json").exists() else None,
+    "genie": ({"hN_compound_nucleus": (o / "genie_override.txt").read_text().split("=", 1)[1].strip(),
+               "override": str(o / "genie_xml" / "HNIntranuke2018.xml")} if (o / "genie_override.txt").exists() else None),
     "epic": {"install": epic, "config": config, "field_swap": field or None, "git": git(epic)},
-    "eicrecon": {"install": eicrecon or None, "git": git(eicrecon) if eicrecon else None},
+    "eicrecon": {"install": eicrecon or None, "git": git(eicrecon) if eicrecon else None,
+                 "flags": (o / "reco_flags.txt").read_text().split() if (o / "reco_flags.txt").exists() else None},
     "abconv_preset": preset,
+    "beam_nucleon": ((o / "add_beam_nucleon.log").exists() and "status-4 active-nucleon proton added after abconv (#158); "
+                     "Roman Pot / OMD matrix reconstruction not valid for Z/A = 1/2 beams") or None,
     "container_image": image,
     "container": info,
     "material_map_matches_epic_checkout": (info.get("material_map_sha256") == exp_sha) if exp_sha and info.get("material_map_sha256") else None,

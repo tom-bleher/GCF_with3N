@@ -48,7 +48,7 @@ void photoGenerator::generate_event(double &weight, double &Ephoton, int &meson_
 
     Ephoton=fixedE;
   }
-  else{Ephoton = photonSpectrum->GetRandom();
+  else{Ephoton = photonSpectrum->GetRandom(myRand);
 
   }	
   TLorentzVector vphoton_target(0.,0.,Ephoton,Ephoton);

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compute weight fractions in Region L and Region R of theta12-theta23 heatmaps.
 
-Triangular regions defined by parameters A=135 deg, K=3.
+Triangular regions defined by parameters A=135 deg, K=4 (as in Fig. 5).
 Region R: triangle near (180,180) bounded by lines with slopes B and 1/B
           through (180,180), plus a diagonal with slope -1.
 Region L: (x,y) in L iff (360-x-y, y) in R  (theta12 <-> theta13 swap).
@@ -12,35 +12,22 @@ Reads three heatmap files:
   3. 3N generator  (pure 3N SRC events)
 """
 
-import math
 import os
 import sys
 
-# Region parameters
-A_REGION = 135.0  # degrees
-K_REGION = 3.0
-A_RAD = math.radians(A_REGION)
-B_REGION = math.degrees(math.atan(math.sin(A_RAD) / (K_REGION + math.cos(A_RAD)))) / (180.0 - A_REGION)
+import numpy as np
 
-
-def is_in_region_R(x, y):
-    """Check if (theta12, theta23) is inside triangular Region R."""
-    line1 = B_REGION * (x - 180.0) + 180.0
-    line2 = (1.0 / B_REGION) * (x - 180.0) + 180.0
-    line3 = -(x - A_REGION) + 180.0 - (180.0 - A_REGION) * B_REGION
-    return (y <= line1) and (y >= line2) and (y >= line3)
-
-
-def is_in_region_L(x, y):
-    """Check if (theta12, theta23) is inside Region L (mirror of R via theta13)."""
-    return is_in_region_R(360.0 - x - y, y)
+# The paper's regions (A=135 deg, K=4), shared with Fig. 5.
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                "..", "..", "genQE_3N", "plotting"))
+from plot_fig5_theta_heatmap_pair import (region_params,
+                                          in_region_R_array as is_in_region_R,
+                                          in_region_L_array as is_in_region_L)
 
 
 def load_and_integrate(filepath):
     """Parse a theta heatmap text file and return (total_weight, weight_L, weight_R)."""
-    total = 0.0
-    wL = 0.0
-    wR = 0.0
+    rows = []
     with open(filepath) as f:
         for line in f:
             if line.startswith('#'):
@@ -48,12 +35,13 @@ def load_and_integrate(filepath):
             parts = line.split()
             if len(parts) != 3:
                 continue
-            th12, th23, w = float(parts[0]), float(parts[1]), float(parts[2])
-            total += w
-            if is_in_region_L(th12, th23):
-                wL += w
-            if is_in_region_R(th12, th23):
-                wR += w
+            rows.append([float(v) for v in parts])
+    if not rows:
+        return 0.0, 0.0, 0.0
+    th12, th23, w = np.asarray(rows).T
+    total = float(w.sum())
+    wL = float(w[is_in_region_L(th12, th23)].sum())
+    wR = float(w[is_in_region_R(th12, th23)].sum())
     return total, wL, wR
 
 
@@ -100,7 +88,8 @@ def main():
             print(f'ERROR: {label} file not found: {path}', file=sys.stderr)
             sys.exit(1)
 
-    print(f'Region R: triangular near (180,180), A={A_REGION:.0f} deg, K={K_REGION:.0f}, B={B_REGION:.4f}')
+    A, B = region_params()
+    print(f'Region R: triangular near (180,180), A={A:.0f} deg, K=4, B={B:.4f}')
     print(f'Region L: (x,y) in L iff (360-x-y, y) in R')
 
     # --- Table 1: heatmap-based fractions (geometry only, no kinematic cuts) ---

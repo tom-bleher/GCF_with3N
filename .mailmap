@@ -1,0 +1,11 @@
+# Canonical author names and emails for git log/shortlog/blame (see gitmailmap(5)).
+# GitHub does not read this file; it links commits to accounts by commit email only.
+Jackson Pybus <jacksonpybus@gmail.com>
+Jackson Pybus <jacksonpybus@gmail.com> JacksonPybus <jacksonpybus@gmail.com>
+Jackson Pybus <jacksonpybus@gmail.com> <jrpybus@mit.edu>
+Jackson Pybus <jacksonpybus@gmail.com> <jrpybus@Jacksons-MacBook-Pro.local>
+Jackson Pybus <jacksonpybus@gmail.com> <jrpybus@eofe7.cm.cluster>
+Alex Kiral <alexkiral@gmail.com> <akiral@mit.edu>
+Axel Schmidt <axelschmidt@gwu.edu> <schmidta@mit.edu>
+Andrew Denniston <awild@mit.edu> <awild@ifarm2402.jlab.org>
+Tom Bleher <tomasbleher@gmail.com> <72304996+tom-bleher@users.noreply.github.com>

@@ -273,7 +273,7 @@ void QEGenerator::generate_event_lightcone(double &weight, int &lead_type, int &
     omega = omega1;
   else
     {
-      omega = (gRandom->Rndm()>0.5)? omega1 : omega2;
+      omega = (myRand->Rndm()>0.5)? omega1 : omega2;
       weight *= 2.;
     }
 

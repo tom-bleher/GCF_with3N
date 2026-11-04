@@ -28,7 +28,7 @@ RESO_PROTON   = 0.01
 
 # Minimum recoil-proton momentum for the weighted map (see AccMap.cpp,
 # min_prec in constants.h — SRC-cut value of 0.35 GeV/c used elsewhere in
-# the paper is consistent).
+# the paper, Wright et al., doi:10.48550/arXiv.2104.05090, is consistent).
 MIN_PREC = 0.30   # GeV/c — safe detection threshold below SRC cut
 
 # =====================================================================
