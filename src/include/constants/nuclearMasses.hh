@@ -4,7 +4,7 @@
 #include "particleMasses.hh"
 
 const double mU = 0.9314941024;
-const double m_1H = mN;
+const double m_1H = 1.007825031898 * mU - me;
 const double m_2H = 2.01410178 * mU - me;
 const double m_3H = 3.01604928199 * mU - me;
 const double m_3He = 3.0160293 * mU - 2*me;

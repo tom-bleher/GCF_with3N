@@ -49,7 +49,7 @@ $PY plotting/plot_mf_fake3n_heatmap.py --input "$SMF" --output "$OUT/Fig7.pdf" \
 echo "=== recoil-threshold scan ==="
 cd "$G3"
 $PY plotting/lr_recoil_scan.py "3N+FSI=$S3N_FSI" "2N+FSI=$S2N" "MF=$SMF" --kF $KF \
-    | tee "$OUT/LR_recoil_scan.txt"
+    | tee "$OUT/LR_recoil_scan.txt" || exit 1
 
 cat > "$OUT/README.txt" <<TXT
 PAPER FIGURES -- flat-list FSI, unified detection-based (e,e'pp) selection
