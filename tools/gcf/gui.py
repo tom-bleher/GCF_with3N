@@ -27,13 +27,69 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import cli, config, results, runner, schema
+from . import cli, config, doctor, estimate, results, runner, schema
 
 STATIC = Path(__file__).resolve().parent / "static"
 MODULE_RE = re.compile(r"[a-z_]+\.js\Z")
 COMPARE_DIR = ".compare"       # hidden: not a run
 COMPARE_FILE_RE = re.compile(r"[A-Za-z0-9_.+-]+\.png\Z")
 COMPARE_SCRIPT = runner.REPO / "tools/validation/compare_samples.py"
+LOG_TAIL_BYTES = 64 * 1024
+MAX_LOGS_SHOWN = 12            # the first logs of a run with many jobs
+SCHEDULE_SECONDS = 2.0
+MAX_AUTO_RESUMES = 3           # a run that keeps dying waits for you after this
+RUNNING_STATES = ("running", "merging", "starting")
+
+
+def tail_lines(path, count, keep=None):
+    """The last lines of a file, without reading all of it."""
+    with open(path, "rb") as f:
+        f.seek(0, os.SEEK_END)
+        f.seek(max(0, f.tell() - LOG_TAIL_BYTES))
+        lines = f.read().decode(errors="replace").splitlines()
+    if keep:
+        lines = [line for line in lines if keep(line)]
+    return lines[-count:]
+
+
+def config_dir():
+    return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "gcf"
+
+
+def stable_token(new=False):
+    """The page's token, kept in a file only you can read, so that a bookmark goes on
+    working after a restart. A random one for this start if that file can't be written."""
+    path = config_dir() / "gui-token"
+    if not new:
+        try:
+            token = path.read_text().strip()
+            if token and path.stat().st_mode & 0o077 == 0:
+                return token
+        except OSError:
+            pass
+    token = secrets.token_urlsafe(18)
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.unlink(missing_ok=True)
+        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(token + "\n")
+    except OSError:
+        pass
+    return token
+
+
+def server_record(port):
+    return config_dir() / f"gui-{port}.json"
+
+
+def read_server(port):
+    """What is known of a server of yours on this port; None if it isn't running."""
+    try:
+        rec = json.loads(server_record(port).read_text())
+    except (OSError, ValueError):
+        return None
+    return rec if runner.proc_is(rec.get("pid"), rec.get("pid_start")) else None
 NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.+-]{0,99}\Z")
 PLACEHOLDER_STATE = "failed"
 
@@ -43,12 +99,16 @@ def valid_name(name):
 
 
 class App:
-    def __init__(self, runs_dir):
-        self.runs_dir = Path(runs_dir).resolve()
-        self.runs_dir.mkdir(parents=True, exist_ok=True)
-        self.token = secrets.token_urlsafe(18)
+    def __init__(self, runs_dir, serve=True, token=None, max_cpus=None):
+        self.runs_dir = Path(runs_dir).expanduser().resolve()
+        if serve:
+            self.runs_dir.mkdir(parents=True, exist_ok=True)
+        self.known_dirs = [self.runs_dir]   # the scheduler looks after all of these
+        self.token = token or secrets.token_urlsafe(18)
+        self.max_cpus = max_cpus or os.cpu_count() or 1
         self.lock = threading.Lock()
-        self.children = {}            # run name -> Popen of `gcf run`
+        self.schedule_lock = threading.Lock()
+        self.children = {}            # run directory -> Popen of `gcf run`
         self.plot_lock = threading.Lock()   # matplotlib is not thread-safe
         self.results_lock = threading.Lock()
         self.nuclear_cache = {}             # (model, A, Z, nn) -> the generator's table values
@@ -75,9 +135,9 @@ class App:
                 st = {}
         state = st.get("state", "starting" if (d / "submitted.toml").exists() else "unknown")
         with self.lock:
-            child = self.children.get(d.name)
+            child = self.children.get(str(d))
             if child is not None and child.poll() is not None:
-                del self.children[d.name]   # reap and forget finished supervisors
+                del self.children[str(d)]   # reap and forget finished supervisors
                 child = None
         # The supervisor is only "running" if its pid is still the recorded
         # process (pid + start time); a reused pid after a crash or reboot is
@@ -87,7 +147,9 @@ class App:
         if state in ("running", "merging") and not supervisor_alive:
             state = "stopped"          # the supervisor is gone (killed, machine reboot)
             orphans = self.live_steps(st)
-        if state == "starting" and child is None:
+        if (d / "queued").exists() or (d / ".starting").exists():
+            state = "queued"
+        if state == "starting" and child is None and not runner.is_locked(d):
             # No supervisor we know of and no status.json: `gcf run` died
             # before writing one (bad config, missing hadd, ...).
             state = "failed"
@@ -101,11 +163,30 @@ class App:
             outputs[stage] = {"path": path, "exists": p.is_file(),
                               "size": p.stat().st_size if p.is_file() else 0,
                               "plot": p.with_suffix(".png").is_file()}
+        jobs = st.get("jobs", [])
+        finished = sum(all(step.get("state") == "done" for step in job) for job in jobs)
+        stopped = state in ("stopped", "failed", "cancelled", "partial")
+        has_config = (d / "config.toml").exists()
+        any_step_done = any(step.get("state") == "done" for job in jobs for step in job)
         return {"name": d.name, "state": state, "error": st.get("error"),
                 "started": st.get("started"), "finished": st.get("finished"),
                 "stages": st.get("stages", {}), "outputs": outputs,
-                "orphans": len(orphans),
+                "orphans": len(orphans), "jobs_total": len(jobs), "jobs_finished": finished,
+                "workers": st.get("workers"), "partial": st.get("partial"),
+                "resumable": bool(stopped and has_config and jobs),
+                "mergeable": bool(state in ("stopped", "failed", "cancelled") and any_step_done
+                                  and "generate" in st.get("stages", {})),
+                "note": self.read_config(d).get("run", {}).get("note"),
                 "setup": self.setup_summary(d), "mtime": d.stat().st_mtime}
+
+    @staticmethod
+    def read_config(d):
+        for name in ("config.toml", "submitted.toml"):
+            try:
+                return tomllib.loads((d / name).read_text())
+            except (OSError, tomllib.TOMLDecodeError):
+                continue
+        return {}
 
     def setup_summary(self, d):
         """One line saying what a run is, from its config: '3N · 12C · 6 GeV · 40k · hN'."""
@@ -152,6 +233,8 @@ class App:
 
     def list_runs(self):
         runs = []
+        if not self.runs_dir.is_dir():
+            return runs
         for d in self.runs_dir.iterdir():
             try:
                 if self.is_run(d):
@@ -183,16 +266,25 @@ class App:
         order = {"generate": 0, "fsi": 1, "merge": 2}
         files = sorted((d / "logs").glob("*.log"), key=lambda p: (order.get(p.name.split("_")[0], 9), p.name)) \
             if (d / "logs").is_dir() else []
-        for log in files:
-            lines = log.read_text(errors="replace").splitlines()
-            # drop progress lines and GENIE's start-up banner / messenger chatter
-            lines = [l for l in lines if l.strip() and not l.startswith("Progress:")
-                     and not l.lstrip().startswith("*") and "NOTICE Messenger" not in l]
-            logs.append({"name": log.name, "tail": "\n".join(lines[-40:])})
+        # With many jobs: those that failed or are running, before the others.
+        interesting = {Path(step.get("log", "")).name: step["state"] for job in out["jobs"] for step in job
+                       if step.get("state") in ("failed", "running")}
+        rank = {"failed": 0, "running": 1}
+        shown = sorted(files, key=lambda p: rank.get(interesting.get(p.name), 2))[:MAX_LOGS_SHOWN]
+        # drop progress lines and GENIE's start-up banner / messenger chatter
+        keep = (lambda l: l.strip() and not l.startswith("Progress:")
+                and not l.lstrip().startswith("*") and "NOTICE Messenger" not in l)
+        for log in shown:
+            logs.append({"name": log.name, "file": f"logs/{log.name}", "size": log.stat().st_size,
+                         "state": interesting.get(log.name), "tail": "\n".join(tail_lines(log, 40, keep))})
         gcf_log = d / "gcf.log"
         if gcf_log.exists() and gcf_log.stat().st_size:
-            logs.insert(0, {"name": "gcf.log", "tail": gcf_log.read_text(errors="replace")[-3000:]})
+            logs.insert(0, {"name": "gcf.log", "file": "gcf.log", "size": gcf_log.stat().st_size,
+                            "tail": "\n".join(tail_lines(gcf_log, 40))})
         out["logs"] = logs
+        out["logs_hidden"] = max(0, len(files) - MAX_LOGS_SHOWN)
+        out["logs_dir"] = str(d / "logs")
+        out["size"] = sum(f.stat().st_size for f in d.rglob("*") if f.is_file())
         out["results"] = {}
         for stage, o in out["outputs"].items():
             if o["exists"]:
@@ -222,19 +314,41 @@ class App:
         elif (self.runs_dir / name).exists():
             problems.append(f"a run named {name!r} already exists; choose another name")
         problems += runner.check_setup(cfg)
+        problems += self.resource_problems(cfg)
+        cost = None
+        if not problems:
+            try:
+                cost = estimate.estimate(cfg, self.runs_dir)
+            except (runner.RunError, OSError, subprocess.SubprocessError) as e:
+                print(f"gcf gui: no estimate: {e}", file=sys.stderr)
+        if cost and cost["peak_bytes"] > cost["free_bytes"]:
+            problems.append(f"this run needs about {estimate.human_bytes(cost['peak_bytes'])} of disk space, and "
+                            f"{self.runs_dir} has {estimate.human_bytes(cost['free_bytes'])} free")
         return {"toml": config.dumps(cfg, comment="Run with:  gcf run <this file>"),
-                "problems": problems, "ok": not problems}
+                "problems": problems, "ok": not problems, "estimate": cost,
+                "estimate_text": estimate_text(cost, cfg) if cost else None}
+
+    def resource_problems(self, cfg):
+        problems = []
+        if cfg["run"]["jobs"] > self.max_cpus:
+            problems.append(f"[run] jobs: {cfg['run']['jobs']} is more than the {self.max_cpus} CPUs "
+                            f"this interface may use (gcf gui --max-cpus)")
+        need, free = estimate.rough_peak_bytes(cfg), shutil.disk_usage(self.runs_dir).free
+        if need / 2 > free:       # a rough number, so only for what clearly can't fit
+            problems.append(f"[generate] events: this needs roughly {estimate.human_bytes(need)} of disk space, and "
+                            f"{self.runs_dir} has {estimate.human_bytes(free)} free")
+        return problems
 
     def delete_run(self, name):
         d = self.run_dir(name)
         if not self.is_run(d):
             raise FileNotFoundError(name)
         st = self.run_summary(d)
-        if st["state"] in ("running", "merging", "starting") or st["orphans"]:
+        if st["state"] in RUNNING_STATES or st["orphans"]:
             raise ValueError("the run is still running; cancel it first")
         shutil.rmtree(d)
         with self.lock:
-            self.children.pop(name, None)
+            self.children.pop(str(d), None)
 
     def start_run(self, raw):
         raw = self.with_runs_dir(raw, self.runs_dir)
@@ -243,23 +357,180 @@ class App:
         if d.exists():
             raise ValueError(f"a run named {name!r} already exists; choose another name")
         cfg = config.validate(raw, base_dir=self.runs_dir)   # report errors now
-        problems = runner.check_setup(cfg)
+        problems = runner.check_setup(cfg) + self.resource_problems(cfg)
         if problems:
             raise ValueError("; ".join(problems))
         d.mkdir(parents=True)
         submitted = d / "submitted.toml"
         submitted.write_text(config.dumps(cfg, comment="Submitted from gcf gui"))
-        log = open(d / "gcf.log", "w")
-        proc = subprocess.Popen([sys.executable, str(runner.REPO / "gcf"), "run", "-q",
-                                 str(submitted)], stdout=log, stderr=subprocess.STDOUT,
-                                cwd=str(self.runs_dir), start_new_session=True)
-        log.close()
-        with self.lock:
-            self.children[name] = proc
+        (d / "queued").write_text("new")
+        self.schedule()
         return name
+
+    # -- scheduling ----------------------------------------------------------
+    def launch(self, d):
+        """Start a queued run's supervisor. It is on its own from here on: no
+        terminal, and this server may stop while it runs."""
+        marker = d / "queued"
+        claimed = d / ".starting"
+        try:
+            # Only one server can win this, if two look after one directory.
+            os.rename(marker, claimed)
+        except OSError:
+            return False
+        resume = claimed.read_text().strip() == "resume"
+        if resume:
+            # What the page shows until the new supervisor has written its own status.
+            st = runner.read_status(d)
+            st.update(state="starting", error=None, partial=None)
+            tmp = d / "status.json.tmp"
+            tmp.write_text(json.dumps(st, indent=1))
+            tmp.replace(d / "status.json")
+        self.spawn(d, resume)
+        claimed.unlink(missing_ok=True)
+        return True
+
+    def spawn(self, d, resume):
+        command = [sys.executable, str(runner.REPO / "gcf"), "run", "-q"]
+        command += ["--resume", str(d / "config.toml")] if resume else [str(d / "submitted.toml")]
+        with open(d / "gcf.log", "a" if resume else "w") as log:
+            proc = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL,
+                                    cwd=str(d.parent), start_new_session=True)
+        with self.lock:
+            self.children[str(d)] = proc
+
+    def queued_runs(self):
+        """Run directories waiting to start, the oldest first."""
+        found = []
+        for base in self.known_dirs:
+            try:
+                entries = list(base.iterdir())
+            except OSError:
+                continue
+            for d in entries:
+                try:
+                    found.append((os.stat(d / "queued").st_mtime, str(d), d))
+                except OSError:
+                    continue
+        return [d for _, _, d in sorted(found)]
+
+    def run_cpus(self, d):
+        """CPUs a run may use: its jobs at a time."""
+        jobs = self.read_config(d).get("run", {}).get("jobs", 1)
+        return max(1, min(jobs if isinstance(jobs, int) else 1, self.max_cpus))
+
+    def cpus_in_use(self):
+        """CPUs reserved by the runs in the directories this server looks after,
+        including runs started from a terminal or by an earlier server."""
+        used = 0
+        for base in self.known_dirs:
+            try:
+                entries = list(base.iterdir())
+            except OSError:
+                continue
+            for d in entries:
+                st = runner.read_status(d)
+                if st.get("state") in ("running", "merging") and runner.proc_is(st.get("pid"), st.get("pid_start")):
+                    used += self.run_cpus(d)
+                elif not st:
+                    with self.lock:
+                        child = self.children.get(str(d))
+                    if child is not None and child.poll() is None:
+                        used += self.run_cpus(d)
+        return used
+
+    def schedule(self):
+        """Start queued runs, in order, as far as CPUs are free."""
+        with self.schedule_lock:
+            free = self.max_cpus - self.cpus_in_use()
+            for d in self.queued_runs():
+                need = self.run_cpus(d)
+                if need > free:
+                    break          # strictly in order, so a large run isn't overtaken forever
+                if self.launch(d):
+                    free -= need
+
+    def reattach(self):
+        """Continue the runs that were interrupted rather than stopped: their status
+        says they are running, but their supervisor is gone (it was killed, or the
+        machine restarted). Stage processes still running get a new supervisor at
+        once, or nothing merges their results; the others wait their turn for CPUs."""
+        for base in self.known_dirs:
+            try:
+                entries = list(base.iterdir())
+            except OSError:
+                continue
+            for d in entries:
+                st = runner.read_status(d)
+                if st.get("state") not in ("running", "merging") or runner.proc_is(st.get("pid"), st.get("pid_start")):
+                    continue
+                if not (d / "config.toml").exists() or runner.is_locked(d) or (d / "queued").exists():
+                    continue
+                count_file = d / ".auto_resumes"
+                try:
+                    count = int(count_file.read_text())
+                except (OSError, ValueError):
+                    count = 0
+                if count >= MAX_AUTO_RESUMES:
+                    continue       # it shows as stopped, and a person decides
+                count_file.write_text(str(count + 1))
+                print(f"gcf gui: run {d.name} was interrupted; resuming it", file=sys.stderr, flush=True)
+                if self.live_steps(st):
+                    self.spawn(d, True)
+                else:
+                    (d / "queued").write_text("resume")
+
+    def scheduler(self):
+        while True:
+            try:
+                self.reattach()
+                self.schedule()
+            except Exception as e:  # noqa: BLE001 - the page must outlive any one problem
+                print(f"gcf gui: scheduler: {e!r}", file=sys.stderr)
+            time.sleep(SCHEDULE_SECONDS)
+
+    def machine(self):
+        """What the page shows about this machine, next to the runs."""
+        try:
+            load = os.getloadavg()[0]
+        except OSError:
+            load = None
+        return {"cpus": os.cpu_count() or 1, "max_cpus": self.max_cpus, "in_use": self.cpus_in_use(),
+                "queued": len(self.queued_runs()), "load": load,
+                "disk_free": shutil.disk_usage(self.runs_dir).free, "runs_dir": str(self.runs_dir)}
+
+    def resume_run(self, name):
+        """Queue a run that stopped: finished jobs stay, the rest run again."""
+        d = self.run_dir(name)
+        if not self.is_run(d):
+            raise FileNotFoundError(name)
+        st = self.run_summary(d)
+        if st["state"] in RUNNING_STATES or st["state"] == "queued" or runner.is_locked(d):
+            raise ValueError("the run is still running")
+        if not st["resumable"]:
+            raise ValueError("this run has nothing to resume")
+        (d / ".auto_resumes").unlink(missing_ok=True)
+        (d / "queued").write_text("resume")
+        self.schedule()
+
+    def merge_finished(self, name):
+        d = self.run_dir(name)
+        if not self.is_run(d):
+            raise FileNotFoundError(name)
+        st = self.run_summary(d)
+        if st["state"] in RUNNING_STATES or st["orphans"] or runner.is_locked(d):
+            raise ValueError("the run is still running")
+        return runner.merge_finished(d)
 
     def cancel_run(self, name):
         d = self.run_dir(name)
+        marker = d / "queued"
+        if marker.exists():
+            marker.unlink(missing_ok=True)
+            st = runner.read_status(d)
+            st.update(state="cancelled", name=name)
+            (d / "status.json").write_text(json.dumps(st, indent=1))
+            return
         try:
             st = json.loads((d / "status.json").read_text())
         except (OSError, json.JSONDecodeError):
@@ -365,6 +636,18 @@ class App:
         out["notes"] = notes
         return out
 
+    def parse_config(self, text):
+        """A TOML config as data, for the form to load; errors say what's wrong with it."""
+        if not isinstance(text, str) or len(text) > 200000:
+            raise ValueError("this is not a config file")
+        try:
+            raw = tomllib.loads(text)
+        except tomllib.TOMLDecodeError as e:
+            raise ValueError(f"this is not valid TOML: {e}") from None
+        raw.setdefault("run", {})
+        config.validate(self.with_runs_dir(raw, self.runs_dir), base_dir=self.runs_dir)
+        return raw
+
     def preview(self, raw):
         raw = self.with_runs_dir(raw, self.runs_dir)
         cfg = config.validate(raw, base_dir=self.runs_dir)
@@ -388,6 +671,25 @@ class App:
             except OSError:
                 continue
         return {"path": str(p), "parent": str(p.parent), "dirs": dirs, "files": files}
+
+
+def estimate_text(c, cfg):
+    """A sentence or two about what a run will cost."""
+    parts = []
+    if c.get("seconds"):
+        jobs = cfg["run"]["jobs"]
+        parts.append(f"About {estimate.human_time(c['seconds'])} on {jobs} job{'s' if jobs > 1 else ''} at a time")
+    if c.get("bytes"):
+        size = f"{estimate.human_bytes(c['bytes'])} of files"
+        if c["peak_bytes"] > c["bytes"]:
+            size += f" ({estimate.human_bytes(c['peak_bytes'])} while merging)"
+        parts.append(size + f"; {estimate.human_bytes(c['free_bytes'])} free")
+    text = ", ".join(parts) + "." if parts else ""
+    if c.get("n_eff_fraction") is not None:
+        text += (f" A test of {c['pilot_events']} events had N_eff = {c['n_eff_fraction'] * c['pilot_events']:.0f}, "
+                 f"so expect at most N_eff of about {c['n_eff_at_most']:.3g} for this run; "
+                 f"with heavy-tailed weights it grows more slowly than the event count.")
+    return text.strip()
 
 
 def make_handler(app):
@@ -428,23 +730,43 @@ def make_handler(app):
             self.send_json({"error": msg}, status)
 
         def send_file(self, path, download=False, cookie=None):
-            data = Path(path).read_bytes()
+            """Send a file of any size, a piece at a time, honouring a simple Range
+            request so that an interrupted download of an event file can continue."""
+            path = Path(path)
+            size = path.stat().st_size
             if path.suffix in (".toml", ".log", ".md"):
                 ctype = "text/plain"
             else:
                 ctype = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
             if ctype.startswith("text/") or ctype == "application/json":
                 ctype += "; charset=utf-8"
-            self.send_response(HTTPStatus.OK)
+            start, end = 0, size - 1
+            m = re.fullmatch(r"bytes=(\d+)-(\d*)", self.headers.get("Range", ""))
+            partial = bool(m and int(m.group(1)) < size)
+            if partial:
+                start = int(m.group(1))
+                end = min(int(m.group(2)), size - 1) if m.group(2) else size - 1
+            self.send_response(HTTPStatus.PARTIAL_CONTENT if partial else HTTPStatus.OK)
             self.send_header("Content-Type", ctype)
-            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Content-Length", str(max(0, end - start + 1)))
+            self.send_header("Accept-Ranges", "bytes")
             self.send_header("Cache-Control", "no-store")
+            if partial:
+                self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
             if download:
                 self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
             if cookie:
                 self.send_header("Set-Cookie", cookie)
             self.end_headers()
-            self.wfile.write(data)
+            with open(path, "rb") as f:
+                f.seek(start)
+                left = end - start + 1
+                while left > 0:
+                    chunk = f.read(min(1024 * 1024, left))
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+                    left -= len(chunk)
 
         def read_json(self):
             n = int(self.headers.get("Content-Length", 0))
@@ -482,19 +804,26 @@ def make_handler(app):
                     return self.send_file(app.runs_dir / COMPARE_DIR / parts[2])
                 if parts == ["api", "schema"]:
                     return self.send_json({"schema": schema.to_json(), "examples": cli.EXAMPLES,
-                                           "runs_dir": str(app.runs_dir), "cpus": os.cpu_count() or 1,
+                                           "doctor": doctor.checks(app.runs_dir), "version": doctor.built_version(),
+                                           "runs_dir": str(app.runs_dir), "cpus": app.max_cpus,
                                            "binaries": all(os.access(runner.BIN_DIR / b, os.X_OK)
                                                            for b in ("gcf_generate", "gcf_fsi"))})
                 if parts == ["api", "runs"]:
-                    return self.send_json({"runs": app.list_runs()})
+                    return self.send_json({"runs": app.list_runs(), "machine": app.machine()})
                 if len(parts) == 3 and parts[:2] == ["api", "runs"]:
                     return self.send_json(app.run_details(parts[2]))
                 if len(parts) == 4 and parts[:2] == ["api", "runs"]:
                     d = app.run_dir(parts[2])
                     f = (d / parts[3]).resolve()
-                    if f.parent != d.resolve() or f.suffix not in (".png", ".toml", ".log", ".json") \
+                    if f.parent != d.resolve() or f.suffix not in (".png", ".toml", ".log", ".json", ".root") \
                             or not f.is_file():
                         raise FileNotFoundError(parts[3])
+                    return self.send_file(f, download="download" in query or f.suffix == ".root")
+                if len(parts) == 5 and parts[:2] == ["api", "runs"] and parts[3] == "logs":
+                    logs = app.run_dir(parts[2]) / "logs"
+                    f = (logs / parts[4]).resolve()
+                    if f.parent != logs.resolve() or f.suffix != ".log" or not f.is_file():
+                        raise FileNotFoundError(parts[4])
                     return self.send_file(f, download="download" in query)
                 if parts == ["api", "nuclear"]:
                     q = {k: query.get(k, [""])[0] for k in ("model", "A", "Z", "nn")}
@@ -539,6 +868,13 @@ def make_handler(app):
                 if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "cancel":
                     app.cancel_run(parts[2])
                     return self.send_json({"ok": True})
+                if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "resume":
+                    app.resume_run(parts[2])
+                    return self.send_json({"ok": True})
+                if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "merge":
+                    return self.send_json({"partial": app.merge_finished(parts[2])})
+                if parts == ["api", "parse-config"]:
+                    return self.send_json(app.parse_config(body.get("text", "")))
                 if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "quicklook":
                     return self.send_json(app.quicklook(parts[2], body.get("stage", "fsi"), body.get("cuts")))
                 if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "results":
@@ -558,26 +894,46 @@ def make_handler(app):
     return Handler
 
 
-def serve(host, port, runs_dir):
-    app = App(runs_dir)
+def banner(app, host, port):
+    user = os.environ.get("USER", "you")
+    machine = os.uname().nodename
+    url = f"http://localhost:{port}/?token={app.token}"
+    lines = [f"gcf gui: runs are written to {app.runs_dir}", "",
+             "On your laptop, open an SSH tunnel to this machine:",
+             f"    ssh -N -L {port}:localhost:{port} {user}@{machine}",
+             "(VS Code Remote-SSH forwards the port for you), then browse to",
+             f"    {url}", "",
+             "The token is the password: don't share this URL, and don't redirect this output to a file others can read."]
+    if host not in ("127.0.0.1", "localhost", "::1"):
+        lines += ["", f"WARNING: listening on {host}, over plain HTTP: others on the network can read the token. "
+                      "Use the SSH tunnel instead unless this network is private."]
+    return "\n".join(lines)
+
+
+def serve(host, port, runs_dir, token=None, max_cpus=None, quiet=False):
+    app = App(runs_dir, token=token, max_cpus=max_cpus)
     try:
         server = ThreadingHTTPServer((host, port), make_handler(app))
     except OSError as e:
         raise runner.RunError(f"cannot listen on {host}:{port} ({e}); try --port") from None
-    user = os.environ.get("USER", "you")
-    machine = os.uname().nodename
-    url = f"http://localhost:{port}/?token={app.token}"
-    print(f"gcf gui: runs are written to {app.runs_dir}\n"
-          f"\n"
-          f"On your laptop, open an SSH tunnel to this machine:\n"
-          f"    ssh -N -L {port}:localhost:{port} {user}@{machine}\n"
-          f"(VS Code Remote-SSH forwards the port for you), then browse to\n"
-          f"    {url}\n"
-          f"\nThe token is the password: don't redirect this output to a file others can read.\n"
-          f"Ctrl-C stops the interface; runs already started keep going.", flush=True)
+    threading.Thread(target=app.scheduler, daemon=True).start()
+    record = server_record(port)
+    try:
+        record.parent.mkdir(parents=True, exist_ok=True)
+        record.write_text(json.dumps({"pid": os.getpid(), "pid_start": runner.proc_start(os.getpid()), "port": port,
+                                      "host": host, "runs_dir": str(app.runs_dir)}))
+    except OSError:
+        pass
+    if not quiet:
+        print(banner(app, host, port) + "\n\nCtrl-C or closing this terminal stops the interface; runs already started "
+              "keep going. To keep it up after you log out, use: gcf gui --background", flush=True)
+        problems = [c for c in doctor.checks(app.runs_dir) if not c["ok"]]
+        if problems:
+            print("\n" + doctor.text(problems), flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         pass
     finally:
         server.server_close()
+        record.unlink(missing_ok=True)
