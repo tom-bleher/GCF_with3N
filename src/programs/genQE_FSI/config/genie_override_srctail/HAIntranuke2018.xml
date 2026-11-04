@@ -30,7 +30,8 @@ DelRNucleon         double  Yes   mult. factor for nucleon de-Broglie wavelength
 
     <!-- Project override: position-dependent local Fermi gas (no SRC tail)
          for any nucleon that GENIE's INuke cascade scatters off / generates
-         from the residual.  Chosen to match N. Wright's published setup:
+         from the residual.  Chosen to match N. Wright's published setup
+         (Wright et al., arXiv:2104.05090, doi:10.48550/arXiv.2104.05090):
          cascade target momenta reconstructed from her own GHEP events
          (GCF_GENIE repo, gcf10k.ghep.root) are soft (median 0.20 GeV/c,
          only 2.2% above 0.35 GeV/c), i.e. no cascade-side SRC tail.

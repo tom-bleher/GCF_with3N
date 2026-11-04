@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
 natalie_paper_plots.py — Reproduce plots from Wright et al., arXiv:2104.05090
+(doi:10.48550/arXiv.2104.05090)
 "Transport Estimations of Final State Interaction Effects on Short-range
  Correlation Studies Using the (e,e'p) and (e,e'pp) Reactions"
 
@@ -74,10 +75,12 @@ NEUTRON = 2112
 # ALL VALUES ARE EXACT, FOR 12C, FROM THE PRIMARY REFERENCES:
 #
 # Transparencies: Colle, Cosyn & Ryckebusch, PRC 93, 034608 (2016),
+#   doi:10.1103/PhysRevC.93.034608,
 #   Table I (page 13 of the preprint), KinB kinematics
 #   (CLAS-like: x_B>=1.2, theta_{p1,q}<=25deg, 0.62<|p1|/|q|<0.96)
 #
 # SCX probabilities: Duer et al., PRL 122, 172502 (2019),
+#   doi:10.1103/PhysRevLett.122.172502,
 #   Supplemental Material Table III (page 9 of the preprint)
 #   computed via RMSGA framework of Colle et al.
 # ---------------------------------------------------------------------------
@@ -1201,7 +1204,8 @@ def load_paper_extracted(filepath="analysis/paper_extracted_data.json"):
     (extract_paper_points.py).  These are the exact points Natalie plotted —
     verified against the Hists file on fig 9 (median |dy| < 0.3 counts).
 
-    Used for figs 6/7/8, where the paper drew the Ref. [21] (e,e'pp) sample
+    Used for figs 6/7/8, where the paper drew the Ref. [21] (Cohen et al.,
+    PRL 121, 092501, doi:10.1103/PhysRevLett.121.092501) (e,e'pp) sample
     at finer binning (~0.04 GeV/c) than any histogram stored in the Hists
     file (30 bins over [-1,1]), and for the |p_cm| column which has no
     stored 1D histogram at all.
@@ -1277,6 +1281,7 @@ def load_clas_events(filepath="data/clas/SRC_e2p_C_GoodRuns_coulomb.root"):
     xB, theta_pq, pN/|q|, Q2) and two boolean masks — `src_mask_ep` (all
     SRC cuts on the leading proton) and `src_mask_epp` (the same plus the
     |precoil|>0.35 GeV/c cut).  p_cm components are in the Ref. [21]
+    (Cohen et al., PRL 121, 092501, doi:10.1103/PhysRevLett.121.092501)
     pmiss-frame (z along pmiss_hat, q in the x-z plane) — same convention
     the simulation uses for pcm_x/y/z.
     """
@@ -1452,7 +1457,7 @@ def draw_hist(ax, centers, h, **kwargs):
 def area_normalize(histograms, ref_area=None):
     """Normalize a list of (centers, h, style_key) to same area.
 
-    Per Wright et al. (paper Fig 2 caption): "the calculations are
+    Per Wright et al. (doi:10.48550/arXiv.2104.05090; paper Fig 2 caption): "the calculations are
     individually area normalized to the data". If `ref_area` is provided
     (e.g. the integral of the data histogram), all calculations are
     scaled to match it. Otherwise the first non-zero histogram is used
@@ -1928,7 +1933,8 @@ def figure5_components(pwia, fsi, outdir):
 
 def figure6(pwia, fsi, outdir, clas=None, clas_ev=None):
     """Fig 6: CM momentum components for 12C(e,e'pp) in the pmiss frame
-    (z-axis along pmiss, q in x-z plane — Ref. [21] convention).
+    (z-axis along pmiss, q in x-z plane — Ref. [21] convention; Ref. [21] is
+    Cohen et al., PRL 121, 092501, doi:10.1103/PhysRevLett.121.092501).
 
 
     Paper x-ranges: pcm_x,y in [-0.5,0.5], pcm_z in [-0.2,0.8],

@@ -61,7 +61,8 @@ double NuclearDensity(int A, double r_fm);
 // Sample a position inside the nucleus weighted by rho^n(r) * r^2, where n
 // is the configured SRC-vertex rho power (default 2: pair density ~ square
 // of the one-body density; n=1 reproduces GENIE's one-body vertex, the
-// choice of Wright et al. -- REQUIRED for paper comparisons).
+// choice of Wright et al., arXiv:2104.05090, doi:10.48550/arXiv.2104.05090
+// -- REQUIRED for paper comparisons).
 TLorentzVector SampleSRCPosition(int A, TRandom3 *rnd);
 
 // Configure the SRC-pair vertex radial weight rho^n r^2 (n in [1,3]).

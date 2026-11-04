@@ -1,7 +1,11 @@
-# cuts: mode=eq2, kF=0.22, 8.0<theta_e<45.0, Q2>1.0, 0.0<xB<1.2, theta_pq<8.0, 0.75<lead/q<1000000000.0, 0.25<pmiss<0.9
-[3N] f_L=0.0296  f_R=0.0657  L/R=0.451
-[3N] base-cut pass fraction (weighted): 0.0870 (423622/40000000 events)
-[3N] SRC-cut  pass fraction (weighted): 0.01379 (135232/40000000 events)
-[2N] f_L=0.0080  f_R=0.0750  L/R=0.107
-[2N] base-cut pass fraction (weighted): 0.3910 (16367613/60000000 events)
-[2N] SRC-cut  pass fraction (weighted): 0.05446 (4726352/60000000 events)
+# Fig. 5 region fractions: plot_fig5_theta_heatmap_pair.py via make_paper_figures.sh (stdout, "Saved" lines dropped)
+# selection: nProtonAboveKF == 2 (kF=0.22), lead = detected proton closest to q, |p3_rec| > kF,
+#            theta_e<45, Q2>1, xB<1.2, theta_pq<8, p_lead/|q|>0.75, 0.25<pmiss<0.9
+Reading 3N+FSI: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/events_3N_100M.root
+  total events: 100000000 ; (e,e'pp) events passing cuts: 4416427
+Reading 2N+FSI: /home/ilayws/Ilay-Generators/src/programs/genQE_FSI/events/misc/2N_hN_100M_6GeV_kF220_indep.root
+  total events: 100000000 ; (e,e'pp) events passing cuts: 2147837
+  [3N+FSI] f_L=0.1448  f_R=0.0821  L/R=1.762
+    stat. unc. 3N+FSI: f_L=0.14475+-0.00312  f_R=0.08214+-0.00107  L/R=1.7623+-0.0444  (n_L=762129, n_R=574751, n=4416427)
+  [2N+FSI] f_L=0.0711  f_R=0.0321  L/R=2.212
+    stat. unc. 2N+FSI: f_L=0.07107+-0.00154  f_R=0.03213+-0.00076  L/R=2.2117+-0.0725  (n_L=78525, n_R=188410, n=2147837)

@@ -7,9 +7,9 @@
 # medium (config/genie_override_srctail), which is what her
 # ModelConfiguration.xml:37 selects. On those samples the (e,e'pp) effective
 # transparency is 1.26. On the earlier 2M samples, which used the no-tail
-# LocalFGM/Default medium, it is 0.74 -- matching her published 0.73. Her
-# config and her published number disagree, so we need both at good
-# statistics to decide.
+# LocalFGM/Default medium, it is 0.74 -- matching her published 0.73 (Wright
+# et al., doi:10.48550/arXiv.2104.05090). Her config and her published number
+# disagree, so we need both at good statistics to decide.
 #
 # MEMORY: measured peak RSS is 39.1 GB for 45M events analysed (10M/10M/25M),
 # i.e. ~0.85 GB per million. The analysis holds all three samples at once, so

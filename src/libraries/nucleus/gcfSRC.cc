@@ -218,6 +218,8 @@ double gcfSRC::get_phiSq(double *phiPtr, double k_rel)
 
 void gcfSRC::set_Contacts()
 {
+    // "Scale and Scheme paper": R. Cruz-Torres et al., Nature Phys. 17, 306 (2021),
+    // doi:10.1038/s41567-020-01053-7
     if (set_Contacts_SS_k())
     {
       std::cout << "You are using k-space contact values from the Scale and Scheme paper.\n";
@@ -1043,12 +1045,15 @@ bool gcfSRC::set_Contacts_deut()
 
 bool gcfSRC::set_Contacts_EG2()
 {
+  // C1 is in percent per A/2 (Weiss et al., PLB 780, 211, Table I,
+  // doi:10.1016/j.physletb.2018.01.061), like the SS sets
+
   if ((Z==6) && (N==6))
     {
       if (u==AV18)
 	{
 	  double R01 = 0.067;
-	  double C1 = 16.;
+	  double C1 = 16. * ( A * 0.5);
 	  double C0 = R01*C1;
 	    
 	  Cpp0=C0;
@@ -1064,7 +1069,7 @@ bool gcfSRC::set_Contacts_EG2()
       else if (u==N2LO_10)
 	{
 	  double R01 = 0.081;
-	  double C1 = 16.;
+	  double C1 = 16. * ( A * 0.5);
 	  double C0 = R01*C1;
 	    
 	  Cpp0=C0;
@@ -1080,7 +1085,7 @@ bool gcfSRC::set_Contacts_EG2()
       else if (u==N2LO_12)
 	{
 	  double R01 = 0.151;
-	  double C1 = 16.;
+	  double C1 = 16. * ( A * 0.5);
 	  double C0 = R01*C1;
 	    
 	  Cpp0=C0;
@@ -1099,7 +1104,7 @@ bool gcfSRC::set_Contacts_EG2()
       if (u==AV18)
 	{
 	  double R01 = 0.045;
-	  double C1 = 16.;
+	  double C1 = 16. * ( A * 0.5);
 	  double C0 = R01*C1;
 	    
 	  Cpp0=C0;
@@ -1115,7 +1120,7 @@ bool gcfSRC::set_Contacts_EG2()
       else if (u==N2LO_10)
 	{
 	  double R01 = 0.053;
-	  double C1 = 16.;
+	  double C1 = 16. * ( A * 0.5);
 	  double C0 = R01*C1;
 	    
 	  Cpp0=C0;
@@ -1131,7 +1136,7 @@ bool gcfSRC::set_Contacts_EG2()
       else if (u==N2LO_12)
 	{
 	  double R01 = 0.097;
-	  double C1 = 16.;
+	  double C1 = 16. * ( A * 0.5);
 	  double C0 = R01*C1;
 	    
 	  Cpp0=C0;
@@ -1150,7 +1155,7 @@ bool gcfSRC::set_Contacts_EG2()
       if (u==AV18)
 	{
 	  double R01 = 0.064;
-	  double C1 = 16.;
+	  double C1 = 16. * ( A * 0.5);
 	  double C0 = R01*C1;
 	    
 	  Cpp0=C0;
@@ -1166,7 +1171,7 @@ bool gcfSRC::set_Contacts_EG2()
       else if (u==N2LO_10)
 	{
 	  double R01 = 0.080;
-	  double C1 = 16.;
+	  double C1 = 16. * ( A * 0.5);
 	  double C0 = R01*C1;
 	    
 	  Cpp0=C0;
@@ -1182,7 +1187,7 @@ bool gcfSRC::set_Contacts_EG2()
       else if (u==N2LO_12)
 	{
 	  double R01 = 0.132;
-	  double C1 = 16.;
+	  double C1 = 16. * ( A * 0.5);
 	  double C0 = R01*C1;
 	    
 	  Cpp0=C0;
@@ -1201,7 +1206,7 @@ bool gcfSRC::set_Contacts_EG2()
       if (u==AV18)
 	{
 	  double R01 = 0.014;
-	  double C1 = 16.;
+	  double C1 = 16. * ( A * 0.5);
 	  double C0 = R01*C1;
 	    
 	  Cpp0=C0*Z/N;
@@ -1217,7 +1222,7 @@ bool gcfSRC::set_Contacts_EG2()
       else if (u==N2LO_10)
 	{
 	  double R01 = 0.018;
-	  double C1 = 16.;
+	  double C1 = 16. * ( A * 0.5);
 	  double C0 = R01*C1;
 	    
 	  Cpp0=C0*Z/N;
@@ -1233,7 +1238,7 @@ bool gcfSRC::set_Contacts_EG2()
       else if (u==N2LO_12)
 	{
 	  double R01 = 0.036;
-	  double C1 = 16.;
+	  double C1 = 16. * ( A * 0.5);
 	  double C0 = R01*C1;
 	    
 	  Cpp0=C0*Z/N;

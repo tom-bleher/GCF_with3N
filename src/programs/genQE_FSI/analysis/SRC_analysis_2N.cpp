@@ -49,7 +49,8 @@ CLI (positional; later args optional):
   argv[4] = output_path   (default events_2N.root)
   argv[5] = sigmaCM       (GeV/c; default 0.150; ignored for wf_mode 4)
   argv[6] = wf_mode       (0=AV18 full, 2=SRC-only, 4=MF single-nucleon)
-  argv[7] = Ebeam         (GeV; default 5.01 = CLAS/Hall-B Ref [28])
+  argv[7] = Ebeam         (GeV; default 5.01 = CLAS/Hall-B Ref [28]: Mecking
+                           et al., NIM A 503, 513, doi:10.1016/S0168-9002(03)01001-5)
   argv[8] = fg_mode       (wf_mode 4 only: "global" [default] or "local")
   argv[9] = kF            (GeV/c; default 0.25; SRC/MF p_rel split, MF FG
                            ceiling, and the detected-nucleon counting threshold)
@@ -59,7 +60,8 @@ CLI (positional; later args optional):
                            shared depleting remnant in a single record)
   argv[11] = vertex_rho_power (1-3; default 2. Radial weight rho^n r^2 of the
                            SRC-pair FSI vertex. Use 1 for the Wright et al.
-                           paper convention: pair position follows the
+                           paper (arXiv:2104.05090, doi:10.48550/arXiv.2104.05090)
+                           convention: pair position follows the
                            one-body density)
   argv[12] = src_onset    ("fixed" [default] or "local"; wf_mode 2 only).
                            Where the correlated-pair branch begins:

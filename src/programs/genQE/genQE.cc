@@ -69,8 +69,8 @@ bool init(int argc, char ** argv)
   char * phase_space;
   char * uType = (char *)"AV18";
   csMethod csMeth=cc1;
-  double sigCM = 0.055;
-  bool do_sigCM = true;
+  double sigCM = 0.;
+  bool do_sigCM = false;
   double Estar = 0.;
   bool do_Estar = false;
   double sigmaE = 0.;

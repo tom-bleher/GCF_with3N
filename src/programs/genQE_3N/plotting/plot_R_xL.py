@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
 """R(xL): observed L/R event-count ratio vs the 2N-vs-3N mixing parameter xL.
 
-Pure-sample L/R ratios are taken from the per-region region report
-(eq2 mode, theta_e in [8, 45], Q^2 > 1, theta_pq < 12 deg):
+The default pure-sample L/R ratios come from an OLD per-region report with a
+looser lead cut (eq2 mode, theta_e in [8, 45], Q^2 > 1, theta_pq < 12 deg):
 
     R_3N  =  f_L^3N / f_R^3N  =  24.6 / 2.8    = 8.786
     R_2N  =  f_L^2N / f_R^2N  =  0.11 / 11.0   = 0.010
+
+They are NOT the paper's values. The paper's (e,e'pp) selection (theta_pq <
+8 deg, exactly 2 protons above kF, see Paper_Figures_indepFSI/Fig5_summary.txt)
+gives R_3N = 1.762, R_2N = 2.212; pass those with --R-3N/--R-2N (or use
+plot_fig6_R_xL.py). The plots label the defaults "theta_pq < 12 deg".
 
 For an event mixture with relative 2N-to-3N weighting parameterised by xL,
 
@@ -24,7 +29,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from paper_style import apply_style, figure_size, LINE_COLORS
 
 
-# L/R fractions from the eq2_no_cuts region report (theta_pq < 12 deg)
+# L/R fractions from the eq2_no_cuts region report (theta_pq < 12 deg; NOT the
+# paper's theta_pq < 8 deg selection -- see the module docstring)
 F_L_3N_PCT = 24.6      # per cent of total 3N weight inside Region L
 F_R_3N_PCT = 2.8
 F_L_2N_PCT = 0.11
@@ -72,6 +78,8 @@ def main():
     # Compact stats box anchored away from the curve
     txt = (f'$R_{{3N}}={R_3N:.2f}$\n'
            f'$R_{{2N}}={R_2N:.3f}$')
+    if (R_3N, R_2N) == (F_L_3N_PCT / F_R_3N_PCT, F_L_2N_PCT / F_R_2N_PCT):
+        txt += '\n' r'($\theta_{pq}<12^\circ$ defaults)'
     ax.text(0.97, 0.05, txt, transform=ax.transAxes,
             ha='right', va='bottom', fontsize=8,
             bbox=dict(boxstyle='round,pad=0.3', fc='white',

@@ -21,7 +21,8 @@
 #   FGMODE   global or local (wf_mode 4 only)         (default global)
 #   KF       Fermi momentum in GeV/c                  (default 0.25)
 #   FSIINDEP 1 = independent per-nucleon FSI          (default 0 = shared remnant)
-#   RHOPOW   SRC-pair FSI vertex weight rho^n r^2      (default 2; 1 = Wright et al.)
+#   RHOPOW   SRC-pair FSI vertex weight rho^n r^2      (default 2; 1 = Wright et al.,
+#                                                      doi:10.48550/arXiv.2104.05090)
 #   SRCONSET where the SRC branch starts, wf_mode 2 only:
 #              fixed = k_rel > KF (constant)              (default)
 #              local = k_rel > kF(r) at the pair vertex   (Wright et al.;

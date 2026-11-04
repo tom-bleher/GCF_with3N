@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""Acceptance analysis of run_eic_sim.sh runs: e + A -> e' N_lead N_rec (A-2), cf. PRC 105, 034001.
+"""Acceptance analysis of run_eic_sim.sh runs: e + A -> e' N_lead N_rec (A-2), cf. PRC 105, 034001
+(doi:10.1103/PhysRevC.105.034001).
 
 Two steps:
 
@@ -17,8 +18,10 @@ Two steps:
       uncertainties and every event reweighted exactly by S'(k_rel)/S(k_rel); no new simulation.
 
 Event weight: w = (generator weight) / (attempts of its run), in nb, so sum(w) over a
-selection is its cross section; yields for 10 fb^-1 are sigma[nb] * 1e7, times 0.5 for
-nucleon transparency as in the paper (applied only where a figure says so).
+selection is its cross section (per nucleus); yields for 10 fb^-1 per nucleus (--lumi-fb; A x 10 fb^-1
+per nucleon, the ePIC convention for eA) are sigma[nb] * 1e7, times a flat nucleon transparency
+(applied only where a figure says so) chosen per target, see TRANSPARENCY: 1 for runs whose GENIE
+cascade ran (it absorbs nucleons event by event); plots --transparency overrides.
 
 Detection, hit level (the paper's definition: enough hits to reconstruct a track, or a
 deposit in a calorimeter's volume):
@@ -50,6 +53,25 @@ CENTRAL_CLUSTERS = ["LFHCALClusterAssociations", "EcalEndcapPClusterAssociations
                     "HcalEndcapPInsertClusterAssociations", "B0ECalClusterAssociations",
                     "EcalBarrelClusterAssociations", "HcalBarrelClusterAssociations"]
 STATION_GAP_MM = 30.0
+CALO_E_FRAC_MIN = 0.05  # calorimeter detection: deposited energy / the nucleon's true energy (#206)
+
+
+# Electron identification (#207). EICrecon's ReconstructedElectrons asks E(clusters[0])/p in [0.9, 1.2], which loses
+# the backward electron where the EEMC meets the barrel (track eta -1.83 to -1.68: the shower is split between the
+# EEMC rim, barrel ScFi clusters the merger leaves out of EcalBarrelClusters, the nHCal and passive material) and
+# in the barrel, whose ScFi energy scale is 6-10% high. Here E = EEMC clusters + barrel ScFi clusters / scale(eta)
+# within E_ID_CONE of the track's first cluster, with an eta-dependent E/p window. Calibrated with e-/pi- guns
+# (2-12 GeV, eta -2.3 to -0.5) through the prod5 chain: epic 9ebb627fd, EICrecon b2e3d493, energyRelTolerance=-1.
+E_ID_CONE = 0.15  # rad, from the seed cluster's position
+BARREL_SCALE_ETA = (-1.575, -1.425, -1.275, -1.125, -0.975, -0.825, -0.675, -0.525)
+BARREL_SCALE = (1.063, 1.069, 1.077, 1.081, 1.076, 1.087, 1.093, 1.104)  # median E_ScFi/p_true, e- 4-12 GeV
+E_ID_TRANSITION = (-1.83, -1.68)  # track eta
+E_ID_WINDOW = {"eemc": (0.9, 1.2), "transition": (0.5, 1.2), "barrel": (0.85, 1.2)}
+
+
+def cluster_of(assoc):
+    """Cluster collection of a cluster-association collection (B0ECalClusterAssociations -> B0ECalClusters)."""
+    return assoc.replace("ClusterAssociations", "Clusters")
 P_IRF_MIN = 0.3  # GeV/c, the paper's cut against evaporation nucleons
 ROLES = ("lead", "rec")
 
@@ -112,6 +134,46 @@ def final_nucleons(gen_path, nums):
     return out
 
 
+def electron_eop(r, q, rp_i, ids):
+    """E/p of reconstructed particle rp_i in reco event q for the electron ID (#207), and its track eta; (nan, eta)
+    without a backward seed cluster. ids: collection ID -> name (podio_metadata)."""
+    RP = "ReconstructedParticles"
+    pv = np.array([float(r[f"{RP}/{RP}.momentum.{c}"][q][rp_i]) for c in "xyz"])
+    p = float(np.linalg.norm(pv))
+    eta = float(-np.log(np.tan(0.5 * np.arccos(pv[2] / p)))) if p > 0 else np.nan
+    cb = int(r[f"{RP}/{RP}.clusters_begin"][q][rp_i])
+    if int(r[f"{RP}/{RP}.clusters_end"][q][rp_i]) == cb:
+        return np.nan, eta
+    seed_col = ids.get(int(r[f"_{RP}_clusters/_{RP}_clusters.collectionID"][q][cb]))
+    if seed_col not in ("EcalEndcapNClusters", "EcalBarrelClusters"):
+        return np.nan, eta
+    si = int(r[f"_{RP}_clusters/_{RP}_clusters.index"][q][cb])
+    seed = np.array([float(r[f"{seed_col}/{seed_col}.position.{c}"][q][si]) for c in "xyz"])
+    e = 0.0
+    for col in ("EcalEndcapNClusters", "EcalBarrelScFiClusters"):
+        en = ak.to_numpy(r[f"{col}/{col}.energy"][q])
+        if not len(en):
+            continue
+        pos = np.stack([ak.to_numpy(r[f"{col}/{col}.position.{c}"][q]) for c in "xyz"], 1)
+        cosang = pos @ seed / (np.linalg.norm(pos, axis=1) * np.linalg.norm(seed))
+        near = cosang > np.cos(E_ID_CONE)
+        if col == "EcalBarrelScFiClusters":
+            ceta = -np.log(np.tan(0.5 * np.arccos(pos[near, 2] / np.linalg.norm(pos[near], axis=1))))
+            e += float((en[near] / np.interp(ceta, BARREL_SCALE_ETA, BARREL_SCALE)).sum())
+        else:
+            e += float(en[near].sum())
+    return e / p, eta
+
+
+def electron_id(eop, eta):
+    """The E/p window of the electron ID by track eta (#207)."""
+    lo_t, hi_t = E_ID_TRANSITION
+    region = np.where(eta < lo_t, "eemc", np.where(eta < hi_t, "transition", "barrel"))
+    lo = np.vectorize(lambda k: E_ID_WINDOW[k][0])(region)
+    hi = np.vectorize(lambda k: E_ID_WINDOW[k][1])(region)
+    return np.isfinite(eop) & (eop >= lo) & (eop <= hi)
+
+
 def extract_file(sim_path):
     """Per-event detection flags of the leading and recoil nucleon for one sim/reco chunk."""
     sim_path = Path(sim_path)
@@ -138,15 +200,43 @@ def extract_file(sim_path):
         assoc = ["B0TrackerCKFTrackAssociations", "ReconstructedChargedParticleAssociations"]
         assoc += [c for c in ZDC_CLUSTERS + CENTRAL_CLUSTERS if f"_{c}_sim/_{c}_sim.index" in keys]
         rbr += [f"_{c}_sim/_{c}_sim.index" for c in assoc]
+        rbr += [b for c in assoc if c in CENTRAL_CLUSTERS
+                for b in (f"{c}/{c}.weight", f"_{c}_rec/_{c}_rec.index", f"{cluster_of(c)}/{cluster_of(c)}.energy")]
         rbr += ["ScatteredElectronsTruth_objIdx/ScatteredElectronsTruth_objIdx.index",
                 "ReconstructedElectrons_objIdx/ReconstructedElectrons_objIdx.index",
                 "_ReconstructedChargedParticleAssociations_rec/_ReconstructedChargedParticleAssociations_rec.index"]
         rbr += [f"MCParticles/MCParticles.momentum.{c}" for c in "xyz"]
         rbr += [f"ReconstructedChargedParticles/ReconstructedChargedParticles.momentum.{c}" for c in "xyz"]
+        # electron ID (#207): reconstructed particles with their clusters, and the backward calorimeter clusters
+        RP = "ReconstructedParticles"
+        rbr += [f"{RP}/{RP}.charge", f"{RP}/{RP}.clusters_begin", f"{RP}/{RP}.clusters_end",
+                f"_{RP}_clusters/_{RP}_clusters.index", f"_{RP}_clusters/_{RP}_clusters.collectionID",
+                "_ReconstructedParticleAssociations_sim/_ReconstructedParticleAssociations_sim.index",
+                "_ReconstructedParticleAssociations_rec/_ReconstructedParticleAssociations_rec.index"]
+        rbr += [f"{RP}/{RP}.momentum.{c}" for c in "xyz"]
+        rbr += [f"{col}/{col}.{v}" for col in ("EcalEndcapNClusters", "EcalBarrelScFiClusters", "EcalBarrelClusters")
+                for v in ("energy", "position.x", "position.y", "position.z")]
+        ti = uproot.open(reco_path)["podio_metadata"]["events___CollectionTypeInfo"].arrays(library="np")
+        ids = dict(zip(np.concatenate(ti["events___CollectionTypeInfo.collectionID"]).tolist(),
+                       np.concatenate(ti["events___CollectionTypeInfo.name"]).tolist()))
         zn = "ReconstructedHcalFarForwardZDCNeutrals"
         if f"{zn}/{zn}.energy" in keys:
             rbr += [f"{zn}/{zn}.energy"] + [f"{zn}/{zn}.momentum.{c}" for c in "xyz"]
         r = rt.arrays(rbr, library="ak")
+        # ZDC re-reconstructed with tools/rereco_zdc.sh (#212): its side file replaces the reco file's ZDC
+        zdc_path = sim_path.with_name(sim_path.name.replace("sim_", "zdc_").replace(".edm4hep.", ".edm4eic."))
+        if zdc_path.exists():
+            zb = [b for b in rbr if b.startswith(tuple([f"_{c}_sim/" for c in ZDC_CLUSTERS] + [f"{zn}/"]))]
+            z = uproot.open(zdc_path)["events"].arrays(["EventHeader/EventHeader.eventNumber"] + zb, library="ak")
+            # align by event number: a reco file written by multithreaded eicrecon has the events in another order
+            zn_ = ak.to_numpy(ak.firsts(z["EventHeader/EventHeader.eventNumber"]))
+            rn_ = ak.to_numpy(ak.firsts(r["EventHeader/EventHeader.eventNumber"]))
+            if len(zn_) != len(rn_) or set(zn_.tolist()) != set(rn_.tolist()):
+                raise ValueError(f"{zdc_path}: events differ from {reco_path}")
+            pos = {int(n): i for i, n in enumerate(zn_)}
+            z = z[np.array([pos[int(n)] for n in rn_])]
+            for b in zb:
+                r = ak.with_field(r, z[b], b)
         r_index = {int(n[0]): k for k, n in enumerate(r["EventHeader/EventHeader.eventNumber"])}
 
     rows = []
@@ -198,6 +288,19 @@ def extract_file(sim_path):
             row["reco"] = ridx is not None
             row["e_truth_matched"] = len(r["ScatteredElectronsTruth_objIdx/ScatteredElectronsTruth_objIdx.index"][q]) > 0
             row["e_reco"] = len(r["ReconstructedElectrons_objIdx/ReconstructedElectrons_objIdx.index"][q]) > 0
+            # electron ID (#207): any negative reconstructed particle passing; E/p of the truth electron's one
+            RP = "ReconstructedParticles"
+            chg = ak.to_numpy(r[f"{RP}/{RP}.charge"][q])
+            cand = [electron_eop(r, q, i, ids) for i in np.flatnonzero(chg < 0)]
+            row["e_id"] = bool(cand and electron_id(*map(np.array, zip(*cand))).any())
+            row["e_eop"], row["e_eta_reco"] = np.nan, np.nan
+            je = np.flatnonzero((rst == 1) & (ak.to_numpy(r[mc[1]][q]) == 11))
+            if len(je):
+                sim_ = ak.to_numpy(r["_ReconstructedParticleAssociations_sim/_ReconstructedParticleAssociations_sim.index"][q])
+                hit_ = np.flatnonzero(sim_ == je[0])
+                if len(hit_):
+                    ri = int(r["_ReconstructedParticleAssociations_rec/_ReconstructedParticleAssociations_rec.index"][q][hit_[0]])
+                    row["e_eop"], row["e_eta_reco"] = electron_eop(r, q, ri, ids)
             for role in ev_roles:
                 j = ridx[role] if ridx else -2
                 sim_of = lambda c: ak.to_numpy(r[f"_{c}_sim/_{c}_sim.index"][q])  # noqa: E731
@@ -210,6 +313,21 @@ def extract_file(sim_path):
                             m = sim_of(c)
                             hit |= bool(np.any(ranc[m[m >= 0]] == j)) if len(m) else False
                     row[f"{role}_{group}"] = hit
+                # energy the nucleon left in the central calorimeters (association weight = its share of the
+                # cluster energy), the B0 ECal apart: there a neutron's shower is mostly not contained (#206)
+                for col, cols in (("calo_e", [c for c in CENTRAL_CLUSTERS if c != "B0ECalClusterAssociations"]),
+                                  ("b0ecal_e", ["B0ECalClusterAssociations"])):
+                    e = 0.0
+                    for c in cols:
+                        if f"{c}/{c}.weight" in r.fields:
+                            m = sim_of(c)
+                            own = (m >= 0)
+                            own[own] = ranc[m[own]] == j
+                            if own.any():
+                                ce = ak.to_numpy(r[f"{cluster_of(c)}/{cluster_of(c)}.energy"][q])
+                                ci = ak.to_numpy(r[f"_{c}_rec/_{c}_rec.index"][q])[own]
+                                e += float((ak.to_numpy(r[f"{c}/{c}.weight"][q])[own] * ce[ci]).sum())
+                    row[f"{role}_{col}"] = e
                 # true lab momentum (after the afterburner) and the reconstructed one: the linked charged
                 # particle (B0 or central track), else the ZDC neutron for a ZDC-detected neutron
                 if j >= 0:
@@ -244,6 +362,40 @@ def lab_to_irf(px, py, pz, a, p_nucleon, m_ion, crossing=0.025, mass=0.93892):
     e = np.sqrt(mass**2 + px**2 + py**2 + pz**2)
     zr = g * z - bg * e
     return np.sqrt(x**2 + py**2 + zr**2)
+
+
+def cc1_2021_ratio(e_beam, k, p, is_p, m_n=0.93892):
+    """Per event sigma_cc1(as generated for PRC 105, 034001) / sigma_cc1(current), rest-frame vectors.
+
+    De Forest's cc1 as in eNCrossSection::sigmaccn (n = 1, Kelly form factors, mu_p = 2.79, mu_n = -1.91 as
+    in constants.hh). The paper's events were generated with the longitudinal factor Q^4/|q|^2, which
+    1a92ca1 (#33) fixed to (Q^2/|q|^2)^2; everything else in the weight is unchanged, so this ratio
+    reweights a sample to the paper's cross section. It matches the C++, current and with the old line,
+    to 1e-10 (#188). k: scattered electron, p: final leading nucleon (as QEGenerator passes vLead).
+    """
+    q = np.column_stack([-k[:, 0], -k[:, 1], e_beam - k[:, 2]])
+    q2v = (q**2).sum(1)
+    q2 = q2v - (e_beam - np.linalg.norm(k, axis=1)) ** 2
+    e = np.sqrt(m_n**2 + (p**2).sum(1))
+    eb = np.sqrt(m_n**2 + ((p - q) ** 2).sum(1))
+    q2b = q2v - (e - eb) ** 2
+    tau = q2 / (4 * m_n**2)
+    kelly = lambda a1, b1, b2, b3: (1 + a1 * tau) / (1 + b1 * tau + b2 * tau**2 + b3 * tau**3)  # noqa: E731
+    ge = np.where(is_p, kelly(-0.24, 10.98, 12.82, 21.97), 1.70 * tau / (1 + 3.3 * tau) / (1 + q2 / 0.71) ** 2)
+    gm = np.where(is_p, 2.79 * kelly(0.12, 10.97, 18.86, 6.55), -1.91 * kelly(2.33, 14.72, 24.20, 84.1))
+    f1, kf2 = (ge + gm * tau) / (1 + tau), (gm - ge) / (1 + tau)
+    x = f1**2 + q2b / (4 * m_n**2) * kf2**2
+    w_c = ((e + eb) ** 2 * x - q2v * (f1 + kf2) ** 2) / (4 * e * eb)
+    w_t = q2b * (f1 + kf2) ** 2 / (2 * eb * e)
+    p_perp = np.linalg.norm(np.cross(p, q), axis=1) / np.sqrt(q2v)
+    w_s = p_perp**2 * x / (e * eb)
+    w_i = -p_perp * (eb + e) * x / (e * eb)
+    t2 = np.tan(0.5 * np.arctan2(np.hypot(k[:, 0], k[:, 1]), k[:, 2])) ** 2
+    a_, b_ = np.cross(q, k), np.cross(q, p)
+    cphi = np.clip((a_ * b_).sum(1) / (np.linalg.norm(a_, axis=1) * np.linalg.norm(b_, axis=1)), -1, 1)
+    rest = ((q2 / (2 * q2v) + t2) * w_t + q2 / q2v * np.sqrt(q2 / q2v + t2) * w_i * cphi
+            + (q2 / q2v * cphi**2 + t2) * w_s)
+    return (q2**2 / q2v * w_c + rest) / ((q2 / q2v) ** 2 * w_c + rest)
 
 
 def boost_angles(p_irf, a, p_nucleon, m_ion):
@@ -292,6 +444,8 @@ def extract(run, jobs):
     out = {"num": num, "w_nb": g["weight"][num] / conv["attempts"], "q2": q2, "xb": xb}
     if run_kind == "DIS":
         out["lead_type"] = g["lead_type"][num]  # the struck nucleon (no final-state leading nucleon)
+    if run_kind == "2N":
+        out["cc1_2021_ratio"] = cc1_2021_ratio(e_irf, pe, g["pLead"][num], g["lead_type"][num] == 2212)
     z, a, m = {"C12": (6, 12, 11.174863), "d": (1, 2, 1.875613), "He4": (2, 4, 3.727379)}[beams["ion"]]
     for role, (pb, tb) in gen_roles.items():
         p = g[pb][num]
@@ -334,7 +488,7 @@ def extract(run, jobs):
             r.pop("evap", None)
     keys = sorted({k for r in rows for k in r if k != "num"})
     for k in keys:
-        mom = k.endswith(("_px", "_py", "_pz"))
+        mom = k.endswith(("_px", "_py", "_pz", "_eop", "_eta_reco"))  # NaN when absent
         out[k] = np.array([r.get(k, np.nan if mom else False) for r in rows])
     for role in ("lead", "rec", "rec2"):
         for kind in ("true", "reco"):
@@ -344,7 +498,8 @@ def extract(run, jobs):
                 out[f"{role}_{kind}_p_irf"] = lab_to_irf(*v, a, beams["ion_momentum_per_nucleon_GeV"], m)
     meta = {"run": str(run), "kind": run_kind, "beams": beams, "attempts": conv["attempts"], "cuts": conv["cuts"],
             "events": len(num), "q2_range": json.loads((run / "run.json").read_text()).get("q2_range_GeV2")
-            if (run / "run.json").exists() else None}
+            if (run / "run.json").exists() else None,
+            "zdc_reco": json.loads((run / "zdc_reco.json").read_text()) if (run / "zdc_reco.json").exists() else None}
     np.savez_compressed(run / "analysis_events.npz", meta=json.dumps(meta), **out)
     need = {"2N": 3, "3N": 4, "DIS": 2}[run_kind]  # e' + nucleons (mean field: e' + one nucleon)
     bad = int(np.sum((out["n_primaries"] < need) & (out.get("rec_type", np.ones(len(num))) != 0)))
@@ -367,20 +522,118 @@ def detected(d, role, level):
     return np.where(is_p, p_ok, n_ok)
 
 
-def detected_anywhere(d, role):
-    """Far-forward (hit level) or central/B0 reconstruction (charged particle or cluster)."""
-    return detected(d, role, "hit") | d[f"{role}_charged"] | d[f"{role}_central_cluster"]
+def calo_detected(d, role, b0ecal):
+    """Calorimeter detection: the nucleon left at least CALO_E_FRAC_MIN of its energy in the central
+    calorimeters, or (b0ecal) in the B0 ECal. Runs extracted before #206 only have 'any cluster'."""
+    if f"{role}_calo_e" not in d:
+        return d[f"{role}_central_cluster"]
+    e_true = np.sqrt(d[f"{role}_true_p_lab_mag"] ** 2 + 0.93892**2)
+    ok = d[f"{role}_calo_e"] >= CALO_E_FRAC_MIN * e_true
+    return ok | (d[f"{role}_b0ecal_e"] >= CALO_E_FRAC_MIN * e_true) if b0ecal else ok
+
+
+def detected_anywhere(d, role, b0ecal=True):
+    """Far-forward (hit level), a reconstructed charged particle, or a calorimeter deposit (calo_detected)."""
+    return detected(d, role, "hit") | d[f"{role}_charged"] | calo_detected(d, role, b0ecal)
+
+
+def e_id_columns(d):
+    """(column, summary-key suffix) of the electron identifications in d: the analysis' own e_id (#207) plotted,
+    EICrecon's ReconstructedElectrons (e_reco) kept for comparison; e_reco alone for runs extracted before #207."""
+    if "e_id" in d:
+        return [("e_id", ""), ("e_reco", "_ReconstructedElectrons")]
+    return [("e_reco", "")] if "e_reco" in d else []
+
+
+def e_id_note(data):
+    """Legend note naming the electron identification of the open markers."""
+    if all("e_id" in d for d, _ in data.values()):
+        return " (E/p, EEMC + barrel ScFi)"
+    return " (EICrecon ReconstructedElectrons)"
+
+
+def momentum_measured(d, role):
+    """A reconstructed momentum is linked to the nucleon: a charged particle (B0 or central track) or the ZDC neutron."""
+    return np.isfinite(d[f"{role}_reco_p_lab_mag"]) if f"{role}_reco_p_lab_mag" in d else np.zeros(len(d["w_nb"]), bool)
 
 
 def load(dirs):
     parts = [np.load(Path(r) / "analysis_events.npz") for r in dirs]
     keys = [k for k in parts[0].files if k != "meta"]
+    stale = {r: sorted(set(keys) - set(p.files)) for r, p in zip(dirs, parts) if set(keys) - set(p.files)}
+    if stale:  # Q2 slices extracted by different versions of this script
+        sys.exit("plots: these runs lack columns of " + str(dirs[0]) + "; re-run extract on all runs of the setting:\n"
+                 + "\n".join(f"  {r}: {', '.join(m[:5])}{' ...' if len(m) > 5 else ''}" for r, m in stale.items()))
     d = {k: np.concatenate([p[k] for p in parts]) for k in keys}
     if "evap_event" in d:  # per-product event index: offset by the events of the preceding runs
         off = np.cumsum([0] + [len(p["num"]) for p in parts[:-1]])
         d["evap_event"] = np.concatenate([p["evap_event"] + o for p, o in zip(parts, off)])
+    if "evap_pdg" in d and not len(d["evap_pdg"]):  # no A-2 remnant (e.g. e+d): no evaporation panels (#202)
+        d = {k: v for k, v in d.items() if not k.startswith("evap_")}
     metas = [json.loads(str(p["meta"])) for p in parts]
     return d, metas
+
+
+# Flat nucleon transparency per target, for runs without a GENIE cascade. It scales yields only, never
+# acceptances; plots --transparency overrides it.
+#   C12: 0.5, the factor of PRC 105, 034001 (Figs. 5-7), kept for comparison with the paper. The measured
+#        12C(e,e'p) value is 0.57 (Garrow et al., PRC 66, 044613, doi:10.1103/PhysRevC.66.044613: constant
+#        fit 0.570 +- 0.008 above Q2 ~ 2 GeV^2); for pair-tagged (e,e'pN) yields Colle et al.
+#        (PRC 93, 034608, doi:10.1103/PhysRevC.93.034608) give about 0.28, so 0.5 is a convention (#85).
+#   d:   0.90, the measured D(e,e'p) transparency: Garrow et al.'s constant fit 0.904 +- 0.013 above
+#        Q2 ~ 2 GeV^2 (their Table II: 0.897, 0.917, 0.867 at Q2 = 3.3, 6.1, 8.1, each +- ~3%; consistent
+#        with SLAC NE18, Makins et al., PRL 72, 1986 and O'Neill et al., PLB 351, 87). It is measured in
+#        quasi-free kinematics (low p_miss); at SRC momenta deuteron FSI depends on the recoil angle
+#        (Boeglin et al., PRL 107, 262501, doi:10.1103/PhysRevLett.107.262501).
+#   He4: 0.72 = 4^-0.24, Garrow et al.'s world-data fit T = c A^alpha (c consistent with 1, alpha = -0.24
+#        for Q2 >= 1.8 GeV^2, fitted to d, C and Fe); there is no 4He(e,e'p) measurement at these Q2.
+TRANSPARENCY = {"C12": (0.5, "PRC 105, 034001 convention"),
+                "d": (0.90, "D(e,e'p), Garrow et al., PRC 66, 044613"),
+                "He4": (0.72, "A^-0.24 fit of Garrow et al., PRC 66, 044613; not measured")}
+ION_A = {"C12": 12, "d": 2, "He4": 4}
+
+
+def cascade_ran(generator, a):
+    """True when GENIE's cascade ran: genQE_FSI (SRC pair, or one nucleon with -F) or genQE_3N_FSI without -n,
+    on a target whose residual keeps A_res >= 3 nucleons (QEGeneratorFSI.cc and QEGeneratorFSI_3N.cc skip
+    the cascade below that, so genQE_FSI on d or He4 is PWIA)."""
+    removed = {"genQE_FSI": 1 if "-F" in generator[1:] else 2, "genQE_3N_FSI": 3}.get(generator[0])
+    return removed is not None and "-n" not in generator[1:] and a - removed >= 3
+
+
+def run_info(run):
+    """(generator command, ion) of a run directory from its run.json; None when there is no run.json, so the
+    caller can refuse to guess."""
+    rj = Path(run) / "run.json"
+    if not rj.exists():
+        return None
+    meta = json.loads(rj.read_text())
+    if "generator" not in meta:  # the first production batch predates the key; all of it is genQE (PWIA)
+        print(f"warning: {rj} has no 'generator' entry; taking it as a genQE (PWIA) run", file=sys.stderr)
+    ion = meta.get("ion", meta.get("converter", {}).get("beams", {}).get("ion"))
+    if ion not in ION_A:
+        sys.exit(f"{rj}: unknown ion {ion!r} (known: {', '.join(ION_A)})")
+    return meta.get("generator", ["genQE"]), ion
+
+
+def has_fsi(run):
+    """True for a run whose GENIE cascade ran, None without run.json."""
+    info = run_info(run)
+    return None if info is None else cascade_ran(info[0], ION_A[info[1]])
+
+
+def run_transparency(run):
+    """(transparency, reason) of one run directory: 1 when its GENIE cascade ran, else TRANSPARENCY[ion];
+    None without run.json."""
+    info = run_info(run)
+    if info is None:
+        return None
+    gen, ion = info
+    if cascade_ran(gen, ION_A[ion]):
+        return 1.0, f"{gen[0]} on {ion}, GENIE cascade"
+    t, src = TRANSPARENCY[ion]
+    no_cascade = " (FSI off)" if "-n" in gen[1:] else (" (no cascade: A_res < 3)" if "FSI" in gen[0] else "")
+    return t, f"{gen[0]} on {ion}{no_cascade}: {src}"
 
 
 # ----------------------------------------------------------------------------- plots
@@ -405,7 +658,7 @@ def wstats(x, w, ok, bins):
     return gen, acc, eff, err
 
 
-def plots(settings, outdir, lumi_nb_inv, transparency):
+def plots(settings, outdir, lumi_nb_inv, transparency=None, cc1="fixed"):
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
@@ -413,15 +666,59 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     data = {lab: load(dirs) for lab, dirs in settings.items()}
-    scale = lumi_nb_inv * transparency
+    if cc1 == "2021":
+        # the paper's cross section (cc1 before the longitudinal fix of #33), for like-for-like comparison
+        for lab, (d, _) in data.items():
+            if "cc1_2021_ratio" not in d:
+                sys.exit(f"plots --cc1 2021: {lab} has no cc1_2021_ratio (2N runs only; re-run extract)")
+            d["w_nb"] = d["w_nb"] * d["cc1_2021_ratio"]
+        print("plots: weights reweighted to the cc1 cross section PRC 105, 034001 was generated with (before #33)")
+    # the flat transparency stands in for FSI where no GENIE cascade ran, per target (TRANSPARENCY);
+    # runs whose cascade ran already absorb nucleons event by event and take 1; --transparency overrides
+    if transparency is None:
+        # from the directories given on the command line, not the paths stored in the npz at extract time
+        per_run = {r: run_transparency(r) for dirs in settings.values() for r in dirs}
+        unknown = [r for r, t in per_run.items() if t is None]
+        if unknown:
+            sys.exit("plots: no run.json in " + ", ".join(unknown) + "; cannot tell the target or whether the "
+                     "GENIE cascade ran; pass --transparency")
+        for r, (t, why) in per_run.items():
+            print(f"plots: {r}: transparency {t:g} ({why})")
+        trans = {}
+        for lab, dirs in settings.items():
+            vals = {per_run[r] for r in dirs}
+            if len(vals) > 1:
+                sys.exit(f"plots: the runs of setting {lab} need different transparencies; pass --transparency")
+            trans[lab] = vals.pop()
+    else:
+        trans = {lab: (transparency, "--transparency") for lab in settings}
+    for lab, (t, why) in trans.items():
+        print(f"plots: {lab}: nucleon transparency {t:g} ({why})")
+    scale = {lab: lumi_nb_inv * t for lab, (t, _) in trans.items()}
+    # luminosity is per nucleus; ePIC quotes eA luminosity per nucleon (A x per nucleus)
+    lumi_fb = lumi_nb_inv / 1e6
+    lumi_txt = rf"{lumi_fb:g} fb$^{{-1}}$ per nucleus"
+    t_all = {t for t, _ in trans.values()}
+    t_txt = rf" $\times$ T = {next(iter(t_all)):g}" if len(t_all) == 1 else r" $\times$ T"
+
+    def t_tag(lab):
+        """The setting's transparency for its curve label when settings in one figure differ."""
+        return "" if len(t_all) == 1 else f" (T = {trans[lab][0]:g})"
     summary = {}
 
-    # The figures follow the style of PRC 105, 034001 (Figs. 3-6). The paper's evaporation nucleons
-    # (from BeAGLE) are not simulated here, so Figs. 3 and 4 show recoil and leading nucleons only.
-    green, red, orange, magenta, brown = "#45c045", "#f0281e", "#ff9800", "#ee5fbf", "#9a5a1c"
+    # The figures follow the style of PRC 105, 034001 (Figs. 3-6). The paper's evaporation nucleons (from
+    # BeAGLE) exist only in --deexcite runs (BeAGLE/FLUKA or Geant4 de-excitation of the A-2 remnant);
+    # there Fig. 3 adds them scaled by 1/3 and Fig. 4 gets their column on the left, as in the paper,
+    # and figEvap below shows them in more detail.
+    green, red, orange, magenta, brown, blue_ev = "#45c045", "#f0281e", "#ff9800", "#ee5fbf", "#9a5a1c", "#1f3fe0"
     low_energy = {lab: metas[0]["beams"]["ion_momentum_per_nucleon_GeV"] < 75 for lab, (_, metas) in data.items()}
-    for lab in data:
-        summary.setdefault(lab, {})
+    for lab, (_, metas) in data.items():
+        a = metas[0]["beams"]["ion_pdg"] // 10 % 1000
+        summary[lab] = {"transparency": trans[lab][0], "transparency_reason": trans[lab][1],
+                        "lumi_fb_per_nucleus": lumi_fb, "lumi_fb_per_nucleon_equivalent": a * lumi_fb}
+        print(f"plots: {lab}: yields for {lumi_fb:g} fb^-1 per nucleus = {a * lumi_fb:g} fb^-1 per nucleon (A = {a})")
+        summary[lab]["cc1"] = ("before the #33 fix, as PRC 105, 034001 was generated" if cc1 == "2021"
+                               else "current (longitudinal factor fixed in #33)")
 
     def place_label(ax, text, color, pts, anchor, taken, bw=0.18, bh=0.13, **kw):
         """Put text at the free spot nearest anchor (axes fractions): no data point inside its box."""
@@ -454,16 +751,31 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         cen7 = 0.5 * (bins[1:] + bins[:-1])
         curves7 = {}
         for lab, (d, _) in data.items():
-            w = d["w_nb"] * scale
+            w = d["w_nb"] * scale[lab]
             kin = (d["q2"] > 3) & (d["pmiss"] < 0.3) & (d["emiss"] < 0.08)
             ok = kin & d["e_truth_matched"] & detected_anywhere(d, "lead")
             h = np.histogram(d["q2"][ok], bins, weights=w[ok])[0]
+            only_b0ecal = ok & ~detected_anywhere(d, "lead", b0ecal=False)
             summary[lab].update({"mf_sigma_nb_cuts": float(d["w_nb"][kin].sum()),
                                  "mf_e_and_nucleon_detected": float(w[ok].sum() / w[kin].sum()),
+                                 "mf_e_and_nucleon_detected_only_by_B0ECal": float(w[only_b0ecal].sum() / w[kin].sum()),
+                                 "mf_e_and_nucleon_momentum_measured":
+                                     float(w[ok & momentum_measured(d, "lead")].sum() / w[kin].sum()),
                                  "mf_q2_reach_100_per_GeV2": float(bins[1:][h >= 100].max()) if (h >= 100).any() else None})
             c, mk = (red, "o") if low_energy[lab] else ("#1029ff", "s")
             g = h > 0
-            ax.plot(cen7[g], h[g], ls="none", marker=mk, ms=5, color=c)
+            e7 = np.sqrt(np.histogram(d["q2"][ok], bins, weights=w[ok] ** 2)[0])  # statistical error, sum w^2
+            ax.errorbar(cen7[g], h[g], yerr=e7[g], ls="none", marker=mk, ms=5, color=c, elinewidth=1, capsize=0)
+            for col, suffix in e_id_columns(d):  # open markers: the electron identified (e_id, else EICrecon's)
+                oke = kin & d[col] & detected_anywhere(d, "lead")
+                he = np.histogram(d["q2"][oke], bins, weights=w[oke])[0]
+                summary[lab].update({f"mf_e_identified_and_nucleon_detected{suffix}": float(w[oke].sum() / w[kin].sum()),
+                                     f"mf_q2_reach_100_per_GeV2_e_identified{suffix}":
+                                         float(bins[1:][he >= 100].max()) if (he >= 100).any() else None})
+                if not suffix:
+                    ee = np.sqrt(np.histogram(d["q2"][oke], bins, weights=w[oke] ** 2)[0])
+                    ax.errorbar(cen7[he > 0], he[he > 0], yerr=ee[he > 0], ls="none", marker=mk, ms=5, mfc="none", color=c,
+                                elinewidth=1, capsize=0)
             curves7[lab] = (h, c)
         ax.set_yscale("log")
         ax.set_xlim(1, 25)
@@ -471,9 +783,12 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         for i, lab in enumerate(order):
             h, c = curves7[lab]
             k = 12 if i == 0 else 3
-            ax.text(cen7[k], max(h[k], 1e-3) * (9 if i == 0 else 0.2), lab, color=c, fontsize=15, ha="center", va="center")
+            ax.text(cen7[k], max(h[k], 1e-3) * (9 if i == 0 else 0.2), lab + t_tag(lab), color=c, fontsize=15, ha="center", va="center")
+        if any("e_reco" in d for d, _ in data.values()):
+            ax.text(0.97, 0.95, "filled: electron truth-matched\nopen: electron identified" + e_id_note(data), transform=ax.transAxes,
+                    fontsize=9, ha="right", va="top", color="#444444")
         frame(ax)
-        ax.set_ylabel("Events per bin", fontsize=13, loc="top")
+        ax.set_ylabel(f"Events per bin ({lumi_txt}{t_txt})", fontsize=11, loc="top")
         ax.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="right")
         fig.tight_layout()
         fig.savefig(outdir / "fig7_q2_mean_field.pdf")
@@ -565,7 +880,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
 
     if run_kind == "DIS":
         # Tagged DIS off SRC pairs: recoil acceptance vs the spectator light-cone fraction and momentum,
-        # and the tagged yield over (x', Q2) for 10 fb^-1 x transparency
+        # and the tagged yield over (x', Q2) for --lumi-fb per nucleus x transparency
         acceptance_grid(lambda r: "alpha_s", np.linspace(0.5, 1.9, 15), r"Spectator Light-cone Fraction $\alpha_s$",
                         ("rec",), "figDIS_recoil_acceptance_vs_alpha.pdf")
         acceptance_grid(lambda r: f"{r}_p_irf", np.linspace(0.3, 1.2, 19), r"Spectator Momentum (Ion Rest Frame) [GeV/$c$]",
@@ -574,16 +889,16 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         for ax, (lab, (d, _)) in zip(axes[0], data.items()):
             tag = (d["rec_p_irf"] > P_IRF_MIN) & detected(d, "rec", "hit")
             H, xe, ye = np.histogram2d(d["xprime"][tag], d["q2"][tag], bins=[np.linspace(0.2, 1.0, 33), np.linspace(3, 25, 45)],
-                                       weights=d["w_nb"][tag] * scale)
+                                       weights=d["w_nb"][tag] * scale[lab])
             im = ax.pcolormesh(xe, ye, np.ma.masked_less(H.T, 1), cmap="Blues", norm=matplotlib.colors.LogNorm(vmin=1), rasterized=True)
             ax.text(0.95, 0.93, lab, transform=ax.transAxes, ha="right", va="top", fontsize=13, fontweight="bold")
             ax.set_xlabel(r"x$'$", fontsize=13, loc="right")
             frame(ax)
             summary[lab]["DIS"] = {"sigma_nb_pIRF>0.3": float(d["w_nb"][d["rec_p_irf"] > P_IRF_MIN].sum()),
                                    "tagged_fraction_hit": float(d["w_nb"][tag].sum() / d["w_nb"][d["rec_p_irf"] > P_IRF_MIN].sum()),
-                                   "tagged_events_10fb_x_transparency": float(d["w_nb"][tag].sum() * scale)}
+                                   "tagged_events_10fb_x_transparency": float(d["w_nb"][tag].sum() * scale[lab])}
         axes[0, 0].set_ylabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="top")
-        fig.colorbar(im, ax=axes[0, -1], label=rf"tagged events / bin ({lumi_nb_inv / 1e6:g} fb$^{{-1}}$ $\times$ {transparency:g})")
+        fig.colorbar(im, ax=axes[0, -1], label=f"tagged events / bin\n({lumi_txt}{t_txt})")
         fig.tight_layout()
         fig.savefig(outdir / "figDIS_xprime_q2_tagged.pdf")
         plt.close(fig)
@@ -593,7 +908,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         print(f"wrote {outdir}/figDIS_recoil_acceptance_vs_alpha.pdf figDIS_recoil_acceptance_vs_pirf.pdf figDIS_xprime_q2_tagged.pdf summary.json")
         return
 
-    # Fig. 3: angle w.r.t. the ion beam of recoil (green) and leading (red) nucleons, 10 fb^-1, no p_IRF cut
+    # Fig. 3: angle w.r.t. the ion beam of recoil (green) and leading (red) nucleons, --lumi-fb per nucleus, no p_IRF cut
     fig, axes = plt.subplots(len(data), 1, figsize=(6.6, 3.9 * len(data)), squeeze=False)
     bins = np.arange(0, 51, 1.0)
     cen, hw3 = 0.5 * (bins[1:] + bins[:-1]), 0.5 * np.diff(bins)
@@ -607,6 +922,14 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
             g = h > 0
             ax.errorbar(cen[g], h[g], xerr=hw3[g], yerr=e[g], fmt=mk, ms=4, color=c, elinewidth=1, capsize=0)
             curves[role], errs[role] = h, e
+        if "evap_pdg" in d:  # evaporation nucleons, scaled by 1/3 as in the paper
+            nuc = np.isin(d["evap_pdg"], (2212, 2112))
+            we = w[d["evap_event"][nuc]] / 3
+            h = np.histogram(d["evap_theta_mrad"][nuc], bins, weights=we)[0] / 1e3
+            e = np.sqrt(np.histogram(d["evap_theta_mrad"][nuc], bins, weights=we**2)[0]) / 1e3
+            g = h > 0
+            ax.errorbar(cen[g], h[g], xerr=hw3[g], yerr=e[g], fmt="s", ms=3.5, color=blue_ev, elinewidth=1, capsize=0)
+            curves["evap"], errs["evap"] = h, e
         ymax = 1.15 * max(float(np.max(v)) for v in curves.values())
         ax.set_xlim(0, 50)
         ax.set_ylim(0, ymax)
@@ -628,57 +951,81 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         ax.text(0.92, 0.84, lab, transform=ax.transAxes, ha="right", fontsize=12, fontweight="bold")
         # direct labels in free space next to each curve (data points incl. error bars kept clear)
         pts = []
-        for role in ("rec", "lead"):
+        for role in curves:
             h, e = curves[role], errs[role]
             for y in (h, h + e, np.maximum(h - e, 0)):
                 g = h > 0
                 pts.append(np.column_stack([cen[g] / 50, y[g] / ymax]))
         pts = np.vstack(pts + [np.array([[0.92, 0.86], [0.85, 0.86]])])  # keep the setting tag clear
         taken = []
-        for role, c, text, anchor in (("rec", green, "Recoil\nNucleon", lambda k: (cen[k] / 50 + 0.14, 0.62 * curves["rec"][k] / ymax)),
-                                       ("lead", red, "Leading\nNucleon", lambda k: (cen[k] / 50, 0.25))):
+        labels = [("rec", green, "Recoil\nNucleon", lambda k: (cen[k] / 50 + 0.14, 0.62 * curves["rec"][k] / ymax)),
+                  ("lead", red, "Leading\nNucleon", lambda k: (cen[k] / 50, 0.25))]
+        if "evap" in curves:
+            labels.append(("evap", blue_ev, "Evaporation\nNucleon\n" + r"$\times$1/3", lambda k: (cen[k] / 50 + 0.08, 0.5)))
+        for role, c, text, anchor in labels:
             k = int(np.argmax(curves[role]))
             place_label(ax, text, c, pts, anchor(k), taken, fontsize=12, fontweight="bold")
-        ax.set_ylabel("Events per bin", fontsize=13)
+        ax.set_ylabel(f"Events per bin ({lumi_txt})", fontsize=12)
         ax.set_xlabel(r"$\theta$ [mrad]", fontsize=13, loc="right")
     fig.tight_layout(h_pad=2.5)
     fig.savefig(outdir / "fig3_angles.pdf")
     plt.close(fig)
 
-    # Fig. 4: recoil momentum in the ion rest frame vs opening angle to the ion beam (jet map, empty bins white)
-    fig, axes = plt.subplots(len(data), 1, figsize=(4.6, 2.9 * len(data)), squeeze=False)
-    for ax, (lab, (d, _)) in zip(axes[:, 0], data.items()):
-        xmax = 15 if low_energy[lab] else 8
-        H, xe, ye = np.histogram2d(d["rec_theta_mrad"], d["rec_p_irf"], bins=[np.linspace(0, xmax, 61), np.linspace(0, 0.8, 41)],
-                                   weights=d["w_nb"] * lumi_nb_inv)
+    # Fig. 4: momentum in the ion rest frame vs opening angle to the ion beam (jet map, empty bins white):
+    # recoil nucleons, and evaporation nucleons on the left when the runs have them
+    def fig4_panel(ax, theta, p_irf, w, text, lab, xmax):
+        H, xe, ye = np.histogram2d(theta, p_irf, bins=[np.linspace(0, xmax, 61), np.linspace(0, 0.8, 41)], weights=w)
         ax.pcolormesh(xe, ye, np.ma.masked_less_equal(H, 0).T, cmap="jet", vmin=0, shading="flat", rasterized=True)
         ax.axhline(P_IRF_MIN, color="red", lw=2, ls=(0, (5, 3)))
         ax.text(0.05, 0.9, lab, transform=ax.transAxes, fontsize=15, va="top", color="#333333",
                 bbox=dict(facecolor="white", edgecolor="none", alpha=0.85, pad=2))
-        ax.text(0.95, 0.08, "Recoil\nNucleons", transform=ax.transAxes, fontsize=13, ha="right", va="bottom", color="#333333")
+        ax.text(0.95, 0.08, text, transform=ax.transAxes, fontsize=13, ha="right", va="bottom", color="#333333")
         ax.set_xticks(np.arange(0, xmax + 1, 5 if xmax >= 10 else 2))
         ax.set_xlim(0, xmax)
         ax.set_ylim(0, 0.8)
         ax.set_xlabel("Opening Angle [mrad]", fontsize=12, color="#333333")
-        ax.set_ylabel("Momentum (IRF) [GeV]", fontsize=12, color="#333333")
+        ax.set_ylabel(r"Momentum (IRF) [GeV/$c$]", fontsize=12, color="#333333")
         ax.tick_params(labelsize=11, colors="#333333")
+
+    evap4 = all("evap_pdg" in d for d, _ in data.values())  # the paper's left column: evaporation nucleons
+    fig, axes = plt.subplots(len(data), 2 if evap4 else 1, figsize=(9.2 if evap4 else 4.6, 2.9 * len(data)), squeeze=False)
+    for row, (lab, (d, _)) in enumerate(data.items()):
+        w = d["w_nb"] * lumi_nb_inv
+        panels = [(axes[row, -1], d["rec_theta_mrad"], d["rec_p_irf"], w, "Recoil\nNucleons")]
+        if evap4:
+            nuc = np.isin(d["evap_pdg"], (2212, 2112))
+            panels.insert(0, (axes[row, 0], d["evap_theta_mrad"][nuc], d["evap_p_irf"][nuc], w[d["evap_event"][nuc]],
+                              "Evaporation\nNucleons"))
+        for ax, th, pirf, wt, text in panels:
+            fig4_panel(ax, th, pirf, wt, text, lab, 15 if low_energy[lab] else 8)
     fig.tight_layout()
     fig.savefig(outdir / "fig4_pirf_vs_theta.pdf")
     plt.close(fig)
 
-    # Fig. 5: Q2 of events with a recoil detected far forward, 10 fb^-1 x transparency, one point per GeV^2
+    # Fig. 5: Q2 of events with a recoil detected far forward, --lumi-fb per nucleus x transparency, one point per GeV^2
     fig, ax = plt.subplots(figsize=(6.6, 3.8))
     bins = np.arange(3, 25.5, 1.0)
     cen5 = 0.5 * (bins[1:] + bins[:-1])
     curves5 = {}
     for lab, (d, _) in data.items():
         m = (d["rec_p_irf"] > P_IRF_MIN) & detected(d, "rec", "hit")
-        h, _ = np.histogram(d["q2"][m], bins, weights=d["w_nb"][m] * scale)
+        h, _ = np.histogram(d["q2"][m], bins, weights=d["w_nb"][m] * scale[lab])
         summary[lab]["q2_reach_100_per_GeV2"] = float(bins[1:][h >= 100].max()) if (h >= 100).any() else None
         c, mk = (red, "o") if low_energy[lab] else ("#1029ff", "s")
         g = h > 0
-        ax.plot(cen5[g], h[g], ls="none", marker=mk, ms=5, color=c)
+        e5 = np.sqrt(np.histogram(d["q2"][m], bins, weights=(d["w_nb"][m] * scale[lab]) ** 2)[0])  # statistical, sum w^2
+        ax.errorbar(cen5[g], h[g], yerr=e5[g], ls="none", marker=mk, ms=5, color=c, elinewidth=1, capsize=0)
+        summary[lab]["fig5_stat_error_per_bin"] = e5.tolist()
         curves5[lab] = (h, c)
+        for col, suffix in e_id_columns(d):  # open markers: also the electron identified (e_id, else EICrecon's)
+            me = m & d[col]
+            he = np.histogram(d["q2"][me], bins, weights=d["w_nb"][me] * scale[lab])[0]
+            summary[lab][f"q2_reach_100_per_GeV2_e_identified{suffix}"] = float(bins[1:][he >= 100].max()) if (he >= 100).any() else None
+            summary[lab][f"recoil_tagged_fraction_e_identified{suffix}"] = float(he.sum() / h.sum()) if h.sum() else None
+            if not suffix:
+                ee = np.sqrt(np.histogram(d["q2"][me], bins, weights=(d["w_nb"][me] * scale[lab]) ** 2)[0])
+                ax.errorbar(cen5[he > 0], he[he > 0], yerr=ee[he > 0], ls="none", marker=mk, ms=5, mfc="none", color=c,
+                            elinewidth=1, capsize=0)
     ax.set_yscale("log")
     ax.set_xlim(1, 25)
     lo = min(float(np.min(h[h > 0])) for h, _ in curves5.values())
@@ -689,9 +1036,12 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     for i, lab in enumerate(order):
         h, c = curves5[lab]
         k = 12 if i == 0 else 3
-        ax.text(cen5[k], h[k] * (9 if i == 0 else 0.2), lab, color=c, fontsize=15, ha="center", va="center")
+        ax.text(cen5[k], h[k] * (9 if i == 0 else 0.2), lab + t_tag(lab), color=c, fontsize=15, ha="center", va="center")
+    if any("e_reco" in d for d, _ in data.values()):
+        ax.text(0.97, 0.95, "filled: no electron requirement (as PRC 105)\nopen: electron identified" + e_id_note(data), transform=ax.transAxes,
+                fontsize=9, ha="right", va="top", color="#444444")
     frame(ax)
-    ax.set_ylabel("Events per bin", fontsize=13, loc="top")
+    ax.set_ylabel(f"Events per bin ({lumi_txt}{t_txt})", fontsize=11, loc="top")
     ax.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="right")
     fig.tight_layout()
     fig.savefig(outdir / "fig5_q2.pdf")
@@ -700,7 +1050,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     # Fig. 6 in the style of PRC 105, 034001: rows are beam settings, columns recoil p and n, panels
     # share edges. Generated recoils over the full p_IRF range (black crosses), accepted at hit level
     # above the p_IRF cut (filled), accepted at reco level (blue crosses, in the slot of the paper's
-    # smeared points), all for 10 fb^-1 x transparency. fig6b: acceptance vs p_IRF.
+    # smeared points), all for --lumi-fb per nucleus x transparency. fig6b: acceptance vs p_IRF.
     pink, pblue = "#f4c4c4", "#1f3fe0"
     lbins = np.linspace(0.0, 1.3, 40)
     lc, hw = 0.5 * (lbins[1:] + lbins[:-1]), 0.5 * np.diff(lbins)
@@ -708,7 +1058,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
     for lab, (d, _) in data.items():
         for code, name in ((2212, "proton"), (2112, "neutron")):
             m = d["rec_type"] == code
-            x, w = d["rec_p_irf"][m], d["w_nb"][m] * scale
+            x, w = d["rec_p_irf"][m], d["w_nb"][m] * scale[lab]
             cut = x > P_IRF_MIN
             sel = {"gen": np.ones(len(x), bool), "hit": cut & detected(d, "rec", "hit")[m],
                    "reco": cut & detected(d, "rec", "reco")[m], "cut": cut}
@@ -754,6 +1104,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         f = 10.0 ** k10
         it = iter(letters)
         for row, lab in enumerate(data):
+            axes[row, 0].set_ylabel(f"Events per bin\n({lumi_txt}" + rf" $\times$ T = {trans[lab][0]:g})", fontsize=11)
             ymax = 0.0
             for col, name in enumerate(("proton", "neutron")):
                 ax, H = axes[row, col], hists[lab, name]
@@ -801,7 +1152,9 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         fig, ax = plt.subplots(figsize=(6.6, 4.0))
         pb = np.arange(10, 205, 10.0)
         for lab, (d, _) in data.items():
-            for code, name, col, mk in ((2112, "Neutron", "#1029ff", "s"), (2212, "Proton", red if low_energy[lab] else "#d2a679", "o")):
+            # one colour per setting and species, so the two settings' neutrons stay apart (#204)
+            for code, name, col, mk in ((2112, "Neutron", "#1029ff" if low_energy[lab] else "#00a0c0", "s"),
+                                        (2212, "Proton", red if low_energy[lab] else "#d2a679", "o")):
                 m = (d["rec_final_pdg"] == code) & np.isfinite(d["rec_reco_p_lab_mag"]) & (d["rec_p_irf"] > P_IRF_MIN)
                 pt, rel = d["rec_true_p_lab_mag"][m], (d["rec_reco_p_lab_mag"][m] - d["rec_true_p_lab_mag"][m]) / d["rec_true_p_lab_mag"][m]
                 xs, ys, es = [], [], []
@@ -816,13 +1169,13 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
                     summary[lab][f"recoil {name.lower()} dp/p (68% half-width)"] = float(np.median(ys))
                     summary[lab][f"recoil {name.lower()} dp/p bias (median)"] = float(np.median(rel)) if len(rel) else None
         ax.set_xlim(0, 210)
-        ax.set_ylim(0, None)
+        ax.set_ylim(0, 1.6 * ax.get_ylim()[1])  # headroom: the note and the legend sit above the points
         frame(ax)
         ax.set_xlabel(r"p [GeV/$c$]", fontsize=13, loc="right")
         ax.set_ylabel(r"$\Delta$p/p (68% half-width)", fontsize=13, loc="top")
         ax.text(0.03, 0.95, r"recoil nucleons, $p_\mathrm{IRF} > 0.3$ GeV/$c$; protons: B0 tracks, neutrons: ZDC",
                 transform=ax.transAxes, fontsize=9, va="top", color=MUTED)
-        ax.legend(frameon=False, fontsize=10, loc="lower right")
+        ax.legend(frameon=False, fontsize=10, loc="upper right", bbox_to_anchor=(1.0, 0.9))
         fig.tight_layout()
         fig.savefig(outdir / "fig2_resolution.pdf")
         plt.close(fig)
@@ -873,7 +1226,7 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
             ax.set_xlim(tb[0], tb[-1])
             frame(ax)
             ax.set_xlabel(r"$\theta$ w.r.t. ion beam [mrad]", fontsize=12, loc="right")
-            ax.set_ylabel("Particles per bin (10 fb$^{-1}$)", fontsize=11)
+            ax.set_ylabel(f"Particles per bin ({lumi_txt})", fontsize=11)
             ax.text(0.03, 0.95, lab, transform=ax.transAxes, ha="left", va="top", fontsize=12, fontweight="bold")
             lo_, hi_ = ax.get_ylim()
             ax.set_ylim(lo_, hi_ * 60)  # headroom for the legend
@@ -926,6 +1279,8 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
         w = d["w_nb"]
         rec_ok = detected(d, "rec", "hit")
         lead_ok = detected_anywhere(d, "lead")
+        lead_no_b0ecal = detected_anywhere(d, "lead", b0ecal=False)
+        lead_p = momentum_measured(d, "lead")
         e_ok = d["e_truth_matched"] if "e_truth_matched" in d else np.ones(len(w), bool)
         sigma = float(w[m0].sum())
         summary[lab]["sigma_nb_cuts_pIRF"] = sigma
@@ -936,10 +1291,15 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
             if not m.any():
                 continue
             f = lambda ok: float(w[m & ok].sum() / w[m].sum())  # noqa: E731
+            # lead: detected anywhere; of it, only through the B0 ECal (presence, no momentum); with a measured momentum
             summary[lab][f"pair_{pair}"] = {"weight_fraction": float(w[m].sum() / sigma), "recoil": f(rec_ok),
-                                            "lead": f(lead_ok), "triple_e_lead_rec": f(rec_ok & lead_ok & e_ok)}
+                                            "lead": f(lead_ok), "lead_only_B0ECal": f(lead_ok & ~lead_no_b0ecal),
+                                            "lead_momentum_measured": f(lead_p),
+                                            "triple_e_lead_rec": f(rec_ok & lead_ok & e_ok),
+                                            "triple_e_lead_momentum_rec": f(rec_ok & lead_p & e_ok)}
             lines.append(f"{lab:8s} {pair}  share {w[m].sum() / sigma:5.3f}  recoil {f(rec_ok):5.2f}  "
-                         f"lead {f(lead_ok):5.2f}  e+lead+recoil {f(rec_ok & lead_ok & e_ok):5.2f}")
+                         f"lead {f(lead_ok):5.2f} (only B0 ECal {f(lead_ok & ~lead_no_b0ecal):4.2f}, momentum {f(lead_p):4.2f})  "
+                         f"e+lead+recoil {f(rec_ok & lead_ok & e_ok):5.2f} (lead momentum {f(rec_ok & lead_p & e_ok):4.2f})")
     (outdir / "summary.json").write_text(json.dumps(summary, indent=2) + "\n")
     (outdir / "pairs.txt").write_text("\n".join(lines) + "\n")
     print("\n".join(lines))
@@ -952,31 +1312,40 @@ def plots(settings, outdir, lumi_nb_inv, transparency):
 
 # ----------------------------------------------------------------------------- contact uncertainty band
 
-# GCF k-space contacts from the Scale and Scheme paper with their uncertainties, as set in
+# GCF k-space contacts from the Scale and Scheme paper (Cruz-Torres et al., Nature Phys. 17, 306,
+# doi:10.1038/s41567-020-01053-7) with their uncertainties, as set in
 # src/libraries/nucleus/gcfSRC.cc (set_Contacts_SS_k, AV18), per A/2; gcfSRC::randomize_Contacts
 # varies each one independently with a Gaussian of this width
 CONTACTS_SS_K = {"C12": {"Cpp0": (1.140, 0.210), "Cnn0": (1.140, 0.210), "Cpn0": (1.244, 0.319), "Cpn1": (15.876, 1.770)}}
 GEV_FM = 0.1973  # src/include/constants.hh
 
 
-def av18_phi_sq():
-    """AV18 pn spin-0 and spin-1 |phi|^2 tables (src/libraries/nucleus/universal_functions/AV18.hh)."""
+def av18_phi_sq(names=("AV18_pn0", "AV18_pn1")):
+    """AV18 |phi|^2 tables (src/libraries/nucleus/universal_functions/AV18.hh): pn spin-0 and spin-1 by default;
+    gcfSRC uses AV18_pp0 for both pp and nn."""
     import re
     text = (Path(__file__).resolve().parent.parent / "src/libraries/nucleus/universal_functions/AV18.hh").read_text()
     tab = {}
-    for name in ("AV18_pn0", "AV18_pn1"):
+    for name in names:
         body = re.search(name + r"\[100\]\s*=\s*\{([^}]*)\}", text).group(1)
         tab[name] = np.array([float(x) for x in body.replace("\n", "").split(",") if x.strip()])
         assert len(tab[name]) == 100
-    return tab["AV18_pn0"], tab["AV18_pn1"]
+    return tuple(tab[n] for n in names)
 
 
-def phi_sq(table, k):
-    """gcfSRC::get_phiSq without its constant normalization (ratios at equal k only)."""
+def phi_sq(table, k, log=False):
+    """gcfSRC::get_phiSq without its constant normalization (ratios at equal k only); log=True interpolates
+    log-linearly between the 0.1 fm^-1 grid points instead (#120)."""
     b = np.asarray(k) / GEV_FM / 0.1
     i = np.clip(np.floor(b).astype(int), 1, 99)
     x = b - i
-    v = x * table[i] + (1 - x) * table[i - 1]
+    if log:
+        lo, hi = table[i - 1], table[i]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            v = np.where((lo > 0) & (hi > 0), np.exp(x * np.log(np.where(hi > 0, hi, 1)) + (1 - x) * np.log(np.where(lo > 0, lo, 1))),
+                         x * hi + (1 - x) * lo)
+    else:
+        v = x * table[i] + (1 - x) * table[i - 1]
     return np.where((b >= 1) & (b <= 100), v, 0.0)
 
 
@@ -1009,6 +1378,7 @@ def band(settings, outdir, lumi_nb_inv, transparency, n_rep, seed):
     outdir = Path(outdir)
     outdir.mkdir(parents=True, exist_ok=True)
     scale = lumi_nb_inv * transparency
+    yield_txt = rf"{lumi_nb_inv / 1e6:g} fb$^{{-1}}$ per nucleus $\times$ T = {transparency:g}"
     names = list(CONTACTS_SS_K["C12"])
     nom = np.array([CONTACTS_SS_K["C12"][n][0] for n in names])
     sig = np.array([CONTACTS_SS_K["C12"][n][1] for n in names])
@@ -1031,6 +1401,8 @@ def band(settings, outdir, lumi_nb_inv, transparency, n_rep, seed):
         d, metas = load(dirs)
         if any(m_.get("kind", "2N") != "2N" for m_ in metas) or metas[0]["beams"]["ion"] != "C12":
             sys.exit("band: 12C SRC-pair (genQE) runs only")
+        if any(has_fsi(r) for r in dirs):
+            sys.exit("band: PWIA runs only (the reweighting needs pRel; GENIE FSI runs take no flat transparency)")
         k = np.concatenate([np.linalg.norm(uproot.open(Path(r) / "gen.root")["genT"]["pRel"].array(library="np")
                                            [np.load(Path(r) / "analysis_events.npz")["num"]], axis=1) for r in dirs])
         B = contact_basis(d, k)
@@ -1085,14 +1457,14 @@ def band(settings, outdir, lumi_nb_inv, transparency, n_rep, seed):
                 ax.tick_params(labelbottom=False)
         ax6[row, 0].set_yscale("log")
         ax6[row, 0].set_ylim(1, None)
-        ax6[row, 0].set_ylabel("Events per bin", fontsize=12)
+        ax6[row, 0].set_ylabel(f"Events per bin\n({yield_txt})", fontsize=11)
         summary[lab] = {key: {"p16": float(v[0]), "median": float(v[1]), "p84": float(v[2])} for key, v in out.items()}
         summary[lab]["runs"] = [m_["run"] for m_ in metas]
         print(f"{lab}: " + ", ".join(f"{key} {v[1]:.4g} [{v[0]:.4g}, {v[2]:.4g}]" for key, v in out.items()))
     ax5.set_yscale("log")
     ax5.set_xlim(1, 25)
     ax5.tick_params(direction="in", which="both", top=True, right=True, labelsize=12)
-    ax5.set_ylabel("Events per bin", fontsize=13, loc="top")
+    ax5.set_ylabel(f"Events per bin ({yield_txt})", fontsize=11, loc="top")
     ax5.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=13, loc="right")
     ax5.axhline(100, color=MUTED, lw=0.8, ls=":")
     ax5.legend(frameon=False, fontsize=12, title="band: GCF contact uncertainty (68%)", title_fontsize=10)
@@ -1120,6 +1492,101 @@ def band(settings, outdir, lumi_nb_inv, transparency, n_rep, seed):
     print(f"wrote {outdir}/figband_q2.pdf figband_recoil_spectra.pdf figband_relative.pdf summary.json")
 
 
+def interpolation_ratio(d, k, ion):
+    """Per-event weight factor S_log(k_rel) / S_lin(k_rel): the pair-momentum distribution with log-linear instead
+    of gcfSRC's linear interpolation of the |phi|^2 tables (#120). 12C: pp and nn from AV18_pp0, pn from the contact
+    mix C_pn0 |phi_pn0|^2 + C_pn1 |phi_pn1|^2; d: the pn spin-1 table alone."""
+    t0, t1, tpp = av18_phi_sq(("AV18_pn0", "AV18_pn1", "AV18_pp0"))
+    lin = {n: phi_sq(t, k) for n, t in (("pn0", t0), ("pn1", t1), ("pp", tpp))}
+    log = {n: phi_sq(t, k, log=True) for n, t in (("pn0", t0), ("pn1", t1), ("pp", tpp))}
+    with np.errstate(divide="ignore", invalid="ignore"):
+        if ion == "d":
+            r = log["pn1"] / lin["pn1"]
+        else:
+            c = {n: v[0] for n, v in CONTACTS_SS_K["C12"].items()}
+            same = d["lead_type"] == d["rec_type"]
+            r_pn = (c["Cpn0"] * log["pn0"] + c["Cpn1"] * log["pn1"]) / (c["Cpn0"] * lin["pn0"] + c["Cpn1"] * lin["pn1"])
+            r = np.where(same, log["pp"] / lin["pp"], r_pn)
+    return np.where(np.isfinite(r), r, 1.0)
+
+
+def variants(settings, outdir, lumi_nb_inv):
+    """Generator-model variants of the PWIA SRC results by exact per-event reweighting (no new simulation), with
+    statistical errors: the cc1 prescription PRC 105, 034001 was generated with (cc1_2021_ratio, before #33), and
+    log-linear interpolation of the |phi|^2 tables (#120). For each: the recoil-tagged Fig. 5 yield per Q2 bin with
+    its error sqrt(sum w^2), the Q2 reach (last bin with >= 100 events), sigma after the p_IRF cut and the recoil
+    acceptances; the transparency is the plots default per run (run_transparency)."""
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    outdir = Path(outdir)
+    outdir.mkdir(parents=True, exist_ok=True)
+    bins = np.arange(3, 25.5, 1.0)
+    cen = 0.5 * (bins[1:] + bins[:-1])
+    summary = {"method": "exact per-event reweighting of the simulated events; errors from sum(w^2)",
+               "variants": {"cc1_2021": "cc1 before the #33 longitudinal fix (the cross section PRC 105, 034001 used)",
+                            "phiSq_loglinear": "log-linear interpolation of the AV18 |phi|^2 tables (#120)"}}
+    fig, axes = plt.subplots(1, len(settings), figsize=(5.2 * len(settings), 3.8), squeeze=False, sharey=True)
+    for ax, (lab, dirs) in zip(axes[0], settings.items()):
+        d, metas = load(dirs)
+        ion = metas[0]["beams"]["ion"]
+        if any(m_.get("kind", "2N") != "2N" for m_ in metas) or ion not in ("C12", "d"):
+            sys.exit("variants: 12C or d SRC-pair (genQE) runs only")
+        if any(has_fsi(r) for r in dirs):
+            sys.exit("variants: PWIA runs only (the reweighting needs the generated pair)")
+        trans = {run_transparency(r)[0] for r in dirs}
+        if len(trans) != 1:
+            sys.exit(f"variants: the runs of {lab} need different transparencies")
+        scale = lumi_nb_inv * trans.pop()
+        k = np.concatenate([np.linalg.norm(uproot.open(Path(r) / "gen.root")["genT"]["pRel"].array(library="np")
+                                           [np.load(Path(r) / "analysis_events.npz")["num"]], axis=1) for r in dirs])
+        w0 = d["w_nb"]
+        ws = {"nominal": w0, "cc1_2021": w0 * d["cc1_2021_ratio"], "phiSq_loglinear": w0 * interpolation_ratio(d, k, ion)}
+        cut = d["rec_p_irf"] > P_IRF_MIN
+        tag = cut & detected(d, "rec", "hit")
+        out = {}
+        h0 = None
+        for name, w in ws.items():
+            h = np.histogram(d["q2"][tag], bins, weights=w[tag] * scale)[0]
+            e = np.sqrt(np.histogram(d["q2"][tag], bins, weights=(w[tag] * scale) ** 2)[0])
+            n_eff = np.divide(h**2, e**2, out=np.zeros_like(h), where=e > 0)
+            acc = {}
+            for code, nm in ((2212, "p"), (2112, "n")):
+                m = cut & (d["rec_type"] == code)
+                acc[nm] = float(w[m & tag].sum() / w[m].sum()) if w[m].sum() else None
+            out[name] = {"sigma_nb_cuts_pIRF": float(w[cut].sum()), "tagged_events": float(w[tag].sum() * scale),
+                         "q2_reach_100_per_GeV2": float(bins[1:][h >= 100].max()) if (h >= 100).any() else None,
+                         "recoil_acceptance_hit": acc, "q2_bins": bins.tolist(), "events_per_bin": h.tolist(),
+                         "stat_error_per_bin": e.tolist(), "effective_events_per_bin": n_eff.tolist()}
+            if name == "nominal":
+                h0, e0 = h, e
+                g = h0 > 0
+                ax.fill_between(cen[g], 1 - (e0 / h0)[g], 1 + (e0 / h0)[g], color="#bbbbbb", alpha=0.6, lw=0,
+                                label="nominal, statistical error")
+            else:
+                g = h0 > 0
+                ax.plot(cen[g], (h / np.where(h0 > 0, h0, 1))[g], marker="o" if name == "cc1_2021" else "s", ms=4, lw=1,
+                        label={"cc1_2021": "cc1 as in PRC 105 (before #33)", "phiSq_loglinear": "log-linear |phi|^2 (#120)"}[name])
+                out[name]["relative_to_nominal"] = {"sigma": out[name]["sigma_nb_cuts_pIRF"] / out["nominal"]["sigma_nb_cuts_pIRF"] - 1,
+                                                    "tagged": out[name]["tagged_events"] / out["nominal"]["tagged_events"] - 1}
+        summary[lab] = out
+        ax.axhline(1, color=MUTED, lw=0.8)
+        ax.set_xlim(3, 25)
+        ax.set_title(f"{ion} {lab}", fontsize=12)
+        ax.set_xlabel(r"Q$^2$ [GeV$^2$/c$^4$]", fontsize=12, loc="right")
+        ax.tick_params(direction="in", which="both", top=True, right=True, labelsize=11)
+        print(f"{lab}: " + "; ".join(f"{n}: reach {v['q2_reach_100_per_GeV2']}, tagged {v['tagged_events']:.4g}"
+                                     + (f" ({100 * v['relative_to_nominal']['tagged']:+.1f}%)" if "relative_to_nominal" in v else "")
+                                     for n, v in out.items()))
+    axes[0, 0].set_ylabel("recoil-tagged yield / nominal", fontsize=12)
+    axes[0, 0].legend(frameon=False, fontsize=9, loc="upper left")
+    fig.tight_layout()
+    fig.savefig(outdir / "figvariants_q2.pdf")
+    (outdir / "variants.json").write_text(json.dumps(summary, indent=2) + "\n")
+    print(f"wrote {outdir}/figvariants_q2.pdf variants.json")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -1130,13 +1597,24 @@ def main():
     p.add_argument("--setting", action="append", required=True, help="LABEL=RUN_DIR[,RUN_DIR...] (Q2 slices of one setting)")
     p.add_argument("-o", "--outdir", required=True)
     p.add_argument("--lumi-fb", type=float, default=10.0, help="integrated luminosity per nucleus [fb^-1] (default 10)")
-    p.add_argument("--transparency", type=float, default=0.5, help="flat nucleon transparency factor (default 0.5)")
+    p.add_argument("--transparency", type=float, help="flat nucleon transparency factor for every setting (default: per "
+                   "run from run.json, 1 where the GENIE cascade ran, else by target: C12 0.5, d 0.90, He4 0.72; see "
+                   "TRANSPARENCY)")
+    p.add_argument("--cc1", choices=("fixed", "2021"), default="fixed",
+                   help="cross section: fixed (current cc1, default) or 2021 (cc1 before the #33 fix, as PRC 105, "
+                        "034001 was generated; per-event reweighting, 2N runs)")
     b = sub.add_parser("band", help="GCF contact-uncertainty band of 12C runs by reweighting (no new simulation)")
     b.add_argument("--setting", action="append", required=True, help="LABEL=RUN_DIR[,RUN_DIR...] (Q2 slices of one setting)")
     b.add_argument("-o", "--outdir", required=True)
-    b.add_argument("--lumi-fb", type=float, default=10.0)
-    b.add_argument("--transparency", type=float, default=0.5)
+    b.add_argument("--lumi-fb", type=float, default=10.0, help="integrated luminosity per nucleus [fb^-1] (default 10)")
+    b.add_argument("--transparency", type=float, default=0.5, help="flat nucleon transparency factor (default 0.5, "
+                   "the 12C value of PRC 105, 034001)")
     b.add_argument("--replicas", type=int, default=1000)
+    v = sub.add_parser("variants", help="generator-model variants (cc1 2021, |phi|^2 interpolation) of 12C/d PWIA runs by "
+                       "reweighting, with statistical errors")
+    v.add_argument("--setting", action="append", required=True, help="LABEL=RUN_DIR[,RUN_DIR...] (Q2 slices of one setting)")
+    v.add_argument("-o", "--outdir", required=True)
+    v.add_argument("--lumi-fb", type=float, default=10.0, help="integrated luminosity per nucleus [fb^-1] (default 10)")
     b.add_argument("--seed", type=int, default=1)
     a = ap.parse_args()
     if a.cmd == "extract":
@@ -1149,8 +1627,10 @@ def main():
             settings[lab] = dirs.split(",")
         if a.cmd == "band":
             band(settings, a.outdir, a.lumi_fb * 1e6, a.transparency, a.replicas, a.seed)
+        elif a.cmd == "variants":
+            variants(settings, a.outdir, a.lumi_fb * 1e6)
         else:
-            plots(settings, a.outdir, a.lumi_fb * 1e6, a.transparency)
+            plots(settings, a.outdir, a.lumi_fb * 1e6, a.transparency, a.cc1)
 
 
 if __name__ == "__main__":

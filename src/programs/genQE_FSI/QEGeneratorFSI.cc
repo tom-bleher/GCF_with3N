@@ -48,7 +48,8 @@ void QEGeneratorFSI::SeedFinalState(int lead_type, int rec_type,
   auto seed = [&](int pdg, const TLorentzVector &p4, int role) {
     if (pdg != pCode && pdg != nCode) return;
     FSIParticle part;
-    part.pdg = pdg; part.p4 = p4; part.rescatterCode = -1; part.parentRole = role;
+    part.pdg = pdg; part.p4 = p4; part.rescatterCode = -1; part.generation = 0;
+    part.parentRole = role;
     fParticles.push_back(part);
   };
   seed(lead_type, vLead_target, 0);
@@ -703,7 +704,7 @@ void QEGeneratorFSI::generate_event_lightcone(double &weight, int &lead_type, in
   if ((!omega1Valid) && (!omega2Valid)) { weight=0.; return; }
   if (!omega1Valid) omega = omega2;
   else if (!omega2Valid) omega = omega1;
-  else { omega = (gRandom->Rndm()>0.5)? omega1 : omega2; weight *= 2.; }
+  else { omega = (myRand->Rndm()>0.5)? omega1 : omega2; weight *= 2.; }
 
   double Ek_int = Ebeam_int - omega;
   double cosThetak = 1. - QSq/(2.*Ebeam_int*Ek_int);

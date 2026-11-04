@@ -1,0 +1,18 @@
+3N+FSI: /home/ilayws/Ilay-Generators/src/programs/genQE_3N/events/events_3N_100M.root
+  3N+FSI   p_rec>0.22: pass= 4416427  f_L=14.48%  f_R= 8.21%  L/R= 1.762
+  3N+FSI   p_rec>0.30: pass= 3916228  f_L=13.80%  f_R=11.37%  L/R= 1.213
+  3N+FSI   p_rec>0.35: pass= 3576823  f_L=13.24%  f_R=14.43%  L/R= 0.918
+  3N+FSI   p_rec>0.40: pass= 3243744  f_L=12.69%  f_R=17.70%  L/R= 0.717
+  3N+FSI   p_rec>0.50: pass= 2643654  f_L=11.24%  f_R=23.34%  L/R= 0.482
+2N+FSI: /home/ilayws/Ilay-Generators/src/programs/genQE_FSI/events/misc/2N_hN_100M_6GeV_kF220_indep.root
+  2N+FSI   p_rec>0.22: pass= 2147837  f_L= 7.11%  f_R= 3.21%  L/R= 2.212
+  2N+FSI   p_rec>0.30: pass= 1698688  f_L= 4.90%  f_R= 5.15%  L/R= 0.951
+  2N+FSI   p_rec>0.35: pass= 1424005  f_L= 3.62%  f_R= 7.46%  L/R= 0.486
+  2N+FSI   p_rec>0.40: pass= 1164943  f_L= 3.00%  f_R=11.06%  L/R= 0.271
+  2N+FSI   p_rec>0.50: pass=  734442  f_L= 2.51%  f_R=21.79%  L/R= 0.115
+MF: /home/ilayws/Ilay-Generators/src/programs/genQE_FSI/events/misc/MF_localFG_hN_100M_6GeV_kF220.root
+  MF       p_rec>0.22: pass=  397545  f_L= 5.23%  f_R=12.35%  L/R= 0.424
+  MF       p_rec>0.30: pass=  305840  f_L= 3.45%  f_R=15.94%  L/R= 0.216
+  MF       p_rec>0.35: pass=  251410  f_L= 3.02%  f_R=19.35%  L/R= 0.156
+  MF       p_rec>0.40: pass=  202954  f_L= 2.75%  f_R=24.26%  L/R= 0.113
+  MF       p_rec>0.50: pass=  125977  f_L= 2.19%  f_R=38.72%  L/R= 0.057

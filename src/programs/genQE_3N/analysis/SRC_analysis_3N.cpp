@@ -51,7 +51,10 @@ int main(int argc, char **argv) {
     std::cout << "\n========================================\n"
               << "  3N SRC Analysis — TTree output\n"
               << "========================================\n"
-              << "  Nucleus:      4He\n"
+              << "  Nucleus:      A=" << myGen->GetTargetA()
+              << ", Z=" << myGen->GetTargetZ()
+              << " (residual A=" << myGen->GetTargetA() - 3
+              << ", Z=" << myGen->GetTargetZ() - 2 << ")\n"
               << "  Beam energy:  " << Ebeam << " GeV\n"
               << "  Events:       " << n_events << "\n"
               << "  CM motion:    " << (use_CM ? "ON" : "OFF") << "\n"
