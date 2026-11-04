@@ -119,6 +119,11 @@ void gcfSRC::set_Cpn1(double newCpn1){
   
 }
 
+double gcfSRC::get_dCpp0(){ return d_Cpp0; }
+double gcfSRC::get_dCnn0(){ return d_Cnn0; }
+double gcfSRC::get_dCpn0(){ return d_Cpn0; }
+double gcfSRC::get_dCpn1(){ return d_Cpn1; }
+
 NNModel gcfSRC::get_InteractionType(){
 
   return u;
@@ -223,18 +228,22 @@ void gcfSRC::set_Contacts()
     if (set_Contacts_SS_k())
     {
       std::cout << "You are using k-space contact values from the Scale and Scheme paper.\n";
+      contactSource = "k-space values, Scale and Scheme paper";
     }
   else if (set_Contacts_SS_r())
     {
       std::cout << "You are using r-space contact values from the Scale and Scheme paper.\n";
+      contactSource = "r-space values, Scale and Scheme paper";
     }
   else if (set_Contacts_deut())
     {
       std::cout << "You are using a deuteron momentum distribution, and therefore have no contact dependence.\n";
+      contactSource = "deuteron momentum distribution: no contact dependence";
     }
   else if (set_Contacts_EG2())
     {
       std::cout << "You are using contact ratios from fits to EG2 data. You must be truly desperate...\n";
+      contactSource = "ratios from fits to EG2 data";
     }
   else
     {

@@ -27,8 +27,10 @@
 #include <cstring>
 #include <getopt.h>
 #include <algorithm>
+#include <iomanip>
 #include <iostream>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <vector>
 #include <unistd.h>
@@ -56,6 +58,8 @@ void Usage()
     "      --ff MODEL           nucleon form factors: kelly (default), ye, dipole\n"
     "  -c, --cs MODEL           eN cross section: onshell, cc1 (default), cc2\n"
     "      --q2 MIN:MAX         Q^2 window (GeV^2); 3N default open, 2N/MF default 1:10\n"
+    "      --print-params       print the nuclear inputs of this setup as one line,\n"
+    "                           PARAMS {json}, then exit without generating\n"
     "      --check              validate the options and set the generator up\n"
     "                           (nucleus tables, ...) and try up to 10^6 events: fails\n"
     "                           if none has a nonzero weight. Writes nothing\n"
@@ -75,10 +79,24 @@ void Usage()
     "3N and 2N:\n"
     "      --sigma-cm S         CM momentum width of the SRC cluster per component\n"
     "                           (GeV/c; default 0.15 for 3N, the nucleus table for 2N)\n"
+    "      --estar E            excitation energy E* of the residual (GeV, default 0);\n"
+    "                           not for a target with no residual\n"
     "\n"
     "2N only:\n"
     "      --nn MODEL           NN interaction for the pair contacts (default AV18)\n"
-    "      --estar E            A-2 residual excitation energy E* (GeV)\n"
+    "      --sigma-e S          draw E* per event from a Gaussian of this width around\n"
+    "                           --estar, keeping E* > 0 (GeV)\n"
+    "      --cpp0 C, --cnn0 C, --cpn0 C, --cpn1 C\n"
+    "                           override the pair contacts of the nucleus table, in the\n"
+    "                           table's units (--print-params shows them); only change\n"
+    "                           the weights. Not for the deuteron\n"
+    "      --randomize S        vary the nuclear inputs once, within their uncertainties,\n"
+    "                           with a random stream of its own seeded by S: sigma_CM and\n"
+    "                           the contacts (Gaussian), E* (uniform up to the table's\n"
+    "                           maximum). The options above then override the result.\n"
+    "                           Give every job of a run the same S\n"
+    "      --light-cone         use the light-cone cross section; excludes --prel-is and\n"
+    "                           --onset local\n"
     "      --kcut K             relative-momentum cutoff (GeV/c, default 0.25)\n"
     "      --onset fixed|local  SRC onset k_rel > kcut (default) or > k_F(r)\n"
     "      --prel-is            importance-sample |p_rel| (lower variance)\n"
@@ -127,7 +145,14 @@ const ModelOption kModelOptions[] = {
   {"--kF", "3N", "internal-momentum cutoff of the triplet; 2N uses --kcut, MF --kF-fg"},
   {"--no-cm", "3N", "CM motion of the triplet; 2N sets its width with --sigma-cm"},
   {"--nn", "2N", "NN interaction of the pair contacts; 3N uses --wave-function, MF has no contacts"},
-  {"--estar", "2N", "excitation of the pair's A-2 residual; MF leaves the A-1 residual in its ground state"},
+  {"--estar", "3N/2N", "excitation of the cluster's residual; MF leaves the A-1 residual in its ground state"},
+  {"--sigma-e", "2N", "per-event E* distribution of the pair's A-2 residual"},
+  {"--cpp0", "2N", "pair contact; 3N has no contacts yet (#73), MF has no pair"},
+  {"--cnn0", "2N", "pair contact; 3N has no contacts yet (#73), MF has no pair"},
+  {"--cpn0", "2N", "pair contact; 3N has no contacts yet (#73), MF has no pair"},
+  {"--cpn1", "2N", "pair contact; 3N has no contacts yet (#73), MF has no pair"},
+  {"--randomize", "2N", "the table of pair inputs and their uncertainties exists for 2N only"},
+  {"--light-cone", "2N", "the light-cone cross section exists for the pair generator only"},
   {"--kcut", "2N", "relative-momentum cutoff of the SRC pair"},
   {"--onset", "2N", "SRC onset of the pair's relative momentum"},
   {"--prel-is", "2N", "importance sampling of the pair's |p_rel|"},
@@ -151,17 +176,21 @@ int main(int argc, char **argv)
   string model, output, csName = "cc1", ffName = "kelly", nnName = "AV18", onset = "fixed",
          fermiGas = "global", phaseSpace;
   double beamE = 0., sigCM = 0., q2min = 0., q2max = 0., thetaMin = 5.,
-         thetaMax = 40., kF = 0., estar = 0., kcut = 0., kFfg = 0.;
+         thetaMax = 40., kF = 0., estar = 0., kcut = 0., kFfg = 0., sigmaE = 0.,
+         cpp0 = -1., cnn0 = -1., cpn0 = -1., cpn1 = -1.;
   long long nEvents = 0;
-  unsigned long seed = 0;
+  unsigned long seed = 0, randomizeSeed = 0;
   int A = 12, Z = 6, u = 1;
+  bool lightCone = false, printParams = false, sigmaESet = false, randomize = false;
   bool sigCMSet = false, q2Set = false, kFSet = false, estarSet = false,
        kcutSet = false, kFfgSet = false, useCM = true, doRad = false,
        doCoul = false, prelIS = false, verbose = false, checkOnly = false;
+  bool contactGiven = false, badContact = false;
   vector<string> given;   // model-specific options on the command line
 
   enum { kSigmaCM = 1000, kQ2, kThetaE, kKF, kNoCM, kNN, kEstar, kKcut,
-         kOnset, kPrelIS, kFermiGas, kKFfg, kRad, kCoulomb, kPhaseSpace, kCheck, kFF };
+         kOnset, kPrelIS, kFermiGas, kKFfg, kRad, kCoulomb, kPhaseSpace, kCheck, kFF,
+         kSigmaE, kCpp0, kCnn0, kCpn0, kCpn1, kRandomize, kLightCone, kPrintParams };
   static const option longOpts[] = {
     {"model", required_argument, nullptr, 'm'},
     {"beam", required_argument, nullptr, 'b'},
@@ -192,6 +221,14 @@ int main(int argc, char **argv)
     {"phase-space", required_argument, nullptr, kPhaseSpace},
     {"check", no_argument, nullptr, kCheck},
     {"ff", required_argument, nullptr, kFF},
+    {"sigma-e", required_argument, nullptr, kSigmaE},
+    {"cpp0", required_argument, nullptr, kCpp0},
+    {"cnn0", required_argument, nullptr, kCnn0},
+    {"cpn0", required_argument, nullptr, kCpn0},
+    {"cpn1", required_argument, nullptr, kCpn1},
+    {"randomize", required_argument, nullptr, kRandomize},
+    {"light-cone", no_argument, nullptr, kLightCone},
+    {"print-params", no_argument, nullptr, kPrintParams},
     {nullptr, 0, nullptr, 0}};
 
   int c;
@@ -247,6 +284,14 @@ int main(int argc, char **argv)
       case kPhaseSpace: phaseSpace = optarg; break;
       case kCheck: checkOnly = true; break;
       case kFF: ffName = optarg; break;
+      case kSigmaE: sigmaE = atof(optarg); sigmaESet = true; break;
+      case kCpp0: cpp0 = atof(optarg); contactGiven = true; if (cpp0 < 0.) badContact = true; break;
+      case kCnn0: cnn0 = atof(optarg); contactGiven = true; if (cnn0 < 0.) badContact = true; break;
+      case kCpn0: cpn0 = atof(optarg); contactGiven = true; if (cpn0 < 0.) badContact = true; break;
+      case kCpn1: cpn1 = atof(optarg); contactGiven = true; if (cpn1 < 0.) badContact = true; break;
+      case kRandomize: randomizeSeed = strtoul(optarg, nullptr, 10); randomize = true; break;
+      case kLightCone: lightCone = true; break;
+      case kPrintParams: printParams = true; break;
       default: Usage(); return 1;   // getopt already printed the reason
     }
   }
@@ -256,8 +301,9 @@ int main(int argc, char **argv)
   auto fail = [&ok](const string &msg) { cerr << "Error: " << msg << "\n"; ok = false; };
   if (model != "3N" && model != "2N" && model != "MF") fail("--model must be 3N, 2N or MF");
   if (beamE <= 0.) fail("--beam must be a positive energy in GeV");
-  if (nEvents <= 0 && !checkOnly) fail("--events must be positive");
-  if (output.empty() && !checkOnly) fail("--output is required");
+  const bool noOutput = checkOnly || printParams;
+  if (nEvents <= 0 && !noOutput) fail("--events must be positive");
+  if (output.empty() && !noOutput) fail("--output is required");
   if (A < 1 || Z < 0 || Z > A) fail("invalid target (A, Z)");
   csMethod csMeth = cc1;
   if (csName == "onshell") csMeth = onshell;
@@ -279,12 +325,26 @@ int main(int argc, char **argv)
       }
     }
   }
+  // A negative contact would silently act like 0: only events with a positive
+  // weight are kept.
+  if (badContact) fail("the contacts --cpp0, --cnn0, --cpn0 and --cpn1 must be >= 0");
+  if (estarSet && estar < 0.) fail("--estar must be >= 0");
+  if (sigmaESet && sigmaE <= 0.) fail("--sigma-e must be positive");
+  if (randomize && randomizeSeed == 0) fail("--randomize needs a positive seed");
+  if (lightCone && prelIS) fail("--light-cone excludes --prel-is: it does not sample |p_rel| that way");
+  if (lightCone && onset == "local") fail("--light-cone excludes --onset local: it has no local onset");
+  if (model == "2N" && A == 2) {
+    for (const char *flag : {"--cpp0", "--cnn0", "--cpn0", "--cpn1", "--randomize"})
+      if (find(given.begin(), given.end(), flag) != given.end())
+        fail(string(flag) + " does not apply to the deuteron: it uses a momentum distribution, not contacts");
+  }
+  if (model == "3N" && A == 3 && estarSet) fail("--estar does not apply to A = 3: a triplet leaves no residual");
   if (!ok) { cerr << "(gcf_generate --help for usage)\n"; return 1; }
   if (!output.empty()) output = AbsolutePath(output);
 
   // Seed 0 draws a fresh one; print it either way so the run can be replayed.
   if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
-  if (!checkOnly) cout << "Random seed: " << seed << "\n";
+  if (!noOutput) cout << "Random seed: " << seed << "\n";
   TRandom3 rand(seed);
   eNCrossSection cs(csMeth, ffMod);
 
@@ -315,8 +375,23 @@ int main(int argc, char **argv)
     const bool deuteron = (A == 2 && Z == 1);
     string uType = (deuteron && nnName == "AV18") ? "AV18_deut" : nnName;
     nucleus.reset(new gcfNucleus(Z, A - Z, const_cast<char *>(uType.c_str())));
+    // One draw per run: its own stream, so the events of the jobs still differ
+    // while all of them use the same nuclear inputs.
+    if (randomize) {
+      TRandom3 randomizer(randomizeSeed);
+      nucleus->randomize(&randomizer);
+    }
     if (sigCMSet) nucleus->set_sigmaCM(sigCM);
     if (estarSet) nucleus->set_Estar(estar);
+    if (sigmaESet) nucleus->set_sigmaE(sigmaE);
+    gcfSRC *src = nucleus->get_SRC();
+    if (cpp0 >= 0.) src->set_Cpp0(cpp0);
+    if (cnn0 >= 0.) src->set_Cnn0(cnn0);
+    if (cpn0 >= 0.) src->set_Cpn0(cpn0);
+    if (cpn1 >= 0.) src->set_Cpn1(cpn1);
+    if (src->get_Cpp0() + src->get_Cnn0() + src->get_Cpn0() + src->get_Cpn1() <= 0.) {
+      cerr << "Error: all contacts are zero, so every event has zero weight\n"; return 1;
+    }
     gen2.reset(new QEGeneratorFSI(beamE, nucleus.get(), &cs, &rand));
     gen2->EnableFSI(false);
     if (deuteron) gen2->set_deuteron();
@@ -342,6 +417,49 @@ int main(int argc, char **argv)
     }
   }
 
+  // What the nuclear inputs of this run are, for the provenance and the front end.
+  ostringstream inputs;
+  inputs << setprecision(8);
+  if (gen3) {
+    inputs << "sigma_cm=" << (useCM ? gen3->GetSigCM() : 0.) << " estar=" << estar;
+  } else if (nucleus) {
+    gcfSRC *src = nucleus->get_SRC();
+    inputs << "sigma_cm=" << nucleus->get_sigmaCM() << " estar=" << nucleus->get_Estar()
+           << " sigma_e=" << nucleus->get_sigmaE();
+    if (model == "2N")
+      inputs << " cpp0=" << src->get_Cpp0() << " cnn0=" << src->get_Cnn0()
+             << " cpn0=" << src->get_Cpn0() << " cpn1=" << src->get_Cpn1();
+  }
+
+  if (printParams) {
+    ostringstream j;
+    j << setprecision(8) << "{\"model\": \"" << model << "\", \"A\": " << A << ", \"Z\": " << Z;
+    if (gen3) {
+      j << ", \"sigma_cm\": [" << gen3->GetSigCM() << ", null], \"estar\": " << estar
+        << ", \"kF\": " << gen3->GetInternalMomentumMin()
+        << ", \"mA\": " << gen3->GetTargetMass() << ", \"mRes\": {\"residual\": " << gen3->GetResidualMass() << "}";
+    } else {
+      gcfSRC *src = nucleus->get_SRC();
+      j << ", \"sigma_cm\": [" << nucleus->get_sigmaCM() << ", " << nucleus->get_d_sigmaCM() << "]"
+        << ", \"estar\": " << nucleus->get_Estar() << ", \"sigma_e\": " << nucleus->get_sigmaE()
+        << ", \"estar_max\": " << nucleus->get_Estar_max() << ", \"mA\": " << nucleus->get_mA();
+      if (model == "2N") {
+        j << ", \"nn\": \"" << nnName << "\", \"contact_source\": \"" << src->get_ContactSource() << "\""
+          << ", \"contacts\": {\"cpp0\": [" << src->get_Cpp0() << ", " << src->get_dCpp0() << "]"
+          << ", \"cnn0\": [" << src->get_Cnn0() << ", " << src->get_dCnn0() << "]"
+          << ", \"cpn0\": [" << src->get_Cpn0() << ", " << src->get_dCpn0() << "]"
+          << ", \"cpn1\": [" << src->get_Cpn1() << ", " << src->get_dCpn1() << "]}"
+          << ", \"mRes\": {\"pp\": " << nucleus->get_mAmpp() << ", \"pn\": " << nucleus->get_mAmpn()
+          << ", \"nn\": " << nucleus->get_mAmnn() << "}";
+      } else {
+        j << ", \"mRes\": {\"p\": " << nucleus->get_mAm1p() << ", \"n\": " << nucleus->get_mAm1n() << "}";
+      }
+    }
+    j << "}";
+    cout << "PARAMS " << j.str() << "\n";
+    return 0;
+  }
+
   if (checkOnly) {
     // A setup can be valid and still never give a nonzero weight (an empty
     // phase space): try events until the first one is accepted.
@@ -351,7 +469,8 @@ int main(int argc, char **argv)
     while (w <= 0. && tried < kCheckAttempts) {
       int t1, t2, t3;
       TLorentzVector vk, v1, v2, v3, vRes;
-      if (gen3) gen3->generate_event(w, t1, t2, t3, vk, v1, v2, v3, vRes, useCM);
+      if (gen3) { double e3 = estar; gen3->generate_event(w, t1, t2, t3, vk, v1, v2, v3, vRes, useCM, e3); }
+      else if (model == "2N" && lightCone) gen2->generate_event_lightcone(w, t1, t2, vk, v1, v2, vRes);
       else if (model == "2N") gen2->generate_event(w, t1, t2, vk, v1, v2, vRes);
       else gen2->generate_event_MF(w, t1, t2, vk, v1, v2, vRes);
       ++tried;
@@ -390,7 +509,8 @@ int main(int argc, char **argv)
     if (gen3) {
       int t1, t2, t3;
       TLorentzVector v1, v2, v3;
-      gen3->generate_event(weight, t1, t2, t3, vk, v1, v2, v3, vRes, useCM);
+      double e3 = estar;   // 0 unless --estar: gives the same events as without it
+      gen3->generate_event(weight, t1, t2, t3, vk, v1, v2, v3, vRes, useCM, e3);
       if (weight > 0.) {
         ev.AddParticle(t1, 0, v1);
         ev.AddParticle(t2, 1, v2);
@@ -403,7 +523,8 @@ int main(int argc, char **argv)
       int leadType, recType;
       TLorentzVector vLead, vRec;
       if (model == "2N") {
-        gen2->generate_event(weight, leadType, recType, vk, vLead, vRec, vRes);
+        if (lightCone) gen2->generate_event_lightcone(weight, leadType, recType, vk, vLead, vRec, vRes);
+        else gen2->generate_event(weight, leadType, recType, vk, vLead, vRec, vRes);
         if (weight > 0.) haveVertex = gen2->GetLastSrcVertex(vertex);
       } else {
         gen2->generate_event_MF(weight, leadType, recType, vk, vLead, vRec, vRes);
@@ -445,6 +566,7 @@ int main(int argc, char **argv)
   string prov = gcfio::Provenance("gcf_generate", argc, argv, seed);
   prov += string("form factors: ") + ffModel_name(ffMod) + "\n";
   prov += "model: " + model + "\n";
+  prov += "nuclear inputs: " + inputs.str() + "\n";
   TNamed("gcf_generate", prov.c_str()).Write();
   outfile.Close();
 

@@ -24,6 +24,11 @@ class gcfSRC
   double get_Cpp0();
   double get_Cpn0();
   double get_Cpn1();
+  double get_dCnn0();
+  double get_dCpp0();
+  double get_dCpn0();
+  double get_dCpn1();
+  const char * get_ContactSource() const { return contactSource; }
   void randomize_Contacts(TRandom3* myRand);
   
   void set_Interaction(NNModel thisNNType);
@@ -50,6 +55,7 @@ class gcfSRC
   double d_Cpn0;
   double Cpn1;
   double d_Cpn1;
+  const char * contactSource = "";
   
   double get_phiSq(double *phiPtr, double k_rel);
 
