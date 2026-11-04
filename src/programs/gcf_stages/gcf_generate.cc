@@ -75,8 +75,10 @@ void Usage()
     "      --estar E            residual excitation energy E* (GeV)\n"
     "      --kcut K             2N: relative-momentum cutoff (GeV/c, default 0.25)\n"
     "      --onset fixed|local  2N: SRC onset k_rel > kcut (default) or > k_F(r)\n"
+    "                           (local needs A >= 4)\n"
     "      --prel-is            2N: importance-sample |p_rel| (lower variance)\n"
     "      --fermi-gas global|local  MF: Fermi-gas model (default global)\n"
+    "                           (local needs A >= 4)\n"
     "      --kF-fg K            MF: global Fermi-gas momentum (GeV/c, default 0.25)\n"
     "      --rad                peaking-approximation radiation\n"
     "      --coulomb            Coulomb correction (applied before any FSI stage)\n"
@@ -214,9 +216,22 @@ int main(int argc, char **argv)
   if (kFSet && (kF <= 0. || kF > 0.5)) fail("--kF expects k_F in GeV/c, e.g. 0.22");
   if (onset != "fixed" && onset != "local") fail("--onset must be fixed or local");
   if (fermiGas != "global" && fermiGas != "local") fail("--fermi-gas must be global or local");
+  // k_F(r) comes from GENIE's nuclear density, which gives every A <= 4
+  // nucleus the 4He Gaussian (rms 1.645 fm): too small for 3He/3H, and a local
+  // Fermi momentum means nothing for the deuteron (docs/PHYSICS.md).
+  const bool localKF = (model == "2N" && onset == "local") ||
+                       (model == "MF" && fermiGas == "local");
+  const string localOpt = (model == "2N") ? "--onset local" : "--fermi-gas local";
+  if (localKF && A <= 3)
+    fail(localOpt + " needs a local k_F(r), which GENIE's density does not give "
+         "for A <= 3 (it uses the 4He Gaussian); use " +
+         (model == "2N" ? "--onset fixed" : "--fermi-gas global"));
   if (model == "3N" && (!nnName.empty() && nnName != "AV18"))
     fail("--nn applies to 2N/MF; the 3N wave function is chosen with --wave-function");
   if (!ok) { cerr << "(gcf_generate --help for usage)\n"; return 1; }
+  if (localKF && A == 4)
+    cerr << "Warning: " << localOpt << " on A=4 uses GENIE's 4He Gaussian charge "
+            "density (rms 1.645 fm) for k_F(r); see docs/PHYSICS.md\n";
   if (!output.empty()) output = AbsolutePath(output);
 
   // Seed 0 draws a fresh one; print it either way so the run can be replayed.

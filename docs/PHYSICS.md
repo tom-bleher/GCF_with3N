@@ -165,9 +165,10 @@ sampling over a density spanning many decades makes the weights very uneven
 either a global one (|p| uniform in a sphere of radius k_F = 0.25 GeV/c) or a
 local one (`--fermi-gas local`: position from the one-body density, then |p|
 from the local Fermi sphere with k_F(r) ∝ ρ(r)^{1/3}, as in GENIE's
-LocalFGM). The A−1 residual recoils with −**p**; there is no correlated
-partner. This sample is meant to complement the SRC sample: with the local
-onset the two tile the momentum distribution without gap or overlap.
+LocalFGM; A ≥ 4 only, see "Density" under FSI). The A−1 residual recoils
+with −**p**; there is no correlated partner. This sample is meant to
+complement the SRC sample: with the local onset the two tile the momentum
+distribution without gap or overlap.
 
 Known: the MF weight is normalized per nucleon and divided by (2π)³ a second
 time, so it is not on the same absolute scale as the SRC weight (#34); the
@@ -214,6 +215,28 @@ cascade (vendored GENIE R-3_06_02):
   scales with the density to the power of its size. In the 2N generator the
   vertex is drawn during generation because, with the local onset, k_F at the
   vertex enters the sampling; a PWIA file passes it on to the FSI stage.
+- **Density:** ρ(r) for the starting point, and for k_F(r) in the local onset
+  and the local Fermi gas, is GENIE's `utils::nuclear::Density(r, A)`
+  (normalized to 1). It is a **charge** density (GENIE manual §2.5,
+  [doi:10.48550/arXiv.1510.05494](https://doi.org/10.48550/arXiv.1510.05494)).
+  For ¹²C it is a modified harmonic oscillator (a = 1.69 fm, α = 1.08) with
+  rms radius 2.460 fm; the measured ¹²C charge radius is 2.4702 fm (Angeli &
+  Marinova, At. Data Nucl. Data Tables 99, 69 (2013),
+  [doi:10.1016/j.adt.2011.12.006](https://doi.org/10.1016/j.adt.2011.12.006)),
+  the point-nucleon radius about 2.33 fm. Al, Ar, Fe and Pb match their
+  charge radii to within 1.6 %. Against a point-nucleon density, a
+  straight-line Glauber estimate on the same shapes makes ¹²C about 5 % more
+  transparent for one nucleon and 10–14 % for a pair, and lowers the
+  vertex-averaged k_F(r) by about 4 % (232 vs 242 MeV/c) (#160). NuWro and
+  INCL make the same choice; it is a systematic, not a bug.
+- **A ≤ 4:** GENIE gives every A ≤ 4 nucleus one Gaussian with rms 1.645 fm,
+  the ⁴He shape. ³He (point-nucleon rms about 1.78 fm) and the deuteron
+  (about 1.97 fm) are larger; the vertex-averaged k_F(r) from this density is
+  off by about +8 % for ³He protons and −10 % for ⁴He (#160). `gcf_generate`
+  therefore rejects `--onset local` and `--fermi-gas local` for A ≤ 3 (for
+  the deuteron a local k_F has no meaning) and warns for A = 4. The cascade
+  is skipped for residuals with A < 3; an A = 3 residual (MF on ⁴He) is
+  transported through the same Gaussian.
 - **Record:** a GENIE event record in lepton–nucleus mode with a fake
   electron, the target, the remnant (PDG mass) and the cluster nucleons as
   "hadrons in the nucleus"; `TransportHadrons` steps each one through the
@@ -249,6 +272,9 @@ cascade (vendored GENIE R-3_06_02):
 - GENIE INTRANUKE is validated for A > 6; light residuals (A_res < 7) get a
   warning. The cascade medium is GENIE's generic density for the residual's
   A, while the vertex is drawn from the full target's density.
+- The vertex density and k_F(r) use GENIE's charge density, not the
+  point-nucleon density, and the ⁴He Gaussian for every A ≤ 4 (see FSI,
+  "Density").
 - Open physics questions are tracked as issues on the fork: #9 (a Jacobian in
   the 3N plotting tools), #10 (Pauli blocking), #34 (MF normalization), #35
   (Coulomb with FSI), and the conventions noted in #32.
