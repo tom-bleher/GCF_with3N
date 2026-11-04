@@ -52,6 +52,7 @@ void Usage()
     "  -A, --target-A A         target mass number (default 12)\n"
     "  -Z, --target-Z Z         target charge (default 6)\n"
     "  -S, --seed S             random seed, positive (default: drawn and printed)\n"
+    "      --ff MODEL           nucleon form factors: kelly (default), ye, dipole\n"
     "  -c, --cs MODEL           eN cross section: onshell, cc1 (default), cc2\n"
     "      --sigma-cm S         CM momentum width per component (GeV/c)\n"
     "      --q2 MIN:MAX         Q^2 window (GeV^2); 3N default open, 2N/MF default 1:10\n"
@@ -104,7 +105,7 @@ string AbsolutePath(const string &path)
 
 int main(int argc, char **argv)
 {
-  string model, output, csName = "cc1", nnName = "AV18", onset = "fixed",
+  string model, output, csName = "cc1", ffName = "kelly", nnName = "AV18", onset = "fixed",
          fermiGas = "global", phaseSpace;
   double beamE = 0., sigCM = 0., q2min = 0., q2max = 0., thetaMin = 5.,
          thetaMax = 40., kF = 0., estar = 0., kcut = 0., kFfg = 0.;
@@ -116,7 +117,7 @@ int main(int argc, char **argv)
        doCoul = false, prelIS = false, verbose = false, checkOnly = false;
 
   enum { kSigmaCM = 1000, kQ2, kThetaE, kKF, kNoCM, kNN, kEstar, kKcut,
-         kOnset, kPrelIS, kFermiGas, kKFfg, kRad, kCoulomb, kPhaseSpace, kCheck };
+         kOnset, kPrelIS, kFermiGas, kKFfg, kRad, kCoulomb, kPhaseSpace, kCheck, kFF };
   static const option longOpts[] = {
     {"model", required_argument, nullptr, 'm'},
     {"beam", required_argument, nullptr, 'b'},
@@ -146,6 +147,7 @@ int main(int argc, char **argv)
     {"coulomb", no_argument, nullptr, kCoulomb},
     {"phase-space", required_argument, nullptr, kPhaseSpace},
     {"check", no_argument, nullptr, kCheck},
+    {"ff", required_argument, nullptr, kFF},
     {nullptr, 0, nullptr, 0}};
 
   int c;
@@ -193,6 +195,7 @@ int main(int argc, char **argv)
       case kCoulomb: doCoul = true; break;
       case kPhaseSpace: phaseSpace = optarg; break;
       case kCheck: checkOnly = true; break;
+      case kFF: ffName = optarg; break;
       default: Usage(); return 1;   // getopt already printed the reason
     }
   }
@@ -210,6 +213,8 @@ int main(int argc, char **argv)
   else if (csName == "cc1" || csName == "1") csMeth = cc1;
   else if (csName == "cc2" || csName == "2") csMeth = cc2;
   else fail("--cs must be onshell, cc1 or cc2");
+  ffModel ffMod = kelly;
+  if (!parse_ffModel(ffName.c_str(), ffMod)) fail("--ff must be kelly, ye or dipole");
   if (model == "3N" && (u < 1 || u > 10)) fail("--wave-function must be one of AV18, AV18+UIX, AV18+TM, CDBonn, CDBonn+TM (or with -pD), or 1-10");
   if (kFSet && (kF <= 0. || kF > 0.5)) fail("--kF expects k_F in GeV/c, e.g. 0.22");
   if (onset != "fixed" && onset != "local") fail("--onset must be fixed or local");
@@ -223,7 +228,7 @@ int main(int argc, char **argv)
   if (seed == 0) { TRandom3 seeder(0); seed = 1 + seeder.Integer(0xfffffffe); }
   if (!checkOnly) cout << "Random seed: " << seed << "\n";
   TRandom3 rand(seed);
-  eNCrossSection cs(csMeth, kelly);
+  eNCrossSection cs(csMeth, ffMod);
 
   // ---- Generator setup (before opening the output: a setup error must not
   // leave a truncated file behind) ----------------------------------------
@@ -354,6 +359,7 @@ int main(int argc, char **argv)
   hAttempts.SetBinContent(1, static_cast<double>(attempts));
   hAttempts.Write();
   string prov = gcfio::Provenance("gcf_generate", argc, argv, seed);
+  prov += string("form factors: ") + ffModel_name(ffMod) + "\n";
   prov += "model: " + model + "\n";
   TNamed("gcf_generate", prov.c_str()).Write();
   outfile.Close();

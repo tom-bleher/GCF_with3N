@@ -163,7 +163,12 @@ int main(int argc, char **argv) {
 
     myRand = new TRandom3(0);
     ffModel ffMod = kelly;
-    csMethod csMeth = onshell;  // matches Wright et al. paper (Rosenbluth prescription)
+    // Free Rosenbluth at the lab beam energy and electron angle, as for a nucleon
+    // at rest, with Kelly form factors. This is NOT Wright et al.'s cross section:
+    // GENIE's RosenbluthPXSec, which they used, works in the struck nucleon's rest
+    // frame with BBBA07 form factors. For moving SRC nucleons (|p| = 0.3-0.7 GeV/c)
+    // the two differ by a factor 0.49-1.78 event by event (issue #161).
+    csMethod csMeth = onshell;
     myCS = new eNCrossSection(csMeth, ffMod);
 
     // Carbon-12 (GCF on A=12, FSI on A-2=10 residual)

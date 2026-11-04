@@ -64,6 +64,12 @@ GENERATE = [
     Opt("events", "int", "--events", 10000, label="Events",
         help="Number of accepted (weight > 0) events in total, over all jobs."),
     Opt("target", "target", None, [12, 6], label="Target (A, Z)"),
+    # Kelly: PRC 70, 068202 (2004), doi:10.1103/PhysRevC.70.068202
+    # Ye et al.: PLB 777, 8 (2018), doi:10.1016/j.physletb.2017.11.023
+    Opt("ff", "str", "--ff", "kelly", choices=["kelly", "ye", "dipole"],
+        label="Nucleon form factors",
+        help="Kelly 2004 (default), Ye et al. 2018 z expansion, or dipole with Galster G_En.",
+        advanced=True),
     # De Forest: Nucl. Phys. A 392, 232 (1983), doi:10.1016/0375-9474(83)90124-0
     Opt("cs", "str", "--cs", "cc1", choices=["cc1", "cc2", "onshell"],
         label="eN cross section", help="De Forest cc1 (default), cc2, or on-shell.", advanced=True),
