@@ -79,7 +79,9 @@ void Usage()
     "      --fermi-gas global|local  MF: Fermi-gas model (default global)\n"
     "      --kF-fg K            MF: global Fermi-gas momentum (GeV/c, default 0.25)\n"
     "      --rad                peaking-approximation radiation\n"
-    "      --coulomb            Coulomb correction (applied before any FSI stage)\n"
+    "      --coulomb            Coulomb correction: beam and e' at generation; the\n"
+    "                           hadron shift is recorded (coulomb_dE) and gcf_fsi\n"
+    "                           applies it after the cascade\n"
     "      --phase-space FILE   phase-space limits file (gcfGenerator format)\n";
 }
 
@@ -285,6 +287,9 @@ int main(int argc, char **argv)
   gcfio::EventBuffers ev;
   ev.Book(tree);
   ev.targetA = A; ev.targetZ = Z; ev.beamE = beamE;
+  // The stored nucleons carry the correction (as pLead/pRec of genQE_FSI -C);
+  // gcf_fsi takes it off before the cascade and applies it to the final state.
+  ev.coulombDE = (gen2 && doCoul) ? gen2->calcCoulombEnergy() : 0.;
 
   // ---- Event loop: until nEvents events with weight > 0 -------------------
   const long long kMaxAttemptsWithoutSuccess = 100000000LL;
@@ -355,6 +360,7 @@ int main(int argc, char **argv)
   hAttempts.Write();
   string prov = gcfio::Provenance("gcf_generate", argc, argv, seed);
   prov += "model: " + model + "\n";
+  prov += "coulomb_dE: " + to_string(ev.coulombDE) + "\n";
   TNamed("gcf_generate", prov.c_str()).Write();
   outfile.Close();
 
