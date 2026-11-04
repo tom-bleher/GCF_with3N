@@ -5,6 +5,7 @@
 #include "TLorentzVector.h"
 #include "TVector3.h"
 #include "nucleus/gcfNucleus.hh"
+#include <algorithm>
 #include <vector>
 
 class gcfGenerator
@@ -20,9 +21,11 @@ class gcfGenerator
   void set_thetaRel_range_deg(double low, double high);
   void set_pRel_range(double low, double high);
   void set_pRel_cut(double new_cutoff);
+  // Lower end of the sampled |p_rel| range: the larger of pRelmin and the cut.
+  double pRel_floor() const { return std::max(pRelmin, pRel_cut); }
 
   // Importance-sample |p_rel| from its own integrand k^2 * S(k) instead of
-  // uniformly over [pRelmin, pRelmax].
+  // uniformly over [pRel_floor(), pRelmax].
   //
   // With uniform sampling the weight carries the full k^2 S(k) factor, and
   // S(k) spans several decades, so a handful of low-k events dominate every
@@ -30,7 +33,7 @@ class gcfGenerator
   // floor and 0.11% once the floor follows the local Fermi momentum (which
   // reaches down to ~0.02 GeV/c at large radius) -- i.e. 22 effective events
   // out of 20000. Drawing k from k^2 S(k) instead makes that dimension's
-  // weight contribution the integral over [pRelmin, pRelmax], which is
+  // weight contribution the integral over [pRel_floor(), pRelmax], which is
   // constant per event, so the spread vanishes.
   //
   // Expectation values are unchanged (a residual f/f_hat factor keeps the

@@ -24,7 +24,10 @@ gcfGenerator::gcfGenerator(gcfNucleus * thisInfo, TRandom3 * thisRand)
   doRad = false;
   doCoul = false;
 
-  pRelmin = 0.2;
+  // pRelmin is a lower bound the user can raise with a phase-space file. The
+  // sampled range starts at the larger of pRelmin and pRel_cut (pRel_floor),
+  // so a cut below 0.2 GeV/c (light nuclei) is sampled from the cut itself.
+  pRelmin = 0.;
   pRelmax = 1.05;
   phiRelmin = 0.;
   phiRelmax = 2.*M_PI;
@@ -280,7 +283,8 @@ void gcfGenerator::decay_function(double &weight, int lead_type, int rec_type, T
   double cosThetaRel = cosThetaRelmin + (cosThetaRelmax - cosThetaRelmin)*myRand->Rndm();
   double thetaRel = acos(cosThetaRel);
 
-  if ((phiRelmax < phiRelmin) or (cosThetaRelmax < cosThetaRelmin) or (pRelmax < pRelmin))
+  const double kfloor = pRel_floor();
+  if ((phiRelmax < phiRelmin) or (cosThetaRelmax < cosThetaRelmin) or (pRelmax <= kfloor))
     {
       weight = 0.;
       return;
@@ -291,13 +295,13 @@ void gcfGenerator::decay_function(double &weight, int lead_type, int rec_type, T
   double pRel_Mag;
   if (fPRelIS)
     {
-      // Draw |p_rel| from k^2 S(k) restricted to [pRelmin, pRelmax]. The
+      // Draw |p_rel| from k^2 S(k) restricted to [kfloor, pRelmax]. The
       // weight then picks up the integral over that range -- constant per
       // event -- times a residual f/f_hat that makes the estimator exactly
       // unbiased against the piecewise-linear cumulative.
       if (!fPRelIS_built) build_pRel_IS_tables();
       const int cls = is_class(lead_type, rec_type);
-      const double Flo = IS_F(cls, pRelmin);
+      const double Flo = IS_F(cls, kfloor);
       const double Fhi = IS_F(cls, pRelmax);
       const double dF  = Fhi - Flo;
       if (dF <= 0.) { weight = 0.; return; }
@@ -311,9 +315,9 @@ void gcfGenerator::decay_function(double &weight, int lead_type, int rec_type, T
     }
   else
     {
-      pRel_Mag = pRelmin + (pRelmax - pRelmin)*myRand->Rndm();
+      pRel_Mag = kfloor + (pRelmax - kfloor)*myRand->Rndm();
       // Factor universal functions into the weights
-      weight *= angular * (pRelmax - pRelmin) // Phase Space
+      weight *= angular * (pRelmax - kfloor) // Phase Space
         * sq(pRel_Mag)*myInfo->get_S(pRel_Mag,lead_type,rec_type)/pow(2.*M_PI,3); // Contacts
     }
 
@@ -347,7 +351,8 @@ void gcfGenerator::decay_function_lc(double &weight, int lead_type, int rec_type
   // Pick random relative motion
   double alphaRel = alphaRelmin + (alphaRelmax-alphaRelmin)*myRand->Rndm();
   double kmin = abs(1.-alphaRel)/sqrt(alphaRel*(2.-alphaRel))*mN;
-  double k = max(pRelmin,kmin) + (pRelmax - max(pRelmin,kmin))*myRand->Rndm();
+  const double klo = max(pRel_floor(),kmin);
+  double k = klo + (pRelmax - klo)*myRand->Rndm();
   double phiRel = phiRelmin + (phiRelmax-phiRelmin)*myRand->Rndm();
   double kperpSq = alphaRel*(2.-alphaRel)*(sq(k)+sq(mN)) - sq(mN);
   if (kperpSq < 0.)
@@ -358,14 +363,14 @@ void gcfGenerator::decay_function_lc(double &weight, int lead_type, int rec_type
   TVector2 vRel_perp;
   vRel_perp.SetMagPhi(sqrt(kperpSq),phiRel);
 
-  if ((alphaRelmax < alphaRelmin) or (pRelmax < max(pRelmin,kmin)) or (phiRelmax < phiRelmin))
+  if ((alphaRelmax < alphaRelmin) or (pRelmax < klo) or (phiRelmax < phiRelmin))
     {
       weight = 0.;
       return;
     }
 
   // Factor universal functions into the weights
-  weight *= (alphaRelmax - alphaRelmin) * (pRelmax - max(pRelmin,kmin)) * (phiRelmax-phiRelmin) // Phase Space
+  weight *= (alphaRelmax - alphaRelmin) * (pRelmax - klo) * (phiRelmax-phiRelmin) // Phase Space
     *k*sqrt(sq(k)+sq(mN))*myInfo->get_S(k,lead_type,rec_type)/pow(2.*M_PI,3); // Contacts
   
   // Do a safeguard cut
