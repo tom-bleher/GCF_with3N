@@ -2,12 +2,18 @@
 """Fig. 2 of the 3N-SRC paper.
 
 Three subplots showing the ground-state momentum distributions of the three
-nucleons in three angular configurations of the 3N-SRC, defined as circular
-regions in the (theta12, theta23) plane:
+nucleons in three angular configurations of the 3N-SRC, defined as the
+line-bounded regions of regions.py in the (theta12, theta23) plane:
 
-    Lead Rocket     center (180, 0)    -> lead is the rocket nucleon
-    Recoil Rocket   center (0, 180)    -> recoil3 is the rocket nucleon
-    Star            center (120, 120)  -> all three at ~120 deg apart
+    Lead Rocket     region 0, near (180, 0)    -> lead is the rocket nucleon
+    Recoil Rocket   region 2, near (180, 180)  -> recoil2 is the rocket nucleon
+    Star            region 6, near (120, 120)  -> all three at ~120 deg apart
+
+The other tail-rocket region, 3 near (0, 180) with recoil3 as the rocket, is
+not used. It is not region 2's mirror image (its boundary is
+theta23 > 2 theta12 + 27 against region 2's theta12 + theta23 > 320). On a 50k
+PWIA sample it holds 7.6% of the base weight against region 2's 2.4%, so the
+Recoil Rocket panel is the sparsest of the three.
 
 Cuts (paper convention): theta_e<45 deg, Q^2>1 GeV^2, no CM momentum.
 """
@@ -102,16 +108,20 @@ def main():
         print(f'  weight clip at {args.weight_clip_pct}% = {clip:.3e} '
               f'({n_clipped} events affected)')
 
-    # Recoil-rocket center is (0, 180) -> theta12 ~ 0, theta23 ~ 180.
-    # In that configuration, p1 || r2 and r3 is opposite, so r3 is the rocket.
-    # Map for plotting so the "Recoil 1" curve is always the rocket recoil:
+    # The recoil-rocket panel uses region 2, near (180, 180): theta12 ~ 180
+    # and theta23 ~ 180, so p1 || r3 and r2 is opposite both, i.e. r2 is the
+    # rocket. (Region 3, near (0, 180), is the other tail-rocket region, with
+    # r3 as the rocket, but it is not region 2's mirror image: region 2 is
+    # theta12 + theta23 > 320, region 3 is theta23 > 2 theta12 + 27, and on
+    # a 50k PWIA sample region 3 holds about three times the weight.) Map for
+    # plotting so the "Recoil 1" curve is the rocket recoil:
     #   Lead     -> p1
-    #   Recoil 1 -> r3 (the high-momentum recoil at (0, 180))
-    #   Recoil 2 -> r2
+    #   Recoil 1 -> r2 (the high-momentum recoil at (180, 180))
+    #   Recoil 2 -> r3
     nucleons = [
         ('Lead',     p1_mag, LINE_COLORS[0], '-'),
-        ('Recoil 1', r3_mag, LINE_COLORS[1], '-'),
-        ('Recoil 2', r2_mag, LINE_COLORS[2], '-'),
+        ('Recoil 1', r2_mag, LINE_COLORS[1], '-'),
+        ('Recoil 2', r3_mag, LINE_COLORS[2], '-'),
     ]
 
     fig, axes = plt.subplots(1, 3, figsize=figure_size(cols=2, ratio=0.42),
