@@ -150,6 +150,11 @@ class QEGeneratorFSI: public gcfGenerator
     return fParticles;
   }
 
+  // Negative particles dropped by the -C correction of the final-state list
+  // (CoulombCorrectFinalState), summed over all events so far. Only events with
+  // weight > 0 carry a particle list, so this counts stored events only.
+  long GetNCoulombDropped() const { return fNCoulombDropped; }
+
   // Fermi-gas density n_FG(|p1|) of the last generate_event_MF call,
   // evaluated at the TRUE sampled struck-nucleon momentum (free of the
   // radiative/Coulomb reconstruction ambiguity). Valid for MF events only.
@@ -181,6 +186,7 @@ class QEGeneratorFSI: public gcfGenerator
   bool   fIndependentFSI = false;
   int    fA, fZ;           // nucleus A and Z (set from gcfNucleus in ctor)
   std::vector<FSIParticle> fParticles;
+  long fNCoulombDropped = 0;
 
   // SRC onset state (2N pair mode)
   SrcOnset fSrcOnset     = kFixedKF;
@@ -243,6 +249,12 @@ class QEGeneratorFSI: public gcfGenerator
   void SeedFinalState(int lead_type, int rec_type,
                       const TLorentzVector &vLead_target,
                       const TLorentzVector &vRec_target);
+
+  // Coulomb correction (-C) of the final-state particle list, the same shift
+  // the generated nucleons get: each charged particle leaving the nucleus
+  // gains q*deltaE (q in units of e). A negative particle with less kinetic
+  // energy than that cannot escape and is dropped.
+  void CoulombCorrectFinalState(double deltaE);
 
   // Shared electron/Jacobian/cross-section kinematics (extracted so both the
   // 2N pair path and the single-nucleon MF path use identical physics).
