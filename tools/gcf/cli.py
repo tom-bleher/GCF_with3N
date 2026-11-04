@@ -5,7 +5,7 @@
   gcf fsi [options]              event file -> + GENIE FSI   (gcf_fsi)
   gcf quicklook FILE             a page of control plots
   gcf gui                        the web interface
-  gcf example [3N|2N|MF|fsi]     print an example config
+  gcf example [3N|2N|MF|fsi|eic] print an example config
   gcf env                        print the environment the stages run with
 """
 
@@ -86,6 +86,30 @@ input = "my_events.root"
 model = "hA"
 target = [12, 6]      # only needed if the file has no target_A/target_Z
 """,
+    "eic": """\
+# 12C SRC pairs through the ePIC chain at both light-ion settings (tools/run_eic_sim.sh:
+# generator -> gcf2hepmc -> afterburner -> npsim -> eicrecon), then the PRC 105, 034001 figures.
+# These are 1% of the production statistics, about 2000 events per setting.
+[run]
+name = "c12_epic"
+output_dir = "runs"
+stages = ["eic"]
+seed = 0              # 0: draw one; the saved config records it. Slice i uses seed + i.
+
+[eic]
+sample = "src"        # src, fsi, mf, 3n, 3n_fsi, dis
+beams = ["5x41", "10x110"]
+ion = "C12"           # C12, d, He4
+slices = [[3, 5, 9600], [5, 12, 3770], [12, 25, 2260]]   # Q2 min, Q2 max [GeV^2], attempts
+deexcite = "auto"     # auto, none, geant4, beagle
+sim_jobs = 8
+sim_threads = 1
+reco_jobs = 8
+# Empty software paths resolve to $EPIC_INSTALL, $EICRECON_INSTALL, $EIC_SHELL, $FIELDMAPS,
+# else the container's nightly geometry and EICrecon. The saved config records the result.
+# epic_install = "/path/to/epic/install"
+# eicrecon_install = "/path/to/EICrecon/install"
+""",
 }
 
 
@@ -153,9 +177,9 @@ def work_dir_for(output):
     return output.parent / f".{output.name}.gcf"
 
 
-def run_plan(cfg, run_dir, final_outputs=None, quiet=False):
+def run_plan(cfg, run_dir, final_outputs=None, quiet=False, resume=False):
     cfg = runner.resolve_seed(cfg)
-    plan = runner.plan_from_config(cfg, run_dir, final_outputs)
+    plan = runner.plan_from_config(cfg, run_dir, final_outputs, resume=resume)
     Path(run_dir).mkdir(parents=True, exist_ok=True)
     (Path(run_dir) / "config.toml").write_text(
         config.dumps(cfg, comment="Resolved configuration of this run (re-run with: gcf run config.toml)"))
@@ -170,10 +194,24 @@ def cmd_run(args):
     if args.jobs:
         cfg["run"]["jobs"] = args.jobs
     run_dir = Path(cfg["run"]["output_dir"]) / cfg["run"]["name"]
-    if (run_dir / "status.json").exists() and not args.force:
-        raise config.ConfigError(f"{run_dir} already holds a run; pick another [run] name "
-                                 f"or pass --force to overwrite it")
-    return run_plan(cfg, run_dir, quiet=args.quiet)
+    eic = "eic" in cfg["run"]["stages"]
+    if args.resume:
+        if not eic:
+            raise config.ConfigError("--resume is for the eic stage; the other stages have no chunks to pick up")
+        if not cfg["run"]["seed"]:
+            raise config.ConfigError(f"--resume needs the seed of the run: use {run_dir}/config.toml")
+    elif (run_dir / "status.json").exists():
+        if eic:
+            raise config.ConfigError(f"{run_dir} already holds a run; pick another [run] name, or pass --resume "
+                                     f"to finish it (--force does not apply: it would mix two runs' chunks)")
+        if not args.force:
+            raise config.ConfigError(f"{run_dir} already holds a run; pick another [run] name "
+                                     f"or pass --force to overwrite it")
+    if eic:
+        problems = runner.check_setup(cfg)
+        if problems:
+            raise config.ConfigError("\n".join(problems))
+    return run_plan(cfg, run_dir, quiet=args.quiet, resume=args.resume)
 
 
 def cmd_generate(args):
@@ -241,6 +279,8 @@ def main(argv=None):
     p.add_argument("config")
     p.add_argument("-j", "--jobs", type=int, default=0, help="override [run] jobs")
     p.add_argument("--force", action="store_true", help="overwrite an existing run")
+    p.add_argument("--resume", action="store_true",
+                   help="eic stage, with the run's config.toml: finish the slices and chunks that did not succeed")
     p.add_argument("-q", "--quiet", action="store_true")
     p.set_defaults(func=cmd_run)
 
