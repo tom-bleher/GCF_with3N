@@ -51,6 +51,7 @@ class App:
         self.children = {}            # run name -> Popen of `gcf run`
         self.plot_lock = threading.Lock()   # matplotlib is not thread-safe
         self.results_lock = threading.Lock()
+        self.nuclear_cache = {}             # (model, A, Z, nn) -> the generator's table values
 
     # -- runs ----------------------------------------------------------------
     def run_dir(self, name):
@@ -301,6 +302,23 @@ class App:
         with self.results_lock:
             return results.cached(path, cache, stage) or results.store(path, cache, stage, results.summarize(path))
 
+    def nuclear(self, model, a, z, nn):
+        """The table values of a setup, for the form. They come from the binary, so
+        they are the ones a run uses; one lookup per setup per server."""
+        if model not in schema.MODELS:
+            raise ValueError(f"unknown model {model!r}")
+        if nn and nn not in schema.NN_INTERACTIONS:
+            raise ValueError(f"unknown interaction {nn!r}")
+        target = (int(a), int(z))
+        key = (model, *target, nn or "")
+        with self.lock:
+            if key in self.nuclear_cache:
+                return self.nuclear_cache[key]
+        params = runner.nuclear_params(model, target, nn or None)
+        with self.lock:
+            self.nuclear_cache[key] = params
+        return params
+
     def run_config(self, name):
         try:
             return tomllib.loads((self.run_dir(name) / "config.toml").read_text())
@@ -478,6 +496,9 @@ def make_handler(app):
                             or not f.is_file():
                         raise FileNotFoundError(parts[3])
                     return self.send_file(f, download="download" in query)
+                if parts == ["api", "nuclear"]:
+                    q = {k: query.get(k, [""])[0] for k in ("model", "A", "Z", "nn")}
+                    return self.send_json(app.nuclear(q["model"], q["A"], q["Z"], q["nn"]))
                 if parts == ["api", "files"]:
                     return self.send_json(app.list_files(query.get("path", [""])[0]))
                 if parts == ["docs"]:
@@ -490,7 +511,7 @@ def make_handler(app):
                 self.send_error_json("not found", HTTPStatus.NOT_FOUND)
             except FileNotFoundError as e:
                 self.send_error_json(f"not found: {e}", HTTPStatus.NOT_FOUND)
-            except (ValueError, OSError) as e:
+            except (ValueError, OSError, runner.RunError, subprocess.TimeoutExpired) as e:
                 self.send_error_json(str(e))
             except Exception as e:   # noqa: BLE001 - never drop the connection
                 print(f"gcf gui: internal error on {self.path}: {e!r}", file=sys.stderr)
