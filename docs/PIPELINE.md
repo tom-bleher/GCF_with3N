@@ -143,6 +143,54 @@ The stage programs can also be called directly
 (`src/programs/gcf_stages/build/gcf_generate --help`, `gcf_fsi --help`) after
 `source build/gcf_env.sh`.
 
+## The EIC / ePIC chain
+
+The `eic` stage sends rest-frame events through the detector: generator, then
+`tools/gcf2hepmc.py` (collider frame), the afterburner, `npsim` and `eicrecon`
+inside eic-shell, for each beam setting and Q^2 slice, and at the end
+`tools/eic_src_analysis.py` (the PRC 105, 034001 figure set). It drives
+`tools/run_eic_sim.sh`, whose `--help` documents every physics choice, so it is
+the same production chain, from the GUI ("EIC / ePIC") or from a config:
+
+```bash
+./gcf example eic > epic.toml        # 1% of the production statistics, both beam settings
+./gcf run epic.toml                  # checks the installs, then runs for a while
+./gcf run --resume runs/c12_epic/config.toml   # finish what did not succeed
+```
+
+Start it on the host, not inside eic-shell: the generators run on the host, and
+the chain enters the container for the rest.
+
+- **Samples** are the productions': SRC pairs (`genQE`), SRC pairs with GENIE
+  FSI, the mean field, 3N SRC with and without FSI, tagged DIS. Each sets its
+  generator, cuts and allowed remnant de-excitation.
+- **Beam settings and targets** are what `run_eic_sim.sh` supports: 5x41 and
+  10x110, on C12, d and He4 (Z/A = 1/2).
+- **Q^2 slices** run one after the other, each with its own seed (`seed + i`)
+  and attempts; each normalizes by its own attempts, so disjoint slices add.
+- **Software** is recorded per slice in `run.json` and shown under "Software".
+  Empty paths resolve to `$EPIC_INSTALL`, `$EICRECON_INSTALL`, `$EIC_SHELL` and
+  `$FIELDMAPS`, else to the container's nightly geometry and EICrecon. That
+  default runs anywhere, but the 2026-10 productions used a pinned epic with the
+  realistic B0 (eic/epic#1194) and an EICrecon build with B0 triplet seeding:
+  give their installs to reproduce those numbers.
+- **The container is a moving nightly.** A local EICrecon or epic build works only
+  with the image it was built against; the check before a run tests that its
+  libraries load, because otherwise eicrecon fails only after the simulation has
+  finished. Either rebuild it inside eic-shell or start gcf with `SIF=<older image>`,
+  which eic-shell honours (`run.json` records the image used, under `container`).
+- **eicrecon is always single-threaded**: multithreaded it segfaults in the dRICH
+  ring finder and can grow past 100 GB, so the config has no setting for it.
+
+Each slice is a directory `<run>/<beams>_q2_<min>_<max>` as `run_eic_sim.sh`
+leaves it. Figures, their PNGs and `summary.json` go to `<run>/plots`. The check
+before a run looks at the installs from inside the container, and at disk and
+memory against the rough cost per event of the productions (about 1 MB per event
+and 3-4.5 core-seconds per event at 5x41-10x110).
+
+A chunk that fails stops the run with a message naming its log; "Resume" (or
+`--resume`) keeps finished slices and chunks and runs only what did not succeed.
+
 ## The web interface
 
 ```bash
@@ -153,7 +201,8 @@ The interface runs on the analysis machine. Open an SSH tunnel from your laptop
 (`ssh -N -L 8765:localhost:8765 you@machine`; VS Code Remote-SSH forwards the
 port automatically) and open the printed URL. From the page you can:
 
-- choose the stages (generate + FSI, generate only, FSI on an existing file);
+- choose the stages (generate + FSI, generate only, FSI on an existing file), or
+  the ePIC detector chain (see [The EIC / ePIC chain](#the-eic--epic-chain));
 - fill in the essential settings (model, beam, events, target with presets of
   supported nuclei, wave function, cascade model, interaction channels); the
   rest is under "Advanced", which says how many of its options you changed;
