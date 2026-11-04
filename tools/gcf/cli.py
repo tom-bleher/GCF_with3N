@@ -285,7 +285,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         ok = args.func(args)
-    except (config.ConfigError, runner.RunError) as e:
+    except (config.ConfigError, runner.RunError, RuntimeError) as e:
         print(f"gcf: error: {e}", file=sys.stderr)
         return 2
     return 0 if ok else 1

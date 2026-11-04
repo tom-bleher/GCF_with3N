@@ -594,10 +594,10 @@ async function startRun() {
   const btn = document.getElementById("btn-start"); btn.disabled = true; showMsg("Checking and starting…", "", "start");
   try {
     const r = await api("api/runs", cfg);
-    showMsg(`Started run ${r.name}.`, "ok", "start");
     document.getElementById("preview").classList.add("hidden");
     document.getElementById(fieldId("run", "name")).value = defaultName();
-    changed();
+    changed();                    // clears the message, so it comes after this
+    showMsg(`Started run ${r.name}.`, "ok", "start");
     await refreshRuns();
     showDetails(r.name);
   } catch (e) { showMsg(friendly(plain(e)), "err", "start"); markField(e.message); }
@@ -639,17 +639,21 @@ function renderRuns() {
   const box = document.getElementById("runs");
   const q = document.getElementById("runs-filter").value.trim().toLowerCase();
   const runs = runsCache.filter(r => !q || (r.name + " " + (r.setup || "")).toLowerCase().includes(q));
+  // The rows are rebuilt on every refresh; a keyboard user stays on the same run.
+  const focused = document.activeElement && document.activeElement.closest ? document.activeElement.closest("tr.run") : null;
+  const focusedName = focused ? focused.dataset.run : null;
   box.replaceChildren();
   if (!runsCache.length) { box.append(el("p", { class: "muted" }, "No runs yet. Fill in the form and press Start run.")); return; }
   if (!runs.length) { box.append(el("p", { class: "muted" }, "No run matches the filter.")); return; }
   const rows = runs.map(r => el("tr", { class: "run" + (r.name === selected ? " selected" : ""), onclick: () => showDetails(r.name),
-      tabindex: "0", role: "button", "aria-current": r.name === selected ? "true" : null, "aria-label": `${r.name}, ${r.state}`,
+      "data-run": r.name, tabindex: "0", role: "button", "aria-current": r.name === selected ? "true" : null, "aria-label": `${r.name}, ${r.state}`,
       onkeydown: e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showDetails(r.name); } }, title: r.setup || "" },
     el("td", {}, el("div", {}, r.name), el("div", { class: "setup" }, r.setup || ""),
       el("div", { class: "setup" }, r.started ? `${fmtTime(r.started)} · ${fmtDuration((r.finished || Date.now() / 1000) - r.started)}` : "")),
     el("td", {}, badge(r.state)), el("td", {}, progressCell(r.stages))));
   box.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", { scope: "col" }, "Run"), el("th", { scope: "col" }, "State"),
     el("th", { scope: "col" }, "Progress"))), el("tbody", {}, rows)));
+  if (focusedName) { const row = rows.find(tr => tr.dataset.run === focusedName); if (row) row.focus({ preventScroll: true }); }
 }
 async function refreshRuns() {
   let data;
