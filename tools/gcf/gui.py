@@ -176,7 +176,7 @@ class App:
                 "workers": st.get("workers"), "partial": st.get("partial"),
                 "resumable": bool(stopped and has_config and jobs),
                 "mergeable": bool(state in ("stopped", "failed", "cancelled") and any_step_done
-                                  and "generate" in st.get("stages", {})),
+                                  and {"generate", "program"} & set(st.get("stages", {}))),
                 "note": self.read_config(d).get("run", {}).get("note"),
                 "scan": self.read_config(d).get("run", {}).get("scan"),
                 "setup": self.setup_summary(d), "mtime": d.stat().st_mtime}
@@ -200,7 +200,20 @@ class App:
         except (OSError, tomllib.TOMLDecodeError):
             return ""
         parts = []
-        g, f, r = c.get("generate"), c.get("fsi"), c.get("run", {})
+        g, f, r, program = c.get("generate"), c.get("fsi"), c.get("run", {}), c.get("program")
+        if program:
+            parts.append(program.get("program", "?"))
+            if "target" in program:
+                a, z = program["target"]
+                parts.append(f"A={a} Z={z}")
+            if "beam" in program:
+                parts.append(f"{program['beam']:g} GeV")
+            if "events" in program:
+                n = program["events"]
+                parts.append((f"{n / 1e6:g}M" if n >= 1e6 else f"{n / 1e3:g}k" if n >= 1e3 else str(n)) + " attempts")
+            if r.get("jobs", 1) > 1:
+                parts.append(f"{r['jobs']} jobs")
+            return " · ".join(parts)
         if g:
             parts.append(g.get("model", "?"))
             if "target" in g:
@@ -690,6 +703,8 @@ class App:
 
     def quicklook(self, name, stage, cuts=None):
         from . import quicklook
+        if stage == "program":
+            raise ValueError("plots are for the event-file format, and this generator writes its own")
         _, path = self.output_path(name, stage)
         stats = {}
         with self.plot_lock:
@@ -700,8 +715,13 @@ class App:
         """The summary of an output, computed once per version of the file."""
         d, path = self.output_path(name, stage)
         cache = d / "results.json"
+        attempts = None
+        if stage == "program" and runner.read_status(d).get("state") == "done":
+            # These generators store only the attempts with a positive weight.
+            attempts = self.read_config(d).get("program", {}).get("events")
         with self.results_lock:
-            return results.cached(path, cache, stage) or results.store(path, cache, stage, results.summarize(path))
+            return results.cached(path, cache, stage) or \
+                results.store(path, cache, stage, results.summarize(path, attempts=attempts))
 
     def nuclear(self, model, a, z, nn):
         """The table values of a setup, for the form. They come from the binary, so
@@ -733,6 +753,8 @@ class App:
             raise ValueError("expected samples a and b, each with a run and a stage")
         if not isinstance(max_events, int) or isinstance(max_events, bool) or max_events < 1000:
             raise ValueError("max_events must be at least 1000")
+        if "program" in (a.get("stage"), b.get("stage")):
+            raise ValueError("comparing is for the event-file format, and this generator writes its own")
         _, path_a = self.output_path(a.get("run"), a.get("stage"))
         _, path_b = self.output_path(b.get("run"), b.get("stage"))
         if path_a == path_b:
@@ -815,9 +837,13 @@ def estimate_text(c, cfg):
             size += f" ({estimate.human_bytes(c['peak_bytes'])} while merging)"
         parts.append(size + f"; {estimate.human_bytes(c['free_bytes'])} free")
     text = ", ".join(parts) + "." if parts else ""
+    if c.get("pilot_stored") == 0:
+        text += (f" A test of {c['pilot_events']} attempts stored no events, so this run may too: check the beam "
+                 f"energy against the reaction's threshold.")
     if c.get("n_eff_fraction") is not None:
-        text += (f" A test of {c['pilot_events']} events had N_eff = {c['n_eff_fraction'] * c['pilot_events']:.0f}, "
-                 f"so expect at most N_eff of about {c['n_eff_at_most']:.3g} for this run; "
+        stored = c.get("pilot_stored") or c["pilot_events"]
+        text += (f" A test with {stored} events had N_eff = {c['n_eff_fraction'] * stored:.0f}, "
+                 f"so expect at most N_eff of about {c['n_eff_at_most'] * stored / c['pilot_events']:.3g} for this run; "
                  f"with heavy-tailed weights it grows more slowly than the event count.")
     return text.strip()
 

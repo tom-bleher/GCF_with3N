@@ -44,8 +44,12 @@ function updatePhysicsTab() {
   const tab = document.getElementById("tab-physics");
   if (!tab) return;
   tab.disabled = !physicsAvailable();
-  tab.title = tab.disabled ? "FSI on a file doesn't generate events" : "";
+  tab.title = tab.disabled ? "These settings are for the Generate stage" : "";
   if (tab.disabled && tab.getAttribute("aria-selected") === "true") showFormTab("setup");
+  const scanTab = document.getElementById("tab-scan");
+  scanTab.disabled = stages().includes("program");
+  scanTab.title = scanTab.disabled ? "Scans are for the Generate and FSI stages" : "";
+  if (scanTab.disabled && scanTab.getAttribute("aria-selected") === "true") showFormTab("setup");
   let n = 0;
   document.querySelectorAll('[data-tab-panel="physics"] .field:not(.hidden)').forEach(f => {
     const o = opt(f.dataset.section, f.dataset.key);

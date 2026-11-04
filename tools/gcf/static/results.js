@@ -38,7 +38,7 @@ function resultsPanel(name, stage, o, d) {
   for (const [level, text] of r.notes || []) box.append(el("p", { class: `note note-${level}` }, text));
   const prov = Object.entries(r.provenance || {});
   if (prov.length) {
-    box.append(el("details", {}, el("summary", {}, `Provenance: ${stage === "generate" ? "PWIA" : "with FSI"}`),
+    box.append(el("details", {}, el("summary", {}, `Provenance: ${STAGE_NAMES[stage] || stage}`),
       ...prov.map(([s, p]) => el("dl", { class: "numbers" },
         ...resultsRow("Stage", s), ...resultsRow("Code version", p.versions.join(", ")), ...resultsRow("Date", p.date),
         ...resultsRow("Jobs", String(p.seeds.length)), ...resultsRow("Seeds", p.seeds.slice(0, 6).join(", ") + (p.seeds.length > 6 ? ", …" : "")),

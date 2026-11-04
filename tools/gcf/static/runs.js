@@ -83,7 +83,7 @@ function logLink(name, l) {
 }
 
 // -- config files and examples ---------------------------------------------
-const EXAMPLE_LABELS = { "3N": "3N on 12C, with FSI", "2N": "2N on 12C, with FSI", MF: "Mean field on 12C", fsi: "FSI on an existing file" };
+const EXAMPLE_LABELS = { "3N": "3N on 12C, with FSI", "2N": "2N on 12C, with FSI", MF: "Mean field on 12C", fsi: "FSI on an existing file", dis: "Tagged DIS on 12C (genDIS)" };
 
 async function loadConfigText(text, source, keepName) {
   let cfg;

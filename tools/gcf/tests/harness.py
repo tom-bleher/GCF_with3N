@@ -25,6 +25,13 @@ sys.path.insert(0, str(REPO / "tools"))
 from gcf import runner  # noqa: E402
 
 
+def need_suite(name):
+    try:
+        runner.program_binary(name)
+    except runner.RunError as e:
+        raise unittest.SkipTest(str(e)) from None
+
+
 def need_binaries():
     for name in ("gcf_generate", "gcf_fsi"):
         if not os.access(runner.BIN_DIR / name, os.X_OK):

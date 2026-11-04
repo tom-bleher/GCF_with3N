@@ -152,7 +152,7 @@ def validate(raw, base_dir="."):
 
     if not run["stages"]:
         raise ConfigError("[run] stages is empty")
-    run["stages"] = [s for s in ["generate", "fsi"] if s in run["stages"]]
+    run["stages"] = [s for s in ["generate", "fsi", "program"] if s in run["stages"]]
     max_jobs = max(1, os.cpu_count() or 1)
     if not 1 <= run["jobs"] <= max_jobs:
         raise ConfigError(f"[run] jobs must be between 1 and {max_jobs} (the CPUs of this machine)")
@@ -165,6 +165,15 @@ def validate(raw, base_dir="."):
     out = Path(run["output_dir"]).expanduser()
     run["output_dir"] = str(out if out.is_absolute() else (Path(base_dir) / out).resolve())
 
+    if "program" in run["stages"]:
+        if len(run["stages"]) > 1:
+            raise ConfigError("[run] stages: another generator runs on its own, not with generate or fsi "
+                              "(it doesn't write the event-file format)")
+        name = cfg["program"]["program"]
+        given = raw.get("program", {})
+        for o in schema.PROGRAM:
+            if o.key in given and name not in o.models:
+                raise ConfigError(f"[program] {o.key} does not apply to {name}")
     if "generate" in run["stages"]:
         if gen["beam"] <= 0:
             raise ConfigError("[generate] beam must be positive")
@@ -258,6 +267,8 @@ def dumps(cfg, comment=None):
             if v is None:
                 continue
             if section == "generate" and model not in o.models:
+                continue
+            if section == "program" and cfg["program"]["program"] not in o.models:
                 continue
             lines.append(f"{o.key} = {_toml_value(v)}")
         lines.append("")

@@ -225,6 +225,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
       <label><input type="radio" name="stages" value="generate,fsi" checked>Generate + FSI</label>
       <label><input type="radio" name="stages" value="generate">Generate only</label>
       <label><input type="radio" name="stages" value="fsi">FSI on a file</label>
+      <label><input type="radio" name="stages" value="program">Other generators</label>
     </div>
     <div id="stage-help"></div>
     <div id="form-tabs-slot"></div>
@@ -243,6 +244,11 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
       <h3>Interaction channels</h3>
       <div class="chan" id="channels"></div>
       <details class="adv"><summary>Advanced <span class="n" id="adv-fsi"></span></summary><div class="grid" id="adv-grid-fsi"></div></details>
+    </fieldset>
+    <fieldset id="fs-program"><legend>Other generators</legend>
+      <div class="grid" id="grid-program"></div>
+      <p id="program-note" class="note note-warn hidden"></p>
+      <details class="adv hidden"><summary>Advanced <span class="n" id="adv-program"></span></summary><div class="grid" id="adv-grid-program"></div></details>
     </fieldset>
     </div>
 
@@ -411,10 +417,11 @@ const STAGE_HELP = {
   "generate,fsi": "PWIA events, then the GENIE cascade: two output files (before and after FSI).",
   "generate": "PWIA events without final-state interactions.",
   "fsi": "GENIE FSI on any event file in the GCF format, also from other generators.",
+  "program": "The suite's other generators, each writing its own tree. Plots, FSI and comparing are not available for their files.",
 };
 
 function buildForm() {
-  for (const section of ["run", "generate", "fsi"]) {
+  for (const section of ["run", "generate", "fsi", "program"]) {
     const grid = document.getElementById("grid-" + section), adv = document.getElementById("adv-grid-" + section);
     for (const o of SCHEMA[section]) {
       if ((SKIP[section] || []).includes(o.key)) continue;
@@ -437,6 +444,8 @@ function buildForm() {
   document.getElementById(fieldId("generate", "model")).addEventListener("change", () => {
     updateVisibility(); document.getElementById(fieldId("run", "name")).value = defaultName(); });
   document.getElementById(fieldId("fsi", "model")).addEventListener("change", updateVisibility);
+  document.getElementById(fieldId("program", "program")).addEventListener("change", () => {
+    updateVisibility(); document.getElementById(fieldId("run", "name")).value = defaultName(); });
   document.getElementById("form-card").addEventListener("input", changed);
   document.getElementById("form-card").addEventListener("change", changed);
   updateVisibility();
@@ -447,7 +456,7 @@ function model() { return document.getElementById(fieldId("generate", "model")).
 function fsiModel() { return document.getElementById(fieldId("fsi", "model")).value; }
 function defaultName() {
   const d = new Date(), p = n => String(n).padStart(2, "0");
-  const st = stages(), m = st.includes("generate") ? model() : "fsi";
+  const st = stages(), m = st.includes("generate") ? model() : st.includes("program") ? document.getElementById(fieldId("program", "program")).value : "fsi";
   return `${m}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
@@ -461,11 +470,16 @@ function updateVisibility() {
   const st = stages(), m = model(), fm = fsiModel();
   document.getElementById("fs-generate").classList.toggle("hidden", !st.includes("generate"));
   document.getElementById("fs-fsi").classList.toggle("hidden", !st.includes("fsi"));
+  document.getElementById("fs-program").classList.toggle("hidden", !st.includes("program"));
+  const prog = document.getElementById(fieldId("program", "program")).value, progInfo = (SCHEMA._programs || {})[prog] || {};
+  const progNote = document.getElementById("program-note");
+  progNote.textContent = progInfo.note || ""; progNote.classList.toggle("hidden", !progInfo.note);
   const fsiOnly = !st.includes("generate");
   document.getElementById("stage-help").textContent = STAGE_HELP[st.join(",")] || "";
   document.querySelectorAll(".field").forEach(f => {
     let show = true;
     if (f.dataset.section === "generate") show = f.dataset.models.split(",").includes(m);
+    if (f.dataset.section === "program") show = f.dataset.models.split(",").includes(prog);
     if (f.dataset.section === "fsi" && ["input", "target", "vertex_power", "keep", "tree", "overwrite"].includes(f.dataset.key)) show = fsiOnly;
     f.classList.toggle("hidden", !show);
   });
@@ -491,7 +505,7 @@ function updateVisibility() {
 }
 
 function updateAdvancedCounts() {
-  for (const section of ["run", "generate", "fsi"]) {
+  for (const section of ["run", "generate", "fsi", "program"]) {
     let n = 0;
     document.querySelectorAll(`#adv-grid-${section} .field:not(.hidden)`).forEach(f => {
       const o = opt(section, f.dataset.key);
@@ -532,6 +546,7 @@ function collect() {
   const cfg = { run: { stages: st } };
   if (st.includes("generate")) cfg.generate = {};
   if (st.includes("fsi")) cfg.fsi = {};
+  if (st.includes("program")) cfg.program = {};
   for (const section of Object.keys(cfg)) {
     for (const o of SCHEMA[section]) {
       if ((SKIP[section] || []).includes(o.key)) continue;
@@ -560,7 +575,7 @@ function applyConfig(cfg) {
   const radio = document.querySelector(`input[name=stages][value="${st.join(",")}"]`) || document.querySelector("input[name=stages]");
   radio.checked = true;
   resetFields();
-  for (const section of ["run", "generate", "fsi"]) {
+  for (const section of ["run", "generate", "fsi", "program"]) {
     const vals = cfg[section] || {};
     for (const o of SCHEMA[section]) {
       if ((SKIP[section] || []).includes(o.key) || !(o.key in vals)) continue;
@@ -579,7 +594,7 @@ function applyConfig(cfg) {
   updateVisibility();
 }
 function resetFields() {
-  for (const section of ["run", "generate", "fsi"]) for (const o of SCHEMA[section]) {
+  for (const section of ["run", "generate", "fsi", "program"]) for (const o of SCHEMA[section]) {
     if ((SKIP[section] || []).includes(o.key)) continue;
     if (o.kind === "bool") document.getElementById(fieldId(section, o.key)).checked = !!o.default;
     else if (o.kind === "range" || o.kind === "target") {
@@ -830,7 +845,7 @@ async function refreshDetails(first) {
     d.orphans ? `Stop ${d.orphans} leftover job process${d.orphans > 1 ? "es" : ""}` : "Cancel run"));
   runActions(name, d, actions, body);
   if (d.config_data) actions.append(el("button", { type: "button", onclick: () => useAsTemplate(d) }, "Use as template"));
-  if (Object.values(d.outputs || {}).some(o => o.exists)) actions.append(el("button", { type: "button", onclick: () => openCompare(name) }, "Compare…"));
+  if (Object.entries(d.outputs || {}).some(([s, o]) => o.exists && s !== "program")) actions.append(el("button", { type: "button", onclick: () => openCompare(name) }, "Compare…"));
   actions.append(el("a", { class: "btn", href: tokenUrl(`api/runs/${encodeURIComponent(name)}/config.toml`) + "&download=1", download: "config.toml" }, "Download config"));
   actions.append(el("button", { type: "button", title: "Copy the terminal command that repeats this run (use --force to overwrite it)",
     onclick: () => navigator.clipboard.writeText(`./gcf run '${RUNS_DIR}/${name}/config.toml'`).then(() => toast("Copied; run it from the repository root (add --force to overwrite this run)")) }, "Copy run command"));
@@ -841,13 +856,13 @@ async function refreshDetails(first) {
   if (outs.length) {
     body.append(el("h3", {}, "Outputs"));
     for (const [stage, o] of outs) {
-      const plotBtn = el("button", { type: "button", class: "small", disabled: !o.exists, onclick: () => quicklook(name, stage) }, o.plot ? "Redraw plots" : "Quick-look plots");
+      const plotBtn = stage === "program" ? null : el("button", { type: "button", class: "small", disabled: !o.exists, onclick: () => quicklook(name, stage) }, o.plot ? "Redraw plots" : "Quick-look plots");
       const copyBtn = el("button", { type: "button", class: "small", disabled: !o.exists, onclick: () => { navigator.clipboard.writeText(o.path).then(() => toast("Path copied")); } }, "Copy path");
       body.append(el("div", { class: "out" },
-        el("div", {}, el("b", {}, stage === "generate" ? "PWIA events" : "With FSI"), " ", el("span", { class: "muted" }, o.exists ? fmtBytes(o.size) : "(not written yet)")),
+        el("div", {}, el("b", {}, stage === "generate" ? "PWIA events" : stage === "program" ? "Events (genT tree)" : "With FSI"), " ", el("span", { class: "muted" }, o.exists ? fmtBytes(o.size) : "(not written yet)")),
         el("div", { class: "output-buttons" }, plotBtn, copyBtn, ...outputButtons(name, stage, o, d)),
         el("div", { class: "path" }, o.path)), resultsPanel(name, stage, o, d));
-      if (!o.plot && o.exists && d.state === "done" && !autoPlotted[name + stage]) {
+      if (!o.plot && o.exists && d.state === "done" && !autoPlotted[name + stage] && stage !== "program") {
         autoPlotted[name + stage] = true;
         api(`api/runs/${encodeURIComponent(name)}/quicklook`, { stage }).then(() => { lastPlot[name + stage] = Date.now(); refreshDetails(); })
           .catch(e => { delete autoPlotted[name + stage]; toast("Plots: " + e.message); });

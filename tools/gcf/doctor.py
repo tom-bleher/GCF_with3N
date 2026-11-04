@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import runner
+from . import runner, schema
 
 LOW_DISK_BYTES = 10 * 1000**3
 
@@ -80,6 +80,14 @@ def checks(runs_dir=None):
                          "" if run.returncode == 0 else "./install.sh, or check build/gcf_env.sh"))
     stale = stale_binaries()
     out.append(check("stage programs match the code", not stale, stale or "", "./install.sh" if stale else "", required=False))
+    missing_programs = []
+    for name in schema.PROGRAMS:
+        try:
+            runner.program_binary(name)
+        except runner.RunError:
+            missing_programs.append(name)
+    out.append(check("other generators", not missing_programs, "not built: " + ", ".join(missing_programs) if missing_programs else "",
+                     "./install.sh" if missing_programs else "", required=False))
     hadd = shutil.which("hadd", path=env.get("PATH"))
     out.append(check("hadd (ROOT)", hadd, "" if hadd else "not found", "" if hadd else "./install.sh; it needs ROOT"))
     missing = [m for m in ("uproot", "awkward", "numpy", "matplotlib") if not has_module(m)]
