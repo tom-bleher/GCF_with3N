@@ -364,7 +364,7 @@ function makeField(section, o) {
     for (const c of o.choices) input.append(el("option", { value: String(c), selected: c === o.default }, String(c)));
     parts = [el("label", { for: id }, o.label, unit, tip(o)), input];
   } else if (o.kind === "float" || o.kind === "int") {
-    input = el("input", { type: "number", step: o.kind === "int" ? "1" : "any", id,
+    input = el("input", { type: "number", step: o.kind === "int" ? "1" : "any", id, min: o.min, max: o.max,
       value: o.default === null ? null : o.default, placeholder: ph });
     parts = [el("label", { for: id }, o.label, unit, tip(o)), input];
   } else {
@@ -446,7 +446,7 @@ function updateVisibility() {
   document.querySelectorAll(".field").forEach(f => {
     let show = true;
     if (f.dataset.section === "generate") show = f.dataset.models.split(",").includes(m);
-    if (f.dataset.section === "fsi" && ["input", "target", "vertex_power", "keep"].includes(f.dataset.key)) show = fsiOnly;
+    if (f.dataset.section === "fsi" && ["input", "target", "vertex_power", "keep", "tree", "overwrite"].includes(f.dataset.key)) show = fsiOnly;
     f.classList.toggle("hidden", !show);
   });
   const preset = document.getElementById(fieldId("generate", "target", "preset"));

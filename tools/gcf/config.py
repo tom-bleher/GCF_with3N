@@ -5,6 +5,7 @@ listed in schema.py. Validation fills in defaults, so a saved (resolved)
 config records every setting a run used.
 """
 
+import math
 import os
 import tomllib
 from pathlib import Path
@@ -14,6 +15,58 @@ from . import schema
 
 class ConfigError(Exception):
     pass
+
+
+def _check_limits(opt, value, where):
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return
+    unit = f" {opt.unit}" if opt.unit else ""
+    if opt.ge is not None and value < opt.ge:
+        raise ConfigError(f"{where}: must be at least {opt.ge:g}{unit}, got {value:g}")
+    if opt.gt is not None and value <= opt.gt:
+        raise ConfigError(f"{where}: must be above {opt.gt:g}{unit}, got {value:g}")
+    if opt.le is not None and value > opt.le:
+        raise ConfigError(f"{where}: must be at most {opt.le:g}{unit}, got {value:g}")
+    if isinstance(value, float) and not math.isfinite(value):
+        raise ConfigError(f"{where}: must be a finite number")
+
+
+def _check_combinations(gen):
+    """Options that are each valid but do nothing where they are set. The binary
+    refuses them too (#123); here the form hears about it as you type."""
+    model, (a, _z) = gen["model"], gen["target"]
+    given = {o.key: gen.get(o.key) for o in schema.GENERATE if model in o.models}
+
+    def refuse(key, why):
+        raise ConfigError(f"[generate] {key}: {why}")
+    if model == "2N" and a == 2:
+        for key in ("sigma_cm", "estar", "sigma_e"):
+            if given.get(key) is not None:
+                refuse(key, "does not apply to the deuteron: a pair is the whole nucleus, with no residual")
+        for key in ("cpp0", "cnn0", "cpn0", "cpn1"):
+            if given.get(key) is not None:
+                refuse(key, "does not apply to the deuteron: it uses a momentum distribution, not contacts")
+        if given.get("randomize"):
+            refuse("randomize", "does not apply to the deuteron: it uses a momentum distribution, not contacts")
+    if model == "3N" and a == 3:
+        if given.get("sigma_cm") is not None:
+            refuse("sigma_cm", "does not apply to A = 3: the triplet is the whole nucleus, at rest")
+        if given.get("estar") is not None:
+            refuse("estar", "does not apply to A = 3: a triplet leaves no residual")
+    if model == "2N" and given.get("onset") == "local" and given.get("kcut") is not None:
+        refuse("kcut", "has no effect with the local SRC onset, which replaces the cut with k_F(r)")
+    if model == "3N" and given.get("cm") is False and given.get("sigma_cm") is not None:
+        refuse("sigma_cm", "has no effect with the CM motion switched off")
+    if model == "MF" and given.get("fermi_gas") == "local" and given.get("kF_fg") is not None:
+        refuse("kF_fg", "has no effect with the local Fermi gas, which takes k_F(r) from the density")
+    if model == "2N" and given.get("light_cone"):
+        if given.get("prel_is"):
+            refuse("prel_is", "does not apply with the light-cone cross section")
+        if given.get("onset") == "local":
+            refuse("onset", "the light-cone cross section has no local onset")
+    if model == "2N" and any(given.get(k) == 0 for k in ("cpp0", "cnn0", "cpn0", "cpn1")) \
+            and all(given.get(k) == 0 for k in ("cpp0", "cnn0", "cpn0", "cpn1")):
+        refuse("cpn1", "all contacts are zero, so every event would have zero weight")
 
 
 def _coerce(opt, value, where):
@@ -39,6 +92,8 @@ def _coerce(opt, value, where):
         value = [float(value[0]), float(value[1])]
         if value[1] <= value[0]:
             raise ConfigError(f"{where}: max must exceed min, got {value!r}")
+        for end in value:
+            _check_limits(opt, end, where)
     elif kind == "target":
         if (not isinstance(value, list) or len(value) != 2
                 or not all(isinstance(v, int) and not isinstance(v, bool) for v in value)):
@@ -62,6 +117,8 @@ def _coerce(opt, value, where):
                 raise ConfigError(f"{where}: the factor of {name} must be a number >= 0, got {factor!r}")
             out[name] = float(factor)
         value = out
+    if kind in ("float", "int"):
+        _check_limits(opt, value, where)
     if opt.choices is not None:
         vals = value if kind == "list" else [value]
         for v in vals:
@@ -124,6 +181,7 @@ def validate(raw, base_dir="."):
             if o.key in given and model not in o.models:
                 raise ConfigError(f"[generate] {o.key} applies to model(s) "
                                   f"{', '.join(o.models)}, not {model}")
+        _check_combinations(gen)
     if "fsi" in run["stages"]:
         applicable = {c[0]: (c[2] if fsi["model"] == "hN" else c[3]) for c in schema.CHANNELS}
         for c in fsi["off"]:
