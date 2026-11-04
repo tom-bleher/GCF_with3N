@@ -172,6 +172,8 @@ port automatically) and open the printed URL. From the page you can:
 - look at quick-look plots, drawn when you open a finished run, and apply a
   selection on Q², x_B, θ_e, p_miss and the proton count (`gcf quicklook --q2 ...`
   does the same);
+- compare the outputs of two runs (`tools/validation/compare_samples.py
+  --weighted`, see [Validation](#validation));
 - reuse a finished run as a template for a new one, or delete it.
 
 Everything the page does goes through `gcf run`, and each run keeps its
@@ -301,6 +303,17 @@ each observable an unweighted two-sample χ² test (FSI does not depend on the
 weight, so this uses the full statistics), plus the weighted cross section per
 attempt. It reads both this format and the combined programs' `genT` trees,
 and exits non-zero on disagreement.
+
+An unweighted test can't see a change that only moves weights, such as another
+contact, because the events are the same. `--weighted` decides on a weighted
+test instead, as the web interface does: the χ² of the normalized weighted
+histograms, with a p-value from randomly reassigning events between the samples.
+The weights are too heavy-tailed for that statistic to follow a χ² distribution
+(on identical settings, 3N gave p < 0.001 in 5-8% of the tests with the
+χ² distribution, and in none of 224 with the permutations). It also covers the
+observables that respond to the nuclear inputs: p_miss, the partner's momentum,
+the angle between them and the residual's momentum. `--max-events` limits the
+events used for the shapes; Σw/attempts always uses the whole file.
 
 Split vs combined, same GENIE build, 12C, hN shared transport:
 

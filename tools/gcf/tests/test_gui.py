@@ -121,6 +121,65 @@ class TestResults(GuiCase):
         self.assertIn("neutrons per event, after FSI", three["panels"])
 
 
+class TestCompare(GuiCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        for name, seed, fsi, extra in (("cmp_a", 11, "hN", {}), ("cmp_b", 22, "hN", {}), ("cmp_ha", 11, "hA", {}),
+                                       ("cmp_sig", 33, "hN", {"sigma_cm": 0.05})):
+            cls.gui.api("api/runs", small_run(name, events=30000, jobs=4, seed=seed, fsi=fsi, **extra))
+        for name in ("cmp_a", "cmp_b", "cmp_ha", "cmp_sig"):
+            cls.gui.wait(name)
+
+    def compare(self, a, b, stage="fsi"):
+        return self.gui.api("api/compare", {"a": {"run": a, "stage": stage}, "b": {"run": b, "stage": stage}})
+
+    def test_same_settings_are_not_flagged(self):
+        r = self.compare("cmp_a", "cmp_b")
+        self.assertTrue(r["ok"], r["observables"])
+        self.assertGreater(len(r["observables"]), 9)
+        self.assertEqual(r["notes"], [])
+        self.assertEqual(self.gui.request(f"api/compare/{r['plot']}")[0], 200)
+
+    def test_another_cascade_model_is_flagged(self):
+        """hN and hA on the same seed: the same generated events, other final states."""
+        r = self.compare("cmp_a", "cmp_ha")
+        by_name = {o["name"]: o for o in r["observables"]}
+        self.assertLess(by_name["protons after FSI"]["p"], 1e-6)
+        self.assertEqual(by_name["Q2 [GeV^2]"]["chi2"], 0)
+        self.assertAlmostEqual(r["pull"], 0)
+        self.assertTrue(any("same seed" in n for n in r["notes"]))
+
+    def test_sigma_cm_is_seen_in_the_observables_that_respond_to_it(self):
+        r = self.compare("cmp_a", "cmp_sig", stage="generate")
+        by_name = {o["name"]: o for o in r["observables"]}
+        self.assertLessEqual(by_name["residual nucleus |p| [GeV/c]"]["p_weighted"], 1e-3)
+        self.assertFalse(r["ok"])
+
+    def test_files_without_fsi_get_the_generated_observables(self):
+        r = self.compare("cmp_a", "cmp_b", stage="generate")
+        names = [o["name"] for o in r["observables"]]
+        self.assertIn("partner |p|, generated [GeV/c]", names)
+        self.assertNotIn("protons after FSI", names)
+
+    def test_a_sample_with_itself_is_refused(self):
+        status, out = self.gui.request("api/compare", {"a": {"run": "cmp_a", "stage": "fsi"}, "b": {"run": "cmp_a", "stage": "fsi"}})
+        self.assertEqual(status, 400)
+        self.assertIn("two different samples", out["error"])
+
+    def test_weighted_test_sees_a_change_in_the_weights_only(self):
+        """The same events, with other weights: invisible to the unweighted test."""
+        import numpy as np
+        sys.path.insert(0, str(REPO / "tools/validation"))
+        import compare_samples as C
+        rng = np.random.default_rng(1)
+        x = rng.normal(0, 1, 40000)
+        w_a, w_b = np.ones_like(x), np.exp(0.3 * x)
+        bins = np.linspace(-4, 4, 21)
+        self.assertEqual(C.chi2_unweighted(x, x, bins)[0], 0)
+        self.assertLess(C.chi2_weighted(x, w_a, x, w_b, bins)[2], 0.01)
+
+
 class TestBrowser(GuiCase):
     @classmethod
     def setUpClass(cls):
@@ -168,6 +227,24 @@ class TestBrowser(GuiCase):
         self.assertIn("Σw / attempts", text)
         self.assertIn("a few events dominate", text)
         self.assertIn("placeholder (#73)", text)
+
+    def test_compare_dialog(self):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        for name, seed in (("dlg_a", 5), ("dlg_b", 6)):
+            self.gui.api("api/runs", small_run(name, events=3000, jobs=2, seed=seed))
+        self.gui.wait("dlg_a")
+        self.gui.wait("dlg_b")
+        self.open()
+        WebDriverWait(self.driver, 20).until(lambda d: d.find_elements(By.CSS_SELECTOR, "tr.run"))
+        self.driver.execute_script("openCompare('dlg_a')")
+        self.driver.execute_script("""const b = document.getElementById('cmp-b-run'); b.value = 'dlg_b';
+                                      b.dispatchEvent(new Event('change'));""")
+        self.driver.execute_script("[...document.querySelectorAll('#compare-dialog button')].find(x => x.textContent == 'Compare').click()")
+        WebDriverWait(self.driver, 200).until(lambda d: d.find_elements(By.CSS_SELECTOR, "#compare-out table"))
+        text = self.driver.find_element(By.ID, "compare-out").text
+        self.assertIn("Weighted p", text)
+        self.assertIn("dlg_b (with FSI)", text)
 
     def test_run_row_keeps_keyboard_focus(self):
         """The table is rebuilt every few seconds; that must not drop the focus."""

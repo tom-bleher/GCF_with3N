@@ -35,15 +35,15 @@ generators (`genDIS`, `genPhoto`, ...) and the EIC chain
 
 You need the programs built with `./install.sh` and Python 3.11 or newer.
 
-The plots also need `uproot`, `awkward`, `numpy` and `matplotlib`, which
-`install.sh` does not install. The rest of the page works without them. A
-virtual environment is the simplest way to add them; activate it in the shell
-where you start the page:
+The plots and summaries also need `uproot`, `awkward`, `numpy` and `matplotlib`,
+and comparing runs needs `scipy`. `install.sh` does not install them. The rest of
+the page works without them. A virtual environment is the simplest way to add
+them; activate it in the shell where you start the page:
 
 ```
 python3 -m venv ~/gcf-venv        # on Ubuntu this needs the python3-venv package
 source ~/gcf-venv/bin/activate
-pip install uproot awkward numpy matplotlib
+pip install uproot awkward numpy matplotlib scipy
 ```
 
 If you use `uv`, `uv venv ~/gcf-venv` and `uv pip install` do the same job.
@@ -106,6 +106,12 @@ Click a run to open its details:
 - **Plots:** control plots are drawn when you open a finished run. Under
   **Selection**, set limits on Q², x_B, θ_e, p_miss or the proton count to redraw
   them and see what share of the yield passes.
+- **Compare…:** compares the outputs of two runs: Σw / attempts with the pull
+  between them, and whether the shapes of the generated and final-state
+  distributions differ. The test uses the event weights, so it also sees changes
+  that only move weights. "No difference" means none larger than the statistics
+  can show, so check the N_eff it quotes. In a terminal:
+  `python3 tools/validation/compare_samples.py --weighted A.root B.root`.
 - **Use as template:** fills the form from that run, with a new seed.
 - **Copy run command:** copies the command that repeats the run from the
   repository root. Add `--force` to overwrite the run, or change `name` in a
