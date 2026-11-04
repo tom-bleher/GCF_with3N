@@ -9,6 +9,12 @@
 #include <sstream>
 #include <string>
 
+// gcf_version.h is written by the stages' build (WriteVersion.cmake).
+#if defined(__has_include)
+#if __has_include("gcf_version.h")
+#include "gcf_version.h"
+#endif
+#endif
 #ifndef GCF_GIT_VERSION
 #define GCF_GIT_VERSION "unknown"
 #endif

@@ -54,20 +54,18 @@ if(NOT LIBXML2_INCLUDE_DIR OR NOT LIBXML2_LIBRARY)
     message(FATAL_ERROR "libxml2 not found; pass -DLIBXML2_INCLUDE_DIR=... -DLIBXML2_LIBRARY=...")
 endif()
 
-# Code version recorded in every output file.
-execute_process(COMMAND git -C "${SRC_ROOT}" describe --always --dirty --tags
-                OUTPUT_VARIABLE GCF_GIT_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE
-                ERROR_QUIET)
-if(NOT GCF_GIT_VERSION)
-    set(GCF_GIT_VERSION "unknown")
-endif()
+# Code version recorded in every output file, refreshed at every build.
+add_custom_target(gcf_version
+    COMMAND ${CMAKE_COMMAND} -DSRC_ROOT=${SRC_ROOT} -DOUT=${CMAKE_CURRENT_BINARY_DIR}/gcf_version.h
+            -P ${CMAKE_CURRENT_SOURCE_DIR}/WriteVersion.cmake
+    BYPRODUCTS ${CMAKE_CURRENT_BINARY_DIR}/gcf_version.h
+    VERBATIM)
 
 add_compile_definitions(
     USE_FSI
     GENIE_OVERRIDE_DIR="${GEN2N_DIR}/config/genie_override"
-    GCF_3N_SOURCE_DIR="${GEN3N_DIR}"
-    GCF_GIT_VERSION="${GCF_GIT_VERSION}")
-include_directories(${ROOT_INCLUDE_DIR} ${SRC_ROOT}/include ${LIBRARIES}
+    GCF_3N_SOURCE_DIR="${GEN3N_DIR}")
+include_directories(${CMAKE_CURRENT_BINARY_DIR} ${ROOT_INCLUDE_DIR} ${SRC_ROOT}/include ${LIBRARIES}
                     ${GEN3N_DIR} ${GEN2N_DIR} "${GENIE_SOURCE_DIR}/src"
                     ${LOG4CPP_INCLUDE_DIR} ${LIBXML2_INCLUDE_DIR})
 set(CMAKE_BUILD_RPATH "${GENIE_SOURCE_DIR}/lib")
@@ -83,6 +81,8 @@ set(DEP_LIBS ${ROOT_LIBRARIES} ${GENIE_SHARED_LIBS} ${LOG4CPP_LIBRARY} ${LIBXML2
 add_executable(gcf_generate gcf_generate.cc
     ${GEN3N_DIR}/QEGenerator_3N.cc ${GEN2N_DIR}/QEGeneratorFSI.cc ${GCF_LIBS})
 target_link_libraries(gcf_generate ${DEP_LIBS})
+add_dependencies(gcf_generate gcf_version)
 
 add_executable(gcf_fsi gcf_fsi.cc ${LIBRARIES}/fsi/FSIStage.cc ${GCF_LIBS})
 target_link_libraries(gcf_fsi ${DEP_LIBS})
+add_dependencies(gcf_fsi gcf_version)
