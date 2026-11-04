@@ -27,11 +27,12 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import cli, config, doctor, estimate, results, runner, schema
+from . import cli, config, doctor, estimate, results, runner, scan, schema
 
 STATIC = Path(__file__).resolve().parent / "static"
 MODULE_RE = re.compile(r"[a-z_]+\.js\Z")
 COMPARE_DIR = ".compare"       # hidden: not a run
+SCANS_DIR = ".scans"           # hidden: what makes runs a scan
 COMPARE_FILE_RE = re.compile(r"[A-Za-z0-9_.+-]+\.png\Z")
 COMPARE_SCRIPT = runner.REPO / "tools/validation/compare_samples.py"
 LOG_TAIL_BYTES = 64 * 1024
@@ -177,6 +178,7 @@ class App:
                 "mergeable": bool(state in ("stopped", "failed", "cancelled") and any_step_done
                                   and "generate" in st.get("stages", {})),
                 "note": self.read_config(d).get("run", {}).get("note"),
+                "scan": self.read_config(d).get("run", {}).get("scan"),
                 "setup": self.setup_summary(d), "mtime": d.stat().st_mtime}
 
     @staticmethod
@@ -360,12 +362,140 @@ class App:
         problems = runner.check_setup(cfg) + self.resource_problems(cfg)
         if problems:
             raise ValueError("; ".join(problems))
-        d.mkdir(parents=True)
-        submitted = d / "submitted.toml"
-        submitted.write_text(config.dumps(cfg, comment="Submitted from gcf gui"))
-        (d / "queued").write_text("new")
+        self.submit(d, cfg)
         self.schedule()
         return name
+
+    @staticmethod
+    def submit(d, cfg):
+        d.mkdir(parents=True)
+        (d / "submitted.toml").write_text(config.dumps(cfg, comment="Submitted from gcf gui"))
+        (d / "queued").write_text("new")
+
+    # -- scans ---------------------------------------------------------------
+    def scan_points(self, raw, axes):
+        """The points of a scan, each validated: a mistake in one starts none of them."""
+        if not isinstance(raw, dict) or not isinstance(axes, list) or not all(isinstance(a, dict) for a in axes):
+            raise ValueError("expected a config and a list of parameters")
+        points = scan.expand(raw, axes)
+        checked = []
+        for name, values, point in points:
+            if not valid_name(name):
+                raise ValueError(f"invalid run name {name!r}: letters, digits, . _ + - only")
+            if (self.runs_dir / name).exists():
+                raise ValueError(f"a run named {name!r} already exists; choose another scan name")
+            cfg = config.validate(self.with_runs_dir(point, self.runs_dir), base_dir=self.runs_dir)
+            checked.append((name, values, cfg))
+        return checked
+
+    def preview_scan(self, raw, axes):
+        points = self.scan_points(raw, axes)
+        generate = [cfg["generate"]["events"] for _, _, cfg in points if "generate" in cfg["run"]["stages"]]
+        return {"points": len(points), "first": points[0][0], "events": sum(generate)}
+
+    def start_scan(self, raw, axes):
+        points = self.scan_points(raw, axes)
+        group = raw["run"]["name"]
+        path = self.runs_dir / SCANS_DIR / f"{group}.json"
+        if path.exists():
+            raise ValueError(f"a scan named {group!r} already exists; choose another name")
+        problems, need = [], 0
+        for name, values, cfg in points:
+            for problem in runner.check_setup(cfg) + self.resource_problems(cfg):
+                problems.append(f"{name}: {problem}" if len(points) > 1 else problem)
+            need += estimate.rough_peak_bytes(cfg)
+        free = shutil.disk_usage(self.runs_dir).free
+        if need / 2 > free:
+            problems.append(f"this scan needs roughly {estimate.human_bytes(need)} of disk space, and "
+                            f"{self.runs_dir} has {estimate.human_bytes(free)} free")
+        if problems:
+            raise ValueError("; ".join(problems[:4]) + (f"; and {len(problems) - 4} more" if len(problems) > 4 else ""))
+        path.parent.mkdir(exist_ok=True)
+        path.write_text(json.dumps({
+            "name": group, "created": time.time(),
+            "axes": [{"path": a["path"], "label": scan.axis_label(a["path"])} for a in axes],
+            "points": [{"name": name, "values": values} for name, values, _ in points]}, indent=1))
+        for name, _, cfg in points:
+            self.submit(self.runs_dir / name, cfg)
+        self.schedule()
+        return {"name": group, "points": len(points)}
+
+    def read_scan(self, name):
+        if not valid_name(name):
+            raise ValueError(f"invalid scan name {name!r}")
+        try:
+            return json.loads((self.runs_dir / SCANS_DIR / f"{name}.json").read_text())
+        except (OSError, ValueError):
+            raise FileNotFoundError(name) from None
+
+    def list_scans(self):
+        out = []
+        try:
+            files = sorted((self.runs_dir / SCANS_DIR).glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True)
+        except OSError:
+            return out
+        for path in files:
+            try:
+                s = json.loads(path.read_text())
+            except (OSError, ValueError):
+                continue
+            states = {}
+            for p in s["points"]:
+                d = self.runs_dir / p["name"]
+                state = self.run_summary(d)["state"] if self.is_run(d) else "deleted"
+                states[state] = states.get(state, 0) + 1
+            out.append({"name": s["name"], "points": len(s["points"]), "states": states,
+                        "axes": [a["label"] for a in s["axes"]]})
+        return out
+
+    def scan_table(self, name):
+        """One row per point: its state and, once it's done, its numbers."""
+        s = self.read_scan(name)
+        rows = []
+        models = set()
+        for p in s["points"]:
+            d = self.runs_dir / p["name"]
+            row = {"name": p["name"], "values": p["values"], "state": "deleted", "events": None, "attempts": None,
+                   "n_eff": None, "yield": None, "yield_err": None}
+            if self.is_run(d):
+                run = self.run_summary(d)
+                row["state"] = run["state"]
+                models.add(self.read_config(d).get("generate", {}).get("model"))
+                stage = "fsi" if "fsi" in run["outputs"] else "generate"
+                o = run["outputs"].get(stage)
+                if run["state"] in ("done", "partial") and o and o["exists"]:
+                    try:
+                        r = self.results(p["name"], stage)
+                        row.update(events=r["events"], attempts=r["attempts"], n_eff=r["n_eff"],
+                                   **{"yield": r["yield"], "yield_err": r["yield_err"]})
+                    except (RuntimeError, OSError, ValueError) as e:
+                        row["error"] = str(e)
+            rows.append(row)
+        notes = []
+        for model in models:
+            if model in results.SCALE_NOTES:
+                notes.append(results.SCALE_NOTES[model])
+        low = [r["n_eff"] for r in rows if r["n_eff"] is not None and r["n_eff"] < results.NEFF_WARN]
+        if low:
+            notes.append(f"{len(low)} point{'s have' if len(low) > 1 else ' has'} N_eff below {results.NEFF_WARN}, "
+                         f"so differences between them may be statistical.")
+        if any(a["path"] != "run.seed" for a in s["axes"]):
+            notes.append("All points share a seed. For a parameter that only changes the weights, they hold the same "
+                         "events, so the differences between them are smaller than the errors shown.")
+        return {"name": s["name"], "axes": s["axes"], "points": rows, "notes": notes}
+
+    def delete_scan(self, name):
+        s = self.read_scan(name)
+        runs = [self.runs_dir / p["name"] for p in s["points"]]
+        active = [d.name for d in runs if self.is_run(d)
+                  and (self.run_summary(d)["state"] in RUNNING_STATES or self.run_summary(d)["orphans"])]
+        if active:
+            raise ValueError(f"{len(active)} of its runs are still running; cancel them first")
+        for d in runs:
+            if self.is_run(d):
+                (d / "queued").unlink(missing_ok=True)
+                shutil.rmtree(d)
+        (self.runs_dir / SCANS_DIR / f"{name}.json").unlink(missing_ok=True)
 
     # -- scheduling ----------------------------------------------------------
     def launch(self, d):
@@ -809,7 +939,9 @@ def make_handler(app):
                                            "binaries": all(os.access(runner.BIN_DIR / b, os.X_OK)
                                                            for b in ("gcf_generate", "gcf_fsi"))})
                 if parts == ["api", "runs"]:
-                    return self.send_json({"runs": app.list_runs(), "machine": app.machine()})
+                    return self.send_json({"runs": app.list_runs(), "machine": app.machine(), "scans": app.list_scans()})
+                if len(parts) == 3 and parts[:2] == ["api", "scans"]:
+                    return self.send_json(app.scan_table(parts[2]))
                 if len(parts) == 3 and parts[:2] == ["api", "runs"]:
                     return self.send_json(app.run_details(parts[2]))
                 if len(parts) == 4 and parts[:2] == ["api", "runs"]:
@@ -873,6 +1005,13 @@ def make_handler(app):
                     return self.send_json({"ok": True})
                 if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "merge":
                     return self.send_json({"partial": app.merge_finished(parts[2])})
+                if parts == ["api", "scans", "preview"]:
+                    return self.send_json(app.preview_scan(body.get("config"), body.get("axes")))
+                if parts == ["api", "scans"]:
+                    return self.send_json(app.start_scan(body.get("config"), body.get("axes")))
+                if len(parts) == 4 and parts[:2] == ["api", "scans"] and parts[3] == "delete":
+                    app.delete_scan(parts[2])
+                    return self.send_json({"ok": True})
                 if parts == ["api", "parse-config"]:
                     return self.send_json(app.parse_config(body.get("text", "")))
                 if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "quicklook":

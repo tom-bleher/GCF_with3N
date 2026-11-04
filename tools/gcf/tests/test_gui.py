@@ -940,6 +940,123 @@ class TestFsiPreflight(GuiCase):
         self.assertTrue(r["problems"][0].startswith("[generate] nn"), r["problems"])
 
 
+class TestScans(GuiCase):
+    def scan(self, name, axes, **generate):
+        cfg = small_run(name, events=generate.pop("events", 1500), jobs=1, fsi=None, seed=generate.pop("seed", 21), **generate)
+        return cfg, axes
+
+    def wait_scan(self, name, timeout=240):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            t = self.gui.api(f"api/scans/{name}")
+            if not any(p["state"] in ("running", "merging", "starting", "queued") for p in t["points"]):
+                return t
+            time.sleep(0.5)
+        self.fail("scan still running")
+
+    def test_values_are_read_as_written_or_as_a_range(self):
+        from gcf import scan
+        self.assertEqual(scan.parse_values("0.1, 0.15 0.2", "float"), [0.1, 0.15, 0.2])
+        self.assertEqual(scan.parse_values("0.1:0.3:3", "float"), [0.1, 0.2, 0.3])
+        self.assertEqual(scan.parse_values("1:4:4", "int"), [1, 2, 3, 4])
+        self.assertEqual(scan.parse_values("cc1,cc2", "str"), ["cc1", "cc2"])
+        for bad, kind in (("", "float"), ("a,b", "float"), ("1.5", "int"), ("1,1", "float"), ("1:2:1", "float")):
+            with self.assertRaises(ValueError, msg=bad):
+                scan.parse_values(bad, kind)
+
+    def test_points_and_names(self):
+        from gcf import scan
+        raw = small_run("s", events=100, fsi=None)
+        pts = scan.expand(raw, [{"path": "generate.sigma_cm", "values": "0.1,0.2"}, {"path": "generate.nn", "values": "AV18,N2LO"}])
+        self.assertEqual([p[0] for p in pts], ["s_sigma_cm-0.1_nn-AV18", "s_sigma_cm-0.1_nn-N2LO", "s_sigma_cm-0.2_nn-AV18", "s_sigma_cm-0.2_nn-N2LO"])
+        self.assertEqual(pts[3][2]["generate"]["nn"], "N2LO")
+        self.assertEqual(pts[3][2]["run"]["scan"], "s")
+        self.assertEqual({p[2]["run"]["seed"] for p in pts}, {1234})
+        unseeded = small_run("u", events=100, fsi=None, seed=0)
+        self.assertEqual(len({p[2]["run"]["seed"] for p in scan.expand(unseeded, [{"path": "generate.sigma_cm", "values": "0.1,0.2"}])}), 1)
+        chan = scan.expand(small_run("c", events=100), [{"path": "fsi.scale:pion.absorption", "values": "0.5,1.5"}])
+        self.assertEqual(chan[1][2]["fsi"]["scale"], {"pion.absorption": 1.5})
+        for bad in ("generate.model", "generate.events", "fsi.input", "run.name", "fsi.scale:nucleon.compound", "bogus.x", "generate.bogus"):
+            with self.assertRaises(ValueError, msg=bad):
+                scan.option(bad)
+        with self.assertRaises(ValueError):
+            scan.expand(raw, [{"path": "generate.sigma_cm", "values": "0:1:30"}, {"path": "generate.estar", "values": "0:1:30"}])
+
+    def test_a_contact_scan_on_shared_events_scales_as_it_should(self):
+        """The whole chain, with a known answer: pp and nn stay, so the yield is linear in C_pn(S=1)."""
+        base = self.gui.api("api/nuclear?model=2N&A=12&Z=6&nn=")["contacts"]["cpn1"][0]
+        cfg = small_run("c1", events=5000, jobs=1, fsi=None, seed=33)
+        r = self.gui.api("api/scans", {"config": cfg, "axes": [{"path": "generate.cpn1", "values": f"{base}, {2 * base}"}]})
+        self.assertEqual(r["points"], 2)
+        t = self.wait_scan("c1")
+        self.assertEqual([p["state"] for p in t["points"]], ["done", "done"])
+        a, b = t["points"]
+        ratio = b["yield"] / a["yield"]
+        # The pn weights nearly double: 1 + (pn share) x (1 - small S=0 part).
+        self.assertTrue(1.5 < ratio < 2.0, ratio)
+        self.assertEqual(a["events"], 5000)
+        self.assertEqual(a["attempts"], b["attempts"], "the same events")
+        self.assertTrue(any("share a seed" in n for n in t["notes"]))
+        listed = self.gui.api("api/runs")
+        self.assertEqual(next(s for s in listed["scans"] if s["name"] == "c1")["states"], {"done": 2})
+        self.assertEqual(next(r for r in listed["runs"] if r["name"] == a["name"])["scan"], "c1")
+
+    def test_a_mistake_in_one_point_starts_none(self):
+        cfg = small_run("bad1", events=100, jobs=1, fsi=None)
+        status, out = self.gui.request("api/scans", {"config": cfg, "axes": [{"path": "generate.estar", "values": "0.01, -1"}]})
+        self.assertEqual(status, 400)
+        self.assertIn("estar", out["error"])
+        self.assertFalse(list(self.gui.runs_dir.glob("bad1*")))
+        status, out = self.gui.request("api/scans", {"config": cfg, "axes": [{"path": "generate.nn", "values": "AV18, N3LO"}]})
+        self.assertEqual(status, 400)
+        self.assertIn("contacts", out["error"])
+        self.assertFalse(list(self.gui.runs_dir.glob("bad1*")))
+
+    def test_preview_and_duplicates(self):
+        cfg = small_run("pv", events=100, jobs=1, fsi=None)
+        axes = [{"path": "generate.sigma_cm", "values": "0.1:0.2:3"}]
+        p = self.gui.api("api/scans/preview", {"config": cfg, "axes": axes})
+        self.assertEqual((p["points"], p["events"]), (3, 300))
+        self.assertEqual(self.gui.api("api/scans", {"config": cfg, "axes": axes})["points"], 3)
+        status, out = self.gui.request("api/scans", {"config": cfg, "axes": axes})
+        self.assertEqual(status, 400)
+        self.assertIn("already exists", out["error"])
+        self.wait_scan("pv")
+        self.gui.api("api/scans/pv/delete", {})
+        self.assertEqual(self.gui.request("api/scans/pv")[0], 404)
+        self.assertFalse(list(self.gui.runs_dir.glob("pv_*")))
+
+    def test_points_respect_the_cpu_limit(self):
+        gui = Gui(args=["--max-cpus", "1"])
+        self.addCleanup(gui.close)
+        cfg = small_run("lim", model="3N", events=3000, jobs=1, fsi=None)
+        gui.api("api/scans", {"config": cfg, "axes": [{"path": "generate.sigma_cm", "values": "0.1,0.15,0.2"}]})
+        peak = 0
+        deadline = time.time() + 120
+        while time.time() < deadline:
+            states = [p["state"] for p in gui.api("api/scans/lim")["points"]]
+            peak = max(peak, sum(s in ("running", "merging", "starting") for s in states))
+            if all(s == "done" for s in states):
+                break
+            time.sleep(0.1)
+        self.assertEqual(states, ["done"] * 3)
+        self.assertLessEqual(peak, 1)
+
+    def test_scan_from_the_command_line(self):
+        import tempfile as tf
+        from gcf import config
+        with tf.TemporaryDirectory() as tmp:
+            cfg = small_run("cl", events=500, jobs=1, fsi=None)
+            cfg["run"]["output_dir"] = str(Path(tmp) / "runs")
+            path = Path(tmp) / "c.toml"
+            path.write_text(config.dumps(config.validate(cfg)))
+            out = subprocess.run([sys.executable, str(REPO / "gcf"), "scan", str(path), "--set", "generate.sigma_cm=0.1,0.2", "-q"],
+                                 capture_output=True, text=True, timeout=120)
+            self.assertEqual(out.returncode, 0, out.stderr)
+            self.assertTrue((Path(tmp) / "runs/cl_sigma_cm-0.2/cl_sigma_cm-0.2_pwia.root").is_file())
+            self.assertTrue((Path(tmp) / "runs/.scans/cl.json").is_file())
+
+
 class TestBrowser(GuiCase):
     @classmethod
     def setUpClass(cls):
@@ -1126,6 +1243,39 @@ class TestBrowser(GuiCase):
         WebDriverWait(self.driver, 15).until(lambda d: d.find_element(By.ID, "f-generate-model").get_attribute("value") == "2N")
         self.assertEqual(self.driver.find_element(By.ID, "f-generate-beam").get_attribute("value"), "4.5")
         self.driver.execute_script("resetForm()")
+
+    def test_scan_tab_from_form_to_table_and_chart(self):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import Select, WebDriverWait
+        self.open()
+        Select(self.driver.find_element(By.ID, "f-generate-model")).select_by_value("2N")
+        self.driver.execute_script("document.querySelector(\"input[name=stages][value='generate']\").click()")
+        self.set_value("f-generate-events", 2000)
+        self.set_value("f-run-name", "uiscan")
+        self.driver.execute_script("showFormTab('scan')")
+        Select(self.driver.find_element(By.CSS_SELECTOR, ".scan-path")).select_by_value("generate.sigma_cm")
+        self.driver.find_element(By.CSS_SELECTOR, ".scan-values").send_keys("0.1, 0.15, 0.2")
+        WebDriverWait(self.driver, 10).until(lambda d: "3 runs" in d.find_element(By.ID, "scan-preview").text)
+        self.assertIn("6,000 events", self.driver.find_element(By.ID, "scan-preview").text)
+        self.driver.find_element(By.ID, "btn-scan").click()
+        WebDriverWait(self.driver, 200).until(lambda d: len(d.find_elements(By.CSS_SELECTOR, ".scan-chart circle.scan-dot")) == 3)
+        body = self.driver.find_element(By.ID, "d-body").text
+        self.assertIn("Ratio to first", body)
+        self.assertIn("3 done", body)
+        self.assertIn("uiscan", self.driver.find_element(By.ID, "scans").text)
+        # Its points are listed with the scan, not among the runs, unless asked for.
+        self.assertFalse(self.driver.find_elements(By.CSS_SELECTOR, 'tr.run[data-run^="uiscan_"]'))
+        self.driver.execute_script("document.getElementById('show-points').click()")
+        self.assertEqual(len(self.driver.find_elements(By.CSS_SELECTOR, 'tr.run[data-run^="uiscan_"]')), 3)
+        self.driver.execute_script("document.getElementById('show-points').click()")
+        self.driver.save_screenshot(str(Path(self.gui.tmp) / "scan.png"))
+        self.driver.execute_script("resetForm(); showFormTab('setup')")
+
+    def test_internal_run_options_are_not_in_the_form(self):
+        from selenium.webdriver.common.by import By
+        self.open()
+        self.assertFalse(self.driver.find_elements(By.CSS_SELECTOR, '.field[data-key="scan"]'))
+        self.assertFalse(self.driver.find_elements(By.CSS_SELECTOR, '.field[data-key="output_dir"]'))
 
     def test_a_bad_value_marks_its_field(self):
         from selenium.webdriver.common.by import By

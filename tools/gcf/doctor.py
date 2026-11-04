@@ -27,16 +27,22 @@ def built_version():
 
 
 def stale_binaries():
-    """A message if src/ changed since the stage programs were built."""
+    """A message if the code under src/ is newer than the stage programs."""
     version = built_version()
-    if not version or version == "unknown":
+    binary = runner.BIN_DIR / "gcf_generate"
+    if not version or version == "unknown" or not binary.exists():
         return None
-    commit = version.removesuffix("-dirty")
-    out = subprocess.run(["git", "-C", str(runner.REPO), "diff", "--quiet", commit, "--", "src",
+    out = subprocess.run(["git", "-C", str(runner.REPO), "diff", "--name-only", version.removesuffix("-dirty"), "--", "src",
                           ":(exclude)src/programs/genQE_FSI/Generator-R-3_06_02"],
-                         capture_output=True)
-    if out.returncode == 1:
-        return f"they were built from {version}, and src/ has changed since"
+                         capture_output=True, text=True)
+    if out.returncode != 0:
+        return None
+    built = binary.stat().st_mtime
+    for name in out.stdout.split():
+        path = runner.REPO / name
+        # Deleted, or changed after the build. A dirty build's own changes are older than it.
+        if not path.exists() or path.stat().st_mtime > built:
+            return f"they were built from {version}, and the code has changed since"
     return None
 
 
@@ -73,7 +79,7 @@ def checks(runs_dir=None):
                          "" if run.returncode == 0 else f"does not start: {(run.stderr or run.stdout).strip()[-200:]}",
                          "" if run.returncode == 0 else "./install.sh, or check build/gcf_env.sh"))
     stale = stale_binaries()
-    out.append(check("stage programs up to date", not stale, stale or "", "./install.sh" if stale else "", required=False))
+    out.append(check("stage programs match the code", not stale, stale or "", "./install.sh" if stale else "", required=False))
     hadd = shutil.which("hadd", path=env.get("PATH"))
     out.append(check("hadd (ROOT)", hadd, "" if hadd else "not found", "" if hadd else "./install.sh; it needs ROOT"))
     missing = [m for m in ("uproot", "awkward", "numpy", "matplotlib") if not has_module(m)]
