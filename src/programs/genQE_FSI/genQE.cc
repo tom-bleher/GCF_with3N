@@ -225,7 +225,7 @@ void evnt(int event)
   double Estar;
 
   if (doLC)
-    myGen->generate_event_lightcone(weight, lead_type, rec_type, vk, vLead, vRec, vAm2);
+    myGen->generate_event_lightcone(weight, lead_type, rec_type, vk, vLead, vRec, vAm2, vRel, vq, Estar);
   else
     myGen->generate_event(weight, lead_type, rec_type, vk, vLead, vRec, vAm2, vRel, vq, Estar);
   

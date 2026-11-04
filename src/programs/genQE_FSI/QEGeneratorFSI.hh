@@ -69,6 +69,14 @@ class QEGeneratorFSI: public gcfGenerator
                                  TLorentzVector &vRec_target,
                                  TLorentzVector &vAm2_target,
                                  double &Estar);
+  void generate_event_lightcone(double &weight, int &lead_type, int &rec_type,
+                                 TLorentzVector &vk_target,
+                                 TLorentzVector &vLead_target,
+                                 TLorentzVector &vRec_target,
+                                 TLorentzVector &vAm2_target,
+                                 TVector3 &vRel_target,
+                                 TLorentzVector &q_target,
+                                 double &Estar);
 
   // ---- Single-nucleon mean-field (MF) mode ----
   // Models a single struck nucleon drawn from a Fermi-gas momentum
