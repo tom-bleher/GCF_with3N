@@ -15,6 +15,9 @@ ionGenerator::ionGenerator(double E, gcfNucleus * thisInfo, NNCrossSection * thi
   v1.SetXYZ(0.,0.,p1);
   v1_target.SetXYZT(0.,0.,p1,E1);
 
+  nCalls_pp = nLow_pp = nHigh_pp = 0;
+  sumW_pp = sumWLow_pp = sumWHigh_pp = 0.;
+
 }
 
 ionGenerator::~ionGenerator()
@@ -68,7 +71,41 @@ void ionGenerator::generate_event(double &weight, int &lead_type, int &rec_type,
   double v12 = sqrt(sq(v1_target.Dot(v2_target)) - sq(mN)*v2_target.Mag2())/(E1*E2);
   double v1A = p1/E1;
   
-  // Calculate the weight
-  weight *= v12/v1A*myCS->sigma_pp(s,max(t,u)); // Scattering cross section
+  // Calculate the weight. The two outgoing protons are identical and
+  // t_scatter samples the full sphere, so every final state is generated
+  // twice (3 <-> 4) and the full-sphere integral of the t <-> u symmetric
+  // dsigma/dt is 2 sigma_el. The 1/2 makes the sum of weights count each
+  // pp final state once.
+  weight *= 0.5 * v12/v1A*myCS->sigma_pp(s,max(t,u)); // Scattering cross section
+
+  // Bookkeeping of the weight that comes from s outside the pp data
+  nCalls_pp++;
+  sumW_pp += weight;
+  if (s < NNCrossSection::pp_s_min())
+    {
+      nLow_pp++;
+      sumWLow_pp += weight;
+    }
+  else if (s > NNCrossSection::pp_s_max())
+    {
+      nHigh_pp++;
+      sumWHigh_pp += weight;
+    }
   
+}
+
+double ionGenerator::get_s_nominal()
+{
+  // pp s for the beam nucleon on a free nucleon at rest
+  return 2.*sq(mN) + 2.*mN*E1;
+}
+
+void ionGenerator::print_pp_summary()
+{
+  std::cerr << "genIon: pp cross section evaluated for " << nCalls_pp << " events; "
+	    << "pp data cover s = " << NNCrossSection::pp_s_min() << "-" << NNCrossSection::pp_s_max() << " GeV^2.\n"
+	    << "  s below: " << nLow_pp << " events, " << ((sumW_pp > 0.) ? 100.*sumWLow_pp/sumW_pp : 0.) << "% of the total weight\n"
+	    << "  s above: " << nHigh_pp << " events, " << ((sumW_pp > 0.) ? 100.*sumWHigh_pp/sumW_pp : 0.) << "% of the total weight\n"
+	    << "  outside the range dsigma/dt was "
+	    << ((myCS->get_pp_range_policy()==ppZero) ? "set to 0" : "held at its lower-edge value (below) or extrapolated (above)") << ".\n";
 }
