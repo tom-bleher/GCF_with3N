@@ -1,12 +1,15 @@
 #include "GenieFSIHelpers.hh"
 #include "constants.hh"
 #include <cmath>
+#include <climits>
 #include <cstdlib>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 #include <TMath.h>
+#include <TSystem.h>
 
 #ifdef USE_FSI
 #include "Framework/GHEP/GHepRecord.h"
@@ -33,18 +36,6 @@
 
 namespace {
 #ifdef USE_FSI
-bool PathListContainsFile(const std::string &pathList, const std::string &filename)
-{
-  std::stringstream ss(pathList);
-  std::string dir;
-  while (std::getline(ss, dir, ':')) {
-    if (dir.empty()) continue;
-    std::ifstream f((dir + "/" + filename).c_str());
-    if (f.good()) return true;
-  }
-  return false;
-}
-
 // Rejection-sample r from the radial weight w(r) = rho^n(r) * r^2 inside the
 // nucleus; return a 4-position with that |r| and an isotropic direction.
 // n=2 -> 2N (pair) sampling, n=3 -> 3N (triplet) sampling.
@@ -87,53 +78,186 @@ TLorentzVector SampleRadialPosition(int A, int n, TRandom3 *rnd,
 
 namespace fsi {
 
-void ResolveGenieXMLPath()
+#ifdef USE_FSI
+namespace {
+// The entries of a GXMLPATH as GENIE reads them (utils::xml::GetXMLFilePath):
+// split on ':', ';' and ',', and $VARS and ~ expanded. Without the expansion
+// an entry such as a literal '$GENIE/config' would not be recognised and
+// would stay ahead of the project override, where GENIE expands it.
+std::vector<std::string> SplitPathList(const std::string &pathList)
+{
+  std::vector<std::string> dirs;
+  std::string dir;
+  for (size_t i = 0; i <= pathList.size(); ++i) {
+    if (i < pathList.size() && std::string(":;,").find(pathList[i]) == std::string::npos) {
+      dir += pathList[i];
+      continue;
+    }
+    if (!dir.empty()) {
+      char *e = gSystem->ExpandPathName(dir.c_str());
+      dirs.push_back(e ? e : dir);
+      delete[] e;
+    }
+    dir.clear();
+  }
+  return dirs;
+}
+
+// Canonical spelling of a directory for comparisons (the spelling itself is
+// kept on the path); the input unchanged if it does not exist.
+std::string CanonicalDir(const std::string &dir)
+{
+  char buf[PATH_MAX];
+  if (realpath(dir.c_str(), buf)) return buf;
+  return dir;
+}
+
+// The NuclearModel of the "Default" parameter set of an Intranuke XML file,
+// ignoring commented-out lines; empty if not found.
+std::string IntranukeNuclearModel(const std::string &file)
+{
+  std::ifstream in(file.c_str());
+  if (!in) return "";
+  std::stringstream buf;
+  buf << in.rdbuf();
+  std::string s = buf.str(), text;
+  for (size_t pos = 0; pos < s.size();) {
+    const size_t c = s.find("<!--", pos);
+    text += s.substr(pos, c == std::string::npos ? std::string::npos : c - pos);
+    if (c == std::string::npos) break;
+    const size_t e = s.find("-->", c + 4);
+    if (e == std::string::npos) break;
+    pos = e + 3;
+  }
+  const size_t set = text.find("<param_set name=\"Default\">");
+  if (set == std::string::npos) return "";
+  const size_t setEnd = text.find("</param_set>", set);
+  const size_t key = text.find("name=\"NuclearModel\"", set);
+  if (key == std::string::npos || key > setEnd) return "";
+  const size_t a = text.find('>', key), b = text.find("</param>", key);
+  if (a == std::string::npos || b == std::string::npos || b < a) return "";
+  std::string v = text.substr(a + 1, b - a - 1);
+  const size_t f = v.find_first_not_of(" \t\n"), l = v.find_last_not_of(" \t\n");
+  return f == std::string::npos ? "" : v.substr(f, l - f + 1);
+}
+} // namespace
+#endif
+
+std::string GenieOverrideDir()
+{
+  const char *env = std::getenv("GENIE_OVERRIDE_DIR");
+  if (env && *env) return env;
+#ifdef GENIE_OVERRIDE_DIR
+  return GENIE_OVERRIDE_DIR;
+#else
+  return "";
+#endif
+}
+
+std::string ResolveGenieXMLPath()
 {
 #ifdef USE_FSI
   const char *genie_home = std::getenv("GENIE");
   const char *gxml_env = std::getenv("GXMLPATH");
-  if (!genie_home) return;
+  if (!genie_home) return gxml_env ? gxml_env : "";
 
   const std::string config_dir = std::string(genie_home) + "/config";
   const std::string default_tune_dir = config_dir + "/G18_10a";
-
-  // Project-side override directory, defined at compile time by the
-  // CMakeLists of the program that links us. Empty if not provided.
-  const std::string override_dir =
+  const std::string override_dir = GenieOverrideDir();
+  // The compile-time default override. When $GENIE_OVERRIDE_DIR selects a
+  // different directory, an entry naming the default (build/gcf_env.sh and
+  // the gcf front end export one) is dropped rather than kept ahead of the
+  // selection, so the variable always takes effect.
+  std::string default_override;
 #ifdef GENIE_OVERRIDE_DIR
-    GENIE_OVERRIDE_DIR;
-#else
-    "";
+  default_override = GENIE_OVERRIDE_DIR;
 #endif
 
-  bool has_model = false;
-  bool has_tune_list = false;
-  bool has_override = override_dir.empty();
-  if (gxml_env && std::string(gxml_env).size() > 0) {
-    const std::string gxml = gxml_env;
-    has_model     = PathListContainsFile(gxml, "ModelConfiguration.xml");
-    has_tune_list = PathListContainsFile(gxml, "TuneGeneratorList.xml");
-    if (!override_dir.empty()) {
-      // crude "is this path already on GXMLPATH" check via the override's
-      // signature file
-      has_override = PathListContainsFile(gxml, "HNIntranuke2018.xml")
-                  && (gxml.find(override_dir) != std::string::npos);
+  // A selected override without the Intranuke files would silently hand
+  // those files to GENIE's own config further down the path.
+  if (!override_dir.empty()) {
+    std::ifstream probe((override_dir + "/HNIntranuke2018.xml").c_str());
+    static bool warned = false;
+    if (!probe && !warned) {
+      std::cerr << "Warning: GENIE override directory " << override_dir
+                << " has no HNIntranuke2018.xml (GENIE_OVERRIDE_DIR?); GENIE "
+                   "reads its own defaults for the files it lacks\n";
+      warned = true;
     }
   }
 
-  if (!has_model || !has_tune_list || !has_override) {
-    // Build a path that PREPENDS the project override (so it wins over the
-    // upstream GENIE configs) and keeps any pre-existing entries the user set.
-    std::string fixed_gxml;
-    if (!override_dir.empty()) fixed_gxml = override_dir;
-    if (!fixed_gxml.empty()) fixed_gxml += ":";
-    fixed_gxml += default_tune_dir + ":" + config_dir;
-    if (gxml_env && std::string(gxml_env).size() > 0) {
-      fixed_gxml += ":";
-      fixed_gxml += gxml_env;
+  // GENIE reads each XML file from the first GXMLPATH entry that has it.
+  // Order: (1) the user's own entries, in their order (e.g. a gcf_fsi
+  // --channel directory, or a variant such as genie_override_srctail),
+  // (2) the selected project override, (3) the G18_10a tune, (4) GENIE's
+  // config. Entries naming (2)-(4) are recognised by canonical path and
+  // moved to their slot, so any spelling of them works and a user
+  // directory is never shadowed by the project override. An entry naming
+  // the default override when another one is selected is dropped.
+  std::vector<std::string> fixed;
+  std::vector<std::string> seen;
+  auto add = [&](const std::string &dir) {
+    const std::string canon = CanonicalDir(dir);
+    for (const std::string &s : seen) if (s == canon) return;
+    seen.push_back(canon);
+    fixed.push_back(dir);
+  };
+  std::vector<std::string> tail;
+  if (!override_dir.empty()) tail.push_back(override_dir);
+  tail.push_back(default_tune_dir);
+  tail.push_back(config_dir);
+  std::vector<std::string> tailCanon;
+  for (const std::string &d : tail) tailCanon.push_back(CanonicalDir(d));
+  if (!default_override.empty()) tailCanon.push_back(CanonicalDir(default_override));
+  if (gxml_env)
+    for (const std::string &dir : SplitPathList(gxml_env)) {
+      const std::string canon = CanonicalDir(dir);
+      bool isTail = false;
+      for (const std::string &t : tailCanon) if (t == canon) isTail = true;
+      if (!isTail) add(dir);
     }
-    setenv("GXMLPATH", fixed_gxml.c_str(), 1);
+  for (const std::string &d : tail) add(d);
+
+  std::string path;
+  for (const std::string &d : fixed) path += (path.empty() ? "" : ":") + d;
+  setenv("GXMLPATH", path.c_str(), 1);
+  return path;
+#else
+  const char *gxml_env = std::getenv("GXMLPATH");
+  return gxml_env ? gxml_env : "";
+#endif
+}
+
+std::string FindOnGenieXMLPath(const std::string &file)
+{
+  const char *gxml_env = std::getenv("GXMLPATH");
+  if (!gxml_env) return "";
+  std::stringstream ss(gxml_env);
+  std::string dir;
+  while (std::getline(ss, dir, ':')) {
+    if (dir.empty()) continue;
+    std::ifstream f((dir + "/" + file).c_str());
+    if (f.good()) return dir;
   }
+  return "";
+}
+
+void PrintGenieXMLConfig(std::ostream &os)
+{
+#ifdef USE_FSI
+  const char *gxml_env = std::getenv("GXMLPATH");
+  os << "GENIE XML path: " << (gxml_env ? gxml_env : "(unset)") << "\n";
+  for (const char *base : {"HNIntranuke2018.xml", "HAIntranuke2018.xml", "Messenger.xml"}) {
+    const std::string dir = FindOnGenieXMLPath(base);
+    os << "  " << base << " from " << (dir.empty() ? "(not found)" : dir);
+    if (!dir.empty() && std::string(base) != "Messenger.xml") {
+      const std::string m = IntranukeNuclearModel(dir + "/" + base);
+      if (!m.empty()) os << " (NuclearModel " << m << ")";
+    }
+    os << "\n";
+  }
+#else
+  (void)os;
 #endif
 }
 

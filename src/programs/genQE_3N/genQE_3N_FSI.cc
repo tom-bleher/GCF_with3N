@@ -183,6 +183,7 @@ bool init(int argc, char ** argv)
 
   doFSI_flag  = enableFSI ? 1 : 0;
   fsiModelInt = (fsiModel == kHN2018) ? 0 : 1;
+  if (enableFSI) fsi::PrintGenieXMLConfig(std::cout);
 
   // Open the output only after the generator is set up: exit() from a
   // setup error with an open TFile crashes in ROOT's teardown and buries

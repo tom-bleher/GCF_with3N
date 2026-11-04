@@ -311,6 +311,7 @@ bool init(int argc, char ** argv)
   if (doCoul)  cout << "  Coulomb corr:   ON\n";
   if (doRad)   cout << "  Radiation:      ON\n";
   if (rand_flag) cout << "  Randomization:  ON\n";
+  if (!noFSI)  fsi::PrintGenieXMLConfig(cout);
   cout << "========================================\n\n";
 
   return true;
