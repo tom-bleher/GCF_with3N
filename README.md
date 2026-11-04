@@ -127,8 +127,12 @@ weights, so for a contact study you can also reweight existing events (`band` in
 
 For **FSI on a file**, use **Browse…** to pick an event file that has not been
 through FSI yet: a `*_pwia.root` file, or another generator's file in the
-[event-file format](docs/PIPELINE.md#event-file-format). A `*_fsi.root` file
-fails as soon as the run starts.
+[event-file format](docs/PIPELINE.md#event-file-format). To redo the cascade on a
+`*_fsi.root` file, tick **Replace earlier FSI in the input** under **Advanced**.
+
+The form refuses values outside their sensible range and combinations where one
+setting would silently cancel another, such as a `k_rel` cutoff with the local SRC
+onset. It says which field to change.
 
 ### Follow a run and use the results
 
@@ -166,13 +170,6 @@ Click a run to open its details:
 
 The **docs** link at the top of the page opens the pipeline and physics
 documentation.
-
-### Things to watch for
-
-- **A passed check doesn't guarantee a good run.** It checks the options and that
-  the generator can produce events, not everything about the input. For example,
-  FSI on a `*_fsi.root` file passes and then fails when the run starts.
-- **Switching off the compound-nucleus channel does nothing in hA** (issue #177).
 
 More detail: [docs/PIPELINE.md](docs/PIPELINE.md#the-web-interface).
 
