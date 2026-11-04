@@ -110,6 +110,21 @@ void gcfNucleus::set_Nucleus(int thisZ, int thisN){
       mAm1n=m_11C;   // 12C - n -> 11C
       Estar_max = 0.030;
     }
+  else if ((Z==8) && (N==8))
+    {
+      // sigma_CM and Estar_max as for 12C: Cohen et al. (PRL 121, 092501
+      // (2018), doi:10.1103/PhysRevLett.121.092501) find sigma_CM roughly
+      // A-independent from 12C up.
+      sigmaCM=0.15;
+      d_sigmaCM=0.02;
+      mA=m_16O;
+      mAmpp=m_14C;
+      mAmpn=m_14N;
+      mAmnn=m_14O;
+      mAm1p=m_15N;   // 16O - p -> 15N
+      mAm1n=m_15O;   // 16O - n -> 15O
+      Estar_max = 0.030;
+    }
   else if ((Z==13) && (N==14))
     {
       sigmaCM=0.15;

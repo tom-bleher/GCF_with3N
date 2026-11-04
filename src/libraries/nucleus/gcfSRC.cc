@@ -240,6 +240,9 @@ void gcfSRC::set_Contacts()
     {
       std::cerr << "You selected a nucleus with Z=" << Z << " and with N=" << N << ".\n"
 		<< "This combination of interaction and nucleus does not have contacts in the library. Aborting...\n";
+      if (u == N3LO_600)
+        std::cerr << "N3LO(600) universal functions are tabulated, but the library has no N3LO contacts for any nucleus.\n"
+                  << "Use AV18, N2LO, N2LO12, AV4 or NV.\n";
       exit(-2);
     }
     

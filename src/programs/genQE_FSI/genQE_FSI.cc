@@ -21,6 +21,7 @@ string nucleusName(int Z, int N)
   if (Z==1  && N==2)   return "Tritium (3H)";
   if (Z==2  && N==2)   return "Helium-4 (4He)";
   if (Z==6  && N==6)   return "Carbon-12 (12C)";
+  if (Z==8  && N==8)   return "Oxygen-16 (16O)";
   if (Z==13 && N==14)  return "Aluminum-27 (27Al)";
   if (Z==18 && N==22)  return "Argon-40 (40Ar)";
   if (Z==20 && N==20)  return "Calcium-40 (40Ca)";

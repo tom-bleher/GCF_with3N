@@ -91,8 +91,8 @@ nuclear input in `src/libraries/nucleus/gcfSRC.cc`, `gcfNucleus.cc`.
   momentum k_F(r) at the pair's position with `onset = local`) and 1 GeV/c,
   and isotropic direction;
 - S_NN(k) = Σ C_NN^(l) |φ_NN^(l)(k)|², the contact-weighted universal
-  functions tabulated per NN interaction (AV18 by default; N2LO, N3LO, AV4,
-  NV available). The contacts are the "Scale and Scheme" k-space values
+  functions tabulated per NN interaction (AV18 by default; N2LO, AV4 and NV
+  available; N3LO has tables but no contacts, so it aborts). The contacts are the "Scale and Scheme" k-space values
   (Cruz-Torres et al., Nature Phys. 17, 306 (2021),
   [doi:10.1038/s41567-020-01053-7](https://doi.org/10.1038/s41567-020-01053-7)).
 
