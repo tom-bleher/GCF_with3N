@@ -94,7 +94,9 @@ def hadd_command():
 # ---------------------------------------------------------------------------
 # Command lines
 
-def generate_args(gen, events, output, seed):
+def generate_args(gen, events, output, seed, base_seed=None):
+    """gcf_generate's command line for one job. `base_seed` is the run's: the
+    options that must be the same in every job of a run derive from it."""
     args = [binary("gcf_generate"), "--model", gen["model"], "--beam", repr(gen["beam"]),
             "--events", str(events), "--output", str(output), "--seed", str(seed),
             "-A", str(gen["target"][0]), "-Z", str(gen["target"][1])]
@@ -103,6 +105,10 @@ def generate_args(gen, events, output, seed):
             continue
         v = gen.get(o.key)
         if v is None or gen["model"] not in o.models:
+            continue
+        if o.key == "randomize":
+            if v:
+                args += [o.flag, str(base_seed or seed)]
             continue
         if o.kind == "bool":
             if v != o.invert:   # pass the flag when it changes the binary's default
@@ -126,6 +132,8 @@ def fsi_args(fsi, inp, output, seed, first=None, count=None, copy_objects=True):
         args += ["--keep", fsi["keep"]]
     for c in fsi.get("off") or []:
         args += ["--channel", f"{c}=0"]
+    for c, factor in (fsi.get("scale") or {}).items():
+        args += ["--channel", f"{c}={factor}"]
     if fsi.get("nucleon_mfp_scale") is not None:
         args += ["--channel", f"nucleon.mfp={fsi['nucleon_mfp_scale']}"]
     if fsi.get("pion_mfp_scale") is not None:
@@ -166,6 +174,21 @@ def check_setup(cfg):
     if "fsi" in run["stages"] and not (GENIE_DIR / "lib").is_dir():
         problems.append("GENIE is not built (no lib/ in the vendored tree); run ./install.sh")
     return problems
+
+
+def nuclear_params(model, target, nn=None):
+    """The nuclear inputs of a setup, from the generator itself (the tables are C++)."""
+    args = [binary("gcf_generate"), "--print-params", "--model", model, "--beam", "6",
+            "-A", str(target[0]), "-Z", str(target[1])]
+    if nn:
+        args += ["--nn", nn]
+    out = subprocess.run(args, capture_output=True, text=True, env=environment(), timeout=120)
+    for line in out.stdout.splitlines():
+        if line.startswith("PARAMS "):
+            return json.loads(line[len("PARAMS "):])
+    text = [l for l in (out.stderr + out.stdout).splitlines()
+            if l.strip() and not l.startswith(("eNCrossSection", "You are using"))]
+    raise RunError(" ".join(text[-2:]) or f"gcf_generate --print-params: exit {out.returncode}")
 
 
 def count_entries(path):
@@ -236,7 +259,7 @@ def plan_from_config(cfg, run_dir, final_outputs=None):
         outs = {"generate": [], "fsi": []}
         for i, n in enumerate(parts):
             g = final["generate"] if single else chunks / f"pwia_{i:03d}.root"
-            steps = [Step("generate", generate_args(gen, n, g, seed + i), g, n,
+            steps = [Step("generate", generate_args(gen, n, g, seed + i, seed), g, n,
                           logs / f"generate_{i:03d}.log")]
             outs["generate"].append(g)
             if "fsi" in stages:
