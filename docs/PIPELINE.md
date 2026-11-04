@@ -87,11 +87,14 @@ ff = "kelly"                  # nucleon form factors: kelly, ye or dipole
 wave_function = "AV18"        # 3N: AV18, AV18+UIX, AV18+TM, CDBonn, CDBonn+TM, or ...-pD
 theta_e = [5.0, 40.0]         # deg
 # 2N: nn = "AV18" | "N2LO" | "N2LO12" | "N3LO" | "AV4" | "NV"; MF (12C only): fermi_gas = "global" | "local"
+# 2N nuclear inputs, default from the tables (gcf_generate --print-params shows them):
+# cpp0, cnn0, cpn0, cpn1 (contacts); sigma_cm; estar; sigma_e; randomize = true; light_cone = true
 
 [fsi]
 model = "hN"                  # hN or hA
 transport = "shared"          # or "independent"
 off = ["pion.absorption"]     # cascade channels to switch off (see below)
+scale = { "pion.cex" = 0.8 }  # or to scale by a factor
 ```
 
 Every run directory holds the resolved `config.toml` (including the seed),
@@ -102,7 +105,8 @@ per-job logs and a `status.json`; `gcf run runs/<name>/config.toml` repeats it.
 `gcf_fsi --channel NAME=FACTOR` scales the rate of one interaction channel
 of the cascade by FACTOR; 0 switches it off and the remaining fates are
 renormalized. In a config, `[fsi] off = [...]` lists the channels to switch
-off; `gcf fsi --off NAME` does the same on the command line. Which channels
+off and `[fsi] scale = { "NAME" = FACTOR }` scales them; `gcf fsi --off NAME`
+and `gcf fsi --scale NAME=FACTOR` do the same on the command line. Which channels
 exist depends on the model (`gcf_fsi --list-channels`):
 
 | channel | hN | hA | |
@@ -161,6 +165,8 @@ port automatically) and open the printed URL. From the page you can:
 - fill in the essential settings (model, beam, events, target with presets of
   supported nuclei, wave function, cascade model, interaction channels); the
   rest is under "Advanced", which says how many of its options you changed;
+- set the physics model on the "Physics inputs" tab, which shows the table value
+  and uncertainty of each nuclear input for the chosen target and interaction;
 - see mistakes as you type (the offending field is highlighted), and run
   "Check" to have the generator itself validate the settings (nucleus tables
   and all) before anything starts;
@@ -294,8 +300,9 @@ streams instead of one interleaved stream. The results agree statistically
   uncorrected.
 - **Event counts**: `gcf_generate --events N` means N accepted events for
   every model; the combined 2N program counted attempts.
-- Not available in the stages yet: the 2N light-cone cross section and the
-  randomized nuclear properties (`genQE_FSI -l`, `-r`).
+- **Randomized nuclear properties** (`--randomize S`, `genQE_FSI -r`): one draw
+  per run, from a random stream of its own, so that all jobs of a run use the
+  same inputs. The combined program draws from its event stream.
 
 ## Validation
 

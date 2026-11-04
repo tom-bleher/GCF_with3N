@@ -180,6 +180,202 @@ class TestCompare(GuiCase):
         self.assertLess(C.chi2_weighted(x, w_a, x, w_b, bins)[2], 0.01)
 
 
+class TestPhysicsFlags(unittest.TestCase):
+    """What the nuclear-input options of gcf_generate do to the events."""
+
+    @classmethod
+    def setUpClass(cls):
+        harness.need_binaries()
+        cls.tmp = tempfile.mkdtemp(prefix="gcf-flags-")
+        cls.addClassCleanup(shutil.rmtree, cls.tmp, ignore_errors=True)
+        cls.env = harness.runner.environment()
+        cls.binary = harness.runner.binary("gcf_generate")
+        cls.count = 0
+
+    def generate(self, *args, model="2N", events=3000, seed=4242):
+        import uproot
+        type(self).count += 1
+        out = str(Path(self.tmp) / f"e{self.count}.root")
+        run = subprocess.run([self.binary, "--model", model, "--beam", "6", "--events", str(events), "--seed", str(seed),
+                              "-A", "12", "-Z", "6", "--output", out, *map(str, args)],
+                             capture_output=True, text=True, env=self.env)
+        self.assertEqual(run.returncode, 0, run.stdout + run.stderr)
+        with uproot.open(out) as f:
+            a = f["events"].arrays(["weight", "e_px", "e_pz", "res_px", "res_py", "res_pz", "res_E", "nuc_pdg"], library="np")
+            a["attempts"] = float(f["hAttempts"].values()[0])
+            a["provenance"] = str(f["gcf_generate"].member("fTitle"))
+        return a
+
+    def params(self, *args):
+        return harness.runner.nuclear_params(*args)
+
+    def assertSameEvents(self, a, b):
+        import numpy as np
+        for k in ("e_px", "e_pz", "res_E"):
+            self.assertTrue(np.array_equal(a[k], b[k]), k)
+
+    @staticmethod
+    def residual_mass(a):
+        import numpy as np
+        return np.sqrt(a["res_E"]**2 - a["res_px"]**2 - a["res_py"]**2 - a["res_pz"]**2)
+
+    def test_contacts_equal_to_the_table_change_nothing(self):
+        import numpy as np
+        c = self.params("2N", [12, 6])["contacts"]
+        a, b = self.generate(), self.generate("--cpp0", c["cpp0"][0], "--cnn0", c["cnn0"][0], "--cpn0", c["cpn0"][0], "--cpn1", c["cpn1"][0])
+        self.assertSameEvents(a, b)
+        self.assertTrue(np.array_equal(a["weight"], b["weight"]))
+
+    def test_scaling_all_contacts_scales_the_weights(self):
+        import numpy as np
+        c = self.params("2N", [12, 6])["contacts"]
+        a = self.generate()
+        b = self.generate("--cpp0", 2 * c["cpp0"][0], "--cnn0", 2 * c["cnn0"][0], "--cpn0", 2 * c["cpn0"][0], "--cpn1", 2 * c["cpn1"][0])
+        self.assertSameEvents(a, b)
+        self.assertTrue(np.allclose(b["weight"], 2 * a["weight"]))
+
+    def test_one_contact_only_moves_the_weights_of_its_pairs(self):
+        import numpy as np
+        c = self.params("2N", [12, 6])["contacts"]
+        a, b = self.generate(), self.generate("--cpn1", 2 * c["cpn1"][0])
+        self.assertSameEvents(a, b)
+        ratio = b["weight"] / a["weight"]
+        pn = np.array([sorted(p[:2]) == [2112, 2212] for p in a["nuc_pdg"]])
+        self.assertTrue(np.allclose(ratio[~pn], 1))
+        self.assertTrue((ratio[pn] > 1).all() and (ratio[pn] <= 2 + 1e-9).all())
+
+    def test_zero_contacts_remove_their_pairs(self):
+        a = self.generate("--cpp0", 0, "--cnn0", 0)
+        self.assertTrue(all(sorted(p[:2]) == [2112, 2212] for p in a["nuc_pdg"]))
+
+    def test_negative_or_all_zero_contacts_are_refused(self):
+        for args in (["--cpp0", "-1"], ["--cpp0", "0", "--cnn0", "0", "--cpn0", "0", "--cpn1", "0"]):
+            run = subprocess.run([self.binary, "--model", "2N", "--beam", "6", "--check", *args],
+                                 capture_output=True, text=True, env=self.env)
+            self.assertEqual(run.returncode, 1, args)
+
+    def test_contacts_do_not_apply_to_the_deuteron(self):
+        run = subprocess.run([self.binary, "--model", "2N", "--beam", "6", "-A", "2", "-Z", "1", "--check", "--cpn1", "50"],
+                             capture_output=True, text=True, env=self.env)
+        self.assertEqual(run.returncode, 1)
+        self.assertIn("deuteron", run.stderr)
+
+    def test_estar_shifts_the_residual_mass(self):
+        import numpy as np
+        a, b = self.generate(), self.generate("--estar", 0.02)
+        # The events differ, so the mix of the three A-2 residuals does slightly.
+        self.assertAlmostEqual(float(np.mean(self.residual_mass(b)) - np.mean(self.residual_mass(a))), 0.02, delta=2e-4)
+
+    def test_3n_estar(self):
+        """Without --estar a 3N run is unchanged; with it the residual is heavier by E*."""
+        import numpy as np
+        a, b = self.generate(model="3N", events=500), self.generate("--estar", 0, model="3N", events=500)
+        self.assertSameEvents(a, b)
+        self.assertTrue(np.array_equal(a["weight"], b["weight"]))
+        c = self.generate("--estar", 0.02, model="3N", events=500)
+        self.assertAlmostEqual(float(np.mean(self.residual_mass(c)) - np.mean(self.residual_mass(a))), 0.02, places=5)
+
+    def test_estar_width_draws_per_event(self):
+        import numpy as np
+        b = self.generate("--estar", 0.02, "--sigma-e", 0.005)
+        # Each residual is the A-2 ground state of its pair type plus its own E*.
+        ground = self.params("2N", [12, 6])["mRes"]
+        kinds = {(2212, 2212): "pp", (2112, 2112): "nn"}
+        states = np.array([ground[kinds.get(tuple(int(x) for x in p[:2]), "pn")] for p in b["nuc_pdg"]])
+        excitation = self.residual_mass(b) - states
+        self.assertTrue((excitation > 0).all())
+        self.assertAlmostEqual(float(np.mean(excitation)), 0.02, delta=0.002)
+        self.assertAlmostEqual(float(np.std(excitation)), 0.005, delta=0.0015)
+
+    def test_randomize_is_the_same_for_every_job(self):
+        """One draw per run: jobs with other event seeds get the same nuclear inputs."""
+        a = self.generate("--randomize", 77, seed=1, events=50)
+        b = self.generate("--randomize", 77, seed=2, events=50)
+        c = self.generate("--randomize", 78, seed=1, events=50)
+        inputs = lambda e: [l for l in e["provenance"].splitlines() if l.startswith("nuclear inputs")][0]
+        self.assertEqual(inputs(a), inputs(b))
+        self.assertNotEqual(inputs(a), inputs(c))
+
+    def test_an_explicit_value_overrides_the_randomized_one(self):
+        a = self.generate("--randomize", 77, "--sigma-cm", 0.111, "--cpn1", 50, events=50)
+        line = [l for l in a["provenance"].splitlines() if l.startswith("nuclear inputs")][0]
+        self.assertIn("sigma_cm=0.111", line)
+        self.assertIn("cpn1=50", line)
+
+    def test_light_cone_gives_other_events(self):
+        a, b = self.generate(events=1000), self.generate("--light-cone", events=1000)
+        self.assertEqual(len(b["weight"]), 1000)
+        self.assertNotEqual(a["attempts"], b["attempts"])
+
+    def test_light_cone_excludes_options_it_would_ignore(self):
+        for extra in (["--prel-is"], ["--onset", "local"]):
+            run = subprocess.run([self.binary, "--model", "2N", "--beam", "6", "--check", "--light-cone", *extra],
+                                 capture_output=True, text=True, env=self.env)
+            self.assertEqual(run.returncode, 1, extra)
+
+    def test_form_factors_change_the_weights_only(self):
+        import numpy as np
+        a, b = self.generate(), self.generate("--ff", "ye")
+        self.assertSameEvents(a, b)
+        self.assertFalse(np.array_equal(a["weight"], b["weight"]))
+
+    def test_params_of_the_setups_the_form_offers(self):
+        p = self.params("2N", [12, 6])
+        self.assertEqual(p["contacts"]["cpn1"][0], 95.256)
+        self.assertEqual(p["sigma_cm"], [0.15, 0.02])
+        self.assertIn("k-space", p["contact_source"])
+        self.assertEqual(self.params("2N", [12, 6], "N2LO")["contacts"]["cpn1"][0], 63.858)
+        self.assertIn("EG2", self.params("2N", [56, 26])["contact_source"])
+        self.assertEqual(self.params("3N", [12, 6])["sigma_cm"][0], 0.15)
+        with self.assertRaises(harness.runner.RunError):
+            self.params("2N", [12, 6], "N3LO")
+
+
+class TestChannelScales(unittest.TestCase):
+    def test_config_round_trip_and_command_line(self):
+        from gcf import config, runner
+        cfg = config.validate({"run": {"stages": ["generate", "fsi"]}, "generate": {"model": "2N"},
+                               "fsi": {"scale": {"pion.absorption": 0.5, "pion.cex": 0}}})
+        self.assertEqual(cfg["fsi"]["scale"], {"pion.absorption": 0.5})
+        self.assertEqual(cfg["fsi"]["off"], ["pion.cex"])
+        import tomllib
+        again = tomllib.loads(config.dumps(cfg))
+        self.assertEqual(again["fsi"]["scale"], {"pion.absorption": 0.5})
+        old, runner.binary = runner.binary, lambda n: n
+        try:
+            args = runner.fsi_args(cfg["fsi"], "i.root", "o.root", 1)
+        finally:
+            runner.binary = old
+        self.assertIn("pion.absorption=0.5", args)
+        self.assertIn("pion.cex=0", args)
+
+    def test_bad_scales_are_refused(self):
+        from gcf import config
+        for scale in ({"pion.absorption": -1}, {"bogus": 1}, {"nucleon.compound": 0.5}, {"nucleon.cex": 2}):
+            with self.assertRaises(config.ConfigError):
+                config.validate({"run": {"stages": ["generate", "fsi"]}, "generate": {"model": "2N"},
+                                 "fsi": {"model": "hN", "scale": scale}})
+
+    def test_a_scale_changes_the_cascade(self):
+        """Pion absorption at half its rate leaves more charged pions."""
+        harness.need_binaries()
+        gui = Gui()
+        self.addCleanup(gui.close)
+        for name, fsi in (("nominal", {}), ("half", {"scale": {"pion.absorption": 0.1}})):
+            cfg = small_run(name, events=40000, jobs=8)
+            cfg["fsi"].update(fsi)
+            gui.api("api/runs", cfg)
+        a, b = gui.wait("nominal"), gui.wait("half")
+        self.assertEqual((a["state"], b["state"]), ("done", "done"), a.get("error") or b.get("error"))
+        import awkward as ak
+        import numpy as np
+        import uproot
+        def pions(d):
+            with uproot.open(d["outputs"]["fsi"]["path"]) as f:
+                return float(np.mean(np.asarray(ak.sum(abs(f["events"]["part_pdg"].array()) == 211, axis=1))))
+        self.assertGreater(pions(b), pions(a))
+
+
 class TestBrowser(GuiCase):
     @classmethod
     def setUpClass(cls):
@@ -190,6 +386,8 @@ class TestBrowser(GuiCase):
     def open(self):
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
+        self.driver.get(self.gui.url)
+        self.driver.execute_script("localStorage.clear()")   # each test starts from the default form
         self.driver.get(self.gui.url)
         WebDriverWait(self.driver, 20).until(lambda d: d.find_elements(By.CSS_SELECTOR, "#grid-run .field"))
 
@@ -245,6 +443,50 @@ class TestBrowser(GuiCase):
         text = self.driver.find_element(By.ID, "compare-out").text
         self.assertIn("Weighted p", text)
         self.assertIn("dlg_b (with FSI)", text)
+
+    def test_physics_tab_shows_table_values_and_sets_options(self):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import Select, WebDriverWait
+        self.open()
+        Select(self.driver.find_element(By.ID, "f-generate-model")).select_by_value("2N")
+        self.driver.execute_script("document.getElementById('tab-physics').click()")
+        WebDriverWait(self.driver, 30).until(lambda d: "contacts" in d.find_element(By.ID, "physics-head").text)
+        head = self.driver.find_element(By.ID, "physics-head").text
+        self.assertIn("12C", head)
+        self.assertIn("k-space", head)
+        field = self.driver.find_element(By.ID, "f-generate-cpn1")
+        self.assertEqual(field.get_attribute("placeholder"), "95.256")
+        self.assertIn("95.256 ± 10.62", self.driver.find_element(By.CSS_SELECTOR, '.field[data-key="cpn1"] .tableval').text)
+        self.assertEqual(self.driver.find_element(By.ID, "f-generate-sigma_cm").get_attribute("placeholder"), "0.15")
+        # Another target or interaction updates the values.
+        self.driver.execute_script("""const n = document.getElementById('f-generate-nn'); n.value = 'N2LO';
+                                      n.dispatchEvent(new Event('change', {bubbles: true}));""")
+        WebDriverWait(self.driver, 30).until(lambda d: d.find_element(By.ID, "f-generate-cpn1").get_attribute("placeholder") == "63.858")
+        self.driver.execute_script("""const n = document.getElementById('f-generate-nn'); n.value = '';
+                                      n.dispatchEvent(new Event('change', {bubbles: true}));""")
+        WebDriverWait(self.driver, 30).until(lambda d: d.find_element(By.ID, "f-generate-cpn1").get_attribute("placeholder") == "95.256")
+        # A value set on the tab reaches the config, and the tab counts it.
+        self.set_value("f-generate-cpn1", 50)
+        WebDriverWait(self.driver, 10).until(lambda d: "1 changed" in d.find_element(By.ID, "tab-count-physics").text)
+        cfg = self.driver.execute_script("return collect()")
+        self.assertEqual(cfg["generate"]["cpn1"], 50)
+        # The fields of other models are not shown, and a 3N setup says why.
+        self.driver.execute_script("""const m = document.getElementById('f-generate-model'); m.value = '3N';
+                                      m.dispatchEvent(new Event('change', {bubbles: true}));""")
+        self.assertNotIn("hidden", self.driver.find_element(By.ID, "physics-note").get_attribute("class"))
+        self.assertIn("hidden", self.driver.find_element(By.CSS_SELECTOR, '.field[data-key="cpn1"]').get_attribute("class"))
+        self.assertNotIn("hidden", self.driver.find_element(By.CSS_SELECTOR, '.field[data-key="estar"]').get_attribute("class"))
+        self.driver.execute_script("resetForm(); showFormTab('setup')")
+
+    def test_channel_scale_reaches_the_config(self):
+        from selenium.webdriver.common.by import By
+        self.open()
+        self.driver.execute_script("resetForm()")
+        self.assertTrue(self.driver.find_element(By.ID, "scale-pion.absorption").is_displayed())
+        self.set_value("scale-pion.absorption", 0.5)
+        self.assertEqual(self.driver.execute_script("return collect()")["fsi"]["scale"], {"pion.absorption": 0.5})
+        self.driver.execute_script("resetForm()")
+        self.assertNotIn("scale", self.driver.execute_script("return collect()")["fsi"])
 
     def test_run_row_keeps_keyboard_focus(self):
         """The table is rebuilt every few seconds; that must not drop the focus."""
