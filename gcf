@@ -6,7 +6,15 @@ import sys
 if sys.version_info < (3, 11):
     sys.exit("gcf needs Python 3.11 or newer; this is Python %d.%d." % sys.version_info[:2])
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.realpath(__file__)), "tools"))
+repo = os.path.dirname(os.path.realpath(__file__))
+
+# The Python packages install.sh sets up, if there are any: tools/gcf/setup_python.sh.
+venv = os.path.join(repo, ".venv")
+if os.path.exists(os.path.join(venv, "bin", "python3")) and os.path.realpath(sys.prefix) != os.path.realpath(venv) \
+        and "VIRTUAL_ENV" not in os.environ:
+    os.execv(os.path.join(venv, "bin", "python3"), [os.path.join(venv, "bin", "python3"), os.path.realpath(__file__)] + sys.argv[1:])
+
+sys.path.insert(0, os.path.join(repo, "tools"))
 
 from gcf.cli import main  # noqa: E402
 

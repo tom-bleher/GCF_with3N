@@ -18,6 +18,7 @@ import shutil
 import tomllib
 import secrets
 import signal
+import socket
 import subprocess
 import sys
 import threading
@@ -35,6 +36,7 @@ COMPARE_DIR = ".compare"       # hidden: not a run
 SCANS_DIR = ".scans"           # hidden: what makes runs a scan
 COMPARE_FILE_RE = re.compile(r"[A-Za-z0-9_.+-]+\.png\Z")
 COMPARE_SCRIPT = runner.REPO / "tools/validation/compare_samples.py"
+FIRST_PORT = 8765
 LOG_TAIL_BYTES = 64 * 1024
 MAX_LOGS_SHOWN = 12            # the first logs of a run with many jobs
 SCHEDULE_SECONDS = 2.0
@@ -82,6 +84,35 @@ def stable_token(new=False):
 
 def server_record(port):
     return config_dir() / f"gui-{port}.json"
+
+
+def free_port(first=FIRST_PORT, count=50):
+    """The first port from `first` that nothing listens on: others may run this too."""
+    for port in range(first, first + count):
+        with socket.socket() as probe:
+            probe.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            try:
+                probe.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    raise runner.RunError(f"no free port from {first} to {first + count - 1}; choose one with --port")
+
+
+def my_servers(port=None):
+    """The servers of yours that are running, on one port or all."""
+    if port:
+        rec = read_server(port)
+        return [rec] if rec else []
+    found = []
+    for path in sorted(config_dir().glob("gui-*.json")):
+        try:
+            rec = read_server(int(path.stem.split("-")[1]))
+        except ValueError:
+            continue
+        if rec:
+            found.append(rec)
+    return found
 
 
 def read_server(port):
@@ -169,7 +200,7 @@ class App:
         stopped = state in ("stopped", "failed", "cancelled", "partial")
         has_config = (d / "config.toml").exists()
         any_step_done = any(step.get("state") == "done" for job in jobs for step in job)
-        return {"name": d.name, "state": state, "error": st.get("error"),
+        return {"name": d.name, "state": state, "error": st.get("error"), "hint": runner.failure_hint(st.get("error")),
                 "started": st.get("started"), "finished": st.get("finished"),
                 "stages": st.get("stages", {}), "outputs": outputs,
                 "orphans": len(orphans), "jobs_total": len(jobs), "jobs_finished": finished,
@@ -800,6 +831,25 @@ class App:
         config.validate(self.with_runs_dir(raw, self.runs_dir), base_dir=self.runs_dir)
         return raw
 
+    def set_runs_dir(self, path, create=False):
+        """Look at, and start runs in, another directory. Runs in the earlier one go
+        on, and its queue is still looked after."""
+        p = Path(path or "").expanduser()
+        if not path or not p.is_absolute():
+            raise ValueError("give a full path")
+        p = p.resolve()
+        if not p.exists():
+            if not create:
+                raise ValueError(f"{p} does not exist")
+            p.mkdir(parents=True)
+        if not p.is_dir() or not os.access(p, os.W_OK):
+            raise ValueError(f"{p} is not a directory you can write to")
+        with self.lock:
+            self.runs_dir = p
+            if p not in self.known_dirs:
+                self.known_dirs.append(p)
+        return str(p)
+
     def preview(self, raw):
         raw = self.with_runs_dir(raw, self.runs_dir)
         cfg = config.validate(raw, base_dir=self.runs_dir)
@@ -862,7 +912,7 @@ def make_handler(app):
                 cookie = self.headers.get("Cookie", "")
                 for part in cookie.split(";"):
                     k, _, v = part.strip().partition("=")
-                    if k == "gcf_token":
+                    if k == f"gcf_token_{self.server.server_address[1]}":
                         token = v
             if not token.isascii():
                 return False
@@ -953,7 +1003,8 @@ def make_handler(app):
                     # The page keeps using the token from its URL; the cookie
                     # lets a bookmark without the token keep working.
                     return self.send_file(STATIC / "index.html",
-                                          cookie=f"gcf_token={app.token}; HttpOnly; SameSite=Strict; Path=/")
+                                          cookie=f"gcf_token_{self.server.server_address[1]}={app.token}; "
+                                                 "HttpOnly; SameSite=Strict; Path=/")
                 if len(parts) == 2 and parts[0] == "static" and MODULE_RE.fullmatch(parts[1]):
                     return self.send_file(STATIC / parts[1])
                 if len(parts) == 3 and parts[:2] == ["api", "compare"] and COMPARE_FILE_RE.fullmatch(parts[2]):
@@ -992,9 +1043,11 @@ def make_handler(app):
                     return self.send_file(STATIC / "docs.html")
                 if parts == ["api", "docs"]:
                     name = query.get("name", ["PIPELINE"])[0]
-                    if name not in ("PIPELINE", "PHYSICS"):
+                    if name not in ("GUI", "PIPELINE", "PHYSICS"):
                         raise FileNotFoundError(name)
                     return self.send_file(runner.REPO / "docs" / f"{name}.md")
+                if len(parts) == 3 and parts[:2] == ["api", "docs"] and re.fullmatch(r"[a-z0-9_-]+\.png", parts[2]):
+                    return self.send_file(runner.REPO / "docs" / "images" / parts[2])
                 self.send_error_json("not found", HTTPStatus.NOT_FOUND)
             except FileNotFoundError as e:
                 self.send_error_json(f"not found: {e}", HTTPStatus.NOT_FOUND)
@@ -1038,6 +1091,8 @@ def make_handler(app):
                 if len(parts) == 4 and parts[:2] == ["api", "scans"] and parts[3] == "delete":
                     app.delete_scan(parts[2])
                     return self.send_json({"ok": True})
+                if parts == ["api", "runs-dir"]:
+                    return self.send_json({"runs_dir": app.set_runs_dir(body.get("path"), bool(body.get("create")))})
                 if parts == ["api", "parse-config"]:
                     return self.send_json(app.parse_config(body.get("text", "")))
                 if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "quicklook":

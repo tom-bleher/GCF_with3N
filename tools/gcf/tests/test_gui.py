@@ -11,6 +11,7 @@ import os
 import re
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -745,7 +746,7 @@ class TestCommands(unittest.TestCase):
         status = self.gcf("gui", "--status", "--port", port)
         self.assertIn(token, status.stdout)
         self.assertIn("is running", status.stdout)
-        clash = self.gcf("gui", "--port", port, "--runs-dir", runs)
+        clash = self.gcf("gui", "--port", port, "--runs-dir", Path(self.home) / "other")
         self.assertEqual(clash.returncode, 2)
         self.assertIn("already running", clash.stderr)
         self.assertEqual(self.gcf("gui", "--stop", "--port", port).returncode, 0)
@@ -775,6 +776,38 @@ class TestCommands(unittest.TestCase):
                 break
             time.sleep(0.5)
         self.assertRegex(status.stdout, r"detached\s+done")
+
+    def test_a_taken_port_moves_to_the_next_one(self):
+        """Others on a shared machine run this too."""
+        from gcf import gui
+        first = harness.free_port()
+        with socket.socket() as taken:
+            taken.bind(("127.0.0.1", first))
+            taken.listen(1)
+            self.assertNotEqual(gui.free_port(first), first)
+
+    def test_status_and_stop_find_the_server_without_a_port(self):
+        harness.need_binaries()
+        runs = Path(self.home) / "runs"
+        out = self.gcf("gui", "--background", "--runs-dir", runs)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.addCleanup(self.gcf, "gui", "--stop")
+        self.assertIn(re.search(r"token=(\S+)", out.stdout).group(1), self.gcf("gui", "--status").stdout)
+        self.assertIn("Already running", self.gcf("gui", "--background", "--runs-dir", runs).stdout)
+        self.assertEqual(self.gcf("gui", "--stop").returncode, 0)
+
+    def test_a_runs_directory_you_cannot_write_is_a_clean_error(self):
+        out = self.gcf("gui", "--runs-dir", "/proc/nope")
+        self.assertEqual(out.returncode, 2)
+        self.assertNotIn("Traceback", out.stderr)
+        self.assertIn("gcf: error", out.stderr)
+
+    def test_failure_hints(self):
+        from gcf import runner
+        self.assertIn("disk is full", runner.failure_hint("write failed: No space left on device"))
+        self.assertIn("memory", runner.failure_hint("fsi job failed (killed, for example because ...)"))
+        self.assertIsNone(runner.failure_hint("something else"))
+        self.assertIsNone(runner.failure_hint(None))
 
     def test_doctor(self):
         out = self.gcf("doctor")
@@ -1240,7 +1273,7 @@ class TestBrowser(GuiCase):
                                       m.dispatchEvent(new Event('change', {bubbles: true}));""")
         self.assertNotIn("hidden", self.driver.find_element(By.ID, "physics-note").get_attribute("class"))
         self.assertIn("hidden", self.driver.find_element(By.CSS_SELECTOR, '.field[data-key="cpn1"]').get_attribute("class"))
-        self.assertNotIn("hidden", self.driver.find_element(By.CSS_SELECTOR, '.field[data-key="estar"]').get_attribute("class"))
+        self.assertNotIn("hidden", self.driver.find_element(By.CSS_SELECTOR, '.field[data-section="generate"][data-key="estar"]').get_attribute("class"))
         self.driver.execute_script("resetForm(); showFormTab('setup')")
 
     def test_channel_scale_reaches_the_config(self):
@@ -1373,6 +1406,42 @@ class TestBrowser(GuiCase):
         self.assertIn("hidden", self.driver.find_element(By.CSS_SELECTOR, '.field[data-section="program"][data-key="beam"]').get_attribute("class"))
         self.driver.execute_script("resetForm()")
 
+    def test_changing_the_runs_directory(self):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        gui = Gui()
+        self.addCleanup(gui.close)
+        gui.api("api/runs", small_run("in_first", events=300, jobs=1, fsi=None))
+        gui.wait("in_first")
+        other = Path(gui.tmp) / "elsewhere"
+        status, out = gui.request("api/runs-dir", {"path": str(other)})
+        self.assertEqual(status, 400)
+        self.assertIn("does not exist", out["error"])
+        self.assertEqual(gui.request("api/runs-dir", {"path": "relative/path"})[0], 400)
+        gui.api("api/runs-dir", {"path": str(other), "create": True})
+        self.assertEqual(gui.api("api/runs")["runs"], [])
+        gui.api("api/runs", small_run("in_second", events=300, jobs=1, fsi=None))
+        self.assertEqual(gui.wait("in_second")["state"], "done")
+        self.assertTrue((other / "in_second/config.toml").is_file())
+        self.driver.get(gui.url)
+        WebDriverWait(self.driver, 20).until(lambda d: "elsewhere" in d.find_element(By.ID, "runs-dir").text)
+        self.driver.execute_script("chooseRunsDir()")
+        WebDriverWait(self.driver, 10).until(lambda d: d.find_element(By.ID, "f-use").is_displayed())
+        self.driver.find_element(By.ID, "f-close").click()
+        gui.api("api/runs-dir", {"path": str(gui.runs_dir)})
+        self.assertEqual([r["name"] for r in gui.api("api/runs")["runs"]], ["in_first"])
+
+    def test_the_guide_opens_from_the_page(self):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        self.open()
+        self.assertTrue(self.driver.find_element(By.ID, "code-version").text.startswith("version "))
+        self.driver.get(self.driver.find_element(By.ID, "docs-link").get_attribute("href"))
+        WebDriverWait(self.driver, 15).until(lambda d: d.find_elements(By.CSS_SELECTOR, "#doc h1"))
+        self.assertIn("web interface", self.driver.find_element(By.CSS_SELECTOR, "#doc h1").text.lower())
+        self.assertIn("Your first run", self.driver.find_element(By.ID, "doc").text)
+        self.assertEqual(self.driver.execute_script("return [...document.images].filter(i => i.complete && !i.naturalWidth).length"), 0)
+
     def test_internal_run_options_are_not_in_the_form(self):
         from selenium.webdriver.common.by import By
         self.open()
@@ -1387,8 +1456,8 @@ class TestBrowser(GuiCase):
                                       m.dispatchEvent(new Event('change', {bubbles: true})); showFormTab('physics');""")
         self.assertEqual(self.driver.find_element(By.ID, "f-generate-estar").get_attribute("min"), "0")
         self.set_value("f-generate-estar", -1)
-        WebDriverWait(self.driver, 10).until(lambda d: "invalid" in d.find_element(By.CSS_SELECTOR, '.field[data-key="estar"]').get_attribute("class"))
-        self.assertIn("at least 0", self.driver.find_element(By.CSS_SELECTOR, '.field[data-key="estar"] .ferr').text)
+        WebDriverWait(self.driver, 10).until(lambda d: "invalid" in d.find_element(By.CSS_SELECTOR, '.field[data-section="generate"][data-key="estar"]').get_attribute("class"))
+        self.assertIn("at least 0", self.driver.find_element(By.CSS_SELECTOR, '.field[data-section="generate"][data-key="estar"] .ferr').text)
         self.driver.execute_script("resetForm(); showFormTab('setup')")
 
     def test_run_row_keeps_keyboard_focus(self):
