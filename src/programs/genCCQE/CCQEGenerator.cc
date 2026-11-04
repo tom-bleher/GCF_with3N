@@ -119,6 +119,11 @@ void CCQEGenerator::generate_event(double &weight, double &Eneutrino, int &rec_t
   double kz = (k_plus - k_minus)/2.;
   TVector3 vk(k_perp*cos(phik),k_perp*sin(phik),kz);
   double Ek = (k_plus + k_minus)/2.;
+  if (!in_xB_nu_window(QSq, Eneutrino - Ek))
+    {
+      weight=0.;
+      return;
+    }
   vk_target.SetVect(vk);
   vk_target.SetT(Ek);
 
