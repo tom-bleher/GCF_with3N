@@ -111,7 +111,18 @@ class App:
         except (OSError, tomllib.TOMLDecodeError):
             return ""
         parts = []
-        g, f, r = c.get("generate"), c.get("fsi"), c.get("run", {})
+        g, f, e, r = c.get("generate"), c.get("fsi"), c.get("eic"), c.get("run", {})
+        if e:
+            sample = schema.EIC_SAMPLES.get(e.get("sample"))
+            slices = e.get("slices") or [[0, 0, 0]]
+            attempts = sum(x[2] for x in slices)
+            parts += ["ePIC", sample.label.split(" (")[0] if sample else str(e.get("sample")),
+                      schema.EIC_IONS.get(e.get("ion"), str(e.get("ion"))), " + ".join(e.get("beams", [])),
+                      f"Q2 {slices[0][0]:g}-{slices[-1][1]:g}",
+                      (f"{attempts / 1e6:g}M" if attempts >= 1e6 else f"{attempts / 1e3:g}k") + " attempts"]
+            if e.get("deexcite") not in (None, "none", "auto"):
+                parts.append(e["deexcite"])
+            return " · ".join(parts)
         if g:
             parts.append(g.get("model", "?"))
             if "target" in g:
@@ -174,7 +185,7 @@ class App:
             except tomllib.TOMLDecodeError:
                 pass
         logs = []
-        order = {"generate": 0, "fsi": 1, "merge": 2}
+        order = {"generate": 0, "fsi": 1, "simulate": 2, "reconstruct": 3, "resume": 4, "analyze": 5, "merge": 6}
         files = sorted((d / "logs").glob("*.log"), key=lambda p: (order.get(p.name.split("_")[0], 9), p.name)) \
             if (d / "logs").is_dir() else []
         for log in files:
@@ -187,7 +198,46 @@ class App:
         if gcf_log.exists() and gcf_log.stat().st_size:
             logs.insert(0, {"name": "gcf.log", "tail": gcf_log.read_text(errors="replace")[-3000:]})
         out["logs"] = logs
+        if out["config_data"] and "eic" in out["config_data"]:
+            out["eic"] = self.eic_details(d, out["config_data"]["eic"])
+            # while the container works the step logs are silent; each slice's run.log is not
+            for s in out["eic"]["slices"]:
+                run_log = d / s["label"] / "run.log"
+                if run_log.is_file():
+                    logs.append({"name": f"{s['label']}/run.log", "tail": "\n".join(
+                        run_log.read_text(errors="replace").splitlines()[-15:])})
         return out
+
+    def eic_details(self, d, eic):
+        """Per slice: events and chunks; the software that made them; the figures."""
+        slices, provenance = [], None
+        for label, beams, lo, hi, attempts in runner.eic_slices(eic):
+            s = d / label
+            info = {"label": label, "beams": beams, "q2": [lo, hi], "attempts": attempts,
+                    "path": str(s), "events": None, "jobs": None}
+            gen = runner._read_json(s / "gen.hepmc3.json")
+            if gen:
+                info["events"] = gen.get("events_written")
+            rec = runner._read_json(s / "run.json")
+            if rec:
+                info["jobs"] = rec.get("jobs")
+                if provenance is None and rec.get("container"):
+                    git = lambda part: (rec.get(part) or {}).get("git") or {}
+                    provenance = {"gcf": " ".join(rec.get("gcf") or []), "generator": " ".join(rec.get("generator") or []),
+                                  "epic": rec.get("epic", {}).get("install"), "epic_config": rec.get("epic", {}).get("config"),
+                                  "epic_commit": git("epic").get("commit"), "eicrecon": rec.get("eicrecon", {}).get("install"),
+                                  "eicrecon_commit": git("eicrecon").get("commit"), "abconv_preset": rec.get("abconv_preset"),
+                                  "container_image": rec["container"].get("container_image"),
+                                  "container_from": rec["container"].get("container_from"),
+                                  "container_build_date": rec["container"].get("container_build_date"),
+                                  "detector_path": rec["container"].get("detector_path")}
+            slices.append(info)
+        figures, plots = [], d / "plots"
+        if plots.is_dir():
+            figures = [{"name": p.stem, "png": p.name, "pdf": p.with_suffix(".pdf").name, "mtime": p.stat().st_mtime}
+                       for p in sorted(plots.glob("*.png"))]
+        return {"slices": slices, "provenance": provenance, "figures": figures,
+                "summary": (plots / "summary.json").is_file(), "plots": str(plots)}
 
     @staticmethod
     def with_runs_dir(raw, runs_dir):
@@ -200,7 +250,7 @@ class App:
 
     def check(self, raw):
         """Validate a config and run the stages' setup checks; returns the
-        resolved TOML and a list of problems."""
+        resolved TOML, a list of problems and, for the ePIC chain, what it will cost."""
         raw = self.with_runs_dir(raw, self.runs_dir)
         cfg = config.validate(raw, base_dir=self.runs_dir)
         problems = []
@@ -210,8 +260,11 @@ class App:
         elif (self.runs_dir / name).exists():
             problems.append(f"a run named {name!r} already exists; choose another name")
         problems += runner.check_setup(cfg)
-        return {"toml": config.dumps(cfg, comment="Run with:  gcf run <this file>"),
-                "problems": problems, "ok": not problems}
+        out = {"toml": config.dumps(cfg, comment="Run with:  gcf run <this file>"),
+               "problems": problems, "ok": not problems}
+        if "eic" in cfg["run"]["stages"]:
+            out["cost"] = dict(zip(("events", "gb", "core_hours"), runner.eic_cost(cfg)))
+        return out
 
     def delete_run(self, name):
         d = self.run_dir(name)
@@ -245,6 +298,24 @@ class App:
         with self.lock:
             self.children[name] = proc
         return name
+
+    def resume_run(self, name):
+        """Finish an ePIC run that stopped: its finished slices and chunks stay."""
+        d = self.run_dir(name)
+        if not self.is_run(d):
+            raise FileNotFoundError(name)
+        st = self.run_summary(d)
+        if st["state"] in ("running", "merging", "starting") or st["orphans"]:
+            raise ValueError("the run is still running")
+        cfg = d / "config.toml"
+        if not cfg.exists() or "eic" not in config.load(cfg)["run"]["stages"]:
+            raise ValueError("only ePIC runs that got past their start can be resumed")
+        log = open(d / "gcf.log", "a")
+        proc = subprocess.Popen([sys.executable, str(runner.REPO / "gcf"), "run", "-q", "--resume", str(cfg)],
+                                stdout=log, stderr=subprocess.STDOUT, cwd=str(self.runs_dir), start_new_session=True)
+        log.close()
+        with self.lock:
+            self.children[name] = proc
 
     def cancel_run(self, name):
         d = self.run_dir(name)
@@ -391,6 +462,7 @@ def make_handler(app):
                                           cookie=f"gcf_token={app.token}; HttpOnly; SameSite=Strict; Path=/")
                 if parts == ["api", "schema"]:
                     return self.send_json({"schema": schema.to_json(), "examples": cli.EXAMPLES,
+                                           "eic_software": config.eic_software_defaults(),
                                            "runs_dir": str(app.runs_dir), "cpus": os.cpu_count() or 1,
                                            "binaries": all(os.access(runner.BIN_DIR / b, os.X_OK)
                                                            for b in ("gcf_generate", "gcf_fsi"))})
@@ -404,6 +476,13 @@ def make_handler(app):
                     if f.parent != d.resolve() or f.suffix not in (".png", ".toml", ".log", ".json") \
                             or not f.is_file():
                         raise FileNotFoundError(parts[3])
+                    return self.send_file(f, download="download" in query)
+                if len(parts) == 5 and parts[:2] == ["api", "runs"] and parts[3] == "plots":
+                    plots = app.run_dir(parts[2]) / "plots"
+                    f = (plots / parts[4]).resolve()
+                    if f.parent != plots.resolve() or f.suffix not in (".png", ".pdf", ".json", ".txt") \
+                            or not f.is_file():
+                        raise FileNotFoundError(parts[4])
                     return self.send_file(f, download="download" in query)
                 if parts == ["api", "files"]:
                     return self.send_json(app.list_files(query.get("path", [""])[0]))
@@ -442,6 +521,9 @@ def make_handler(app):
                     return self.send_json({"name": app.start_run(body)})
                 if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "cancel":
                     app.cancel_run(parts[2])
+                    return self.send_json({"ok": True})
+                if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "resume":
+                    app.resume_run(parts[2])
                     return self.send_json({"ok": True})
                 if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "quicklook":
                     return self.send_json({"plot": app.quicklook(parts[2], body.get("stage", "fsi"))})
