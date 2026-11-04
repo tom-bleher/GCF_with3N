@@ -27,9 +27,10 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import cli, config, runner, schema
+from . import cli, config, results, runner, schema
 
 STATIC = Path(__file__).resolve().parent / "static"
+MODULE_RE = re.compile(r"[a-z_]+\.js\Z")
 NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.+-]{0,99}\Z")
 PLACEHOLDER_STATE = "failed"
 
@@ -46,6 +47,7 @@ class App:
         self.lock = threading.Lock()
         self.children = {}            # run name -> Popen of `gcf run`
         self.plot_lock = threading.Lock()   # matplotlib is not thread-safe
+        self.results_lock = threading.Lock()
 
     # -- runs ----------------------------------------------------------------
     def run_dir(self, name):
@@ -187,6 +189,12 @@ class App:
         if gcf_log.exists() and gcf_log.stat().st_size:
             logs.insert(0, {"name": "gcf.log", "tail": gcf_log.read_text(errors="replace")[-3000:]})
         out["logs"] = logs
+        out["results"] = {}
+        for stage, o in out["outputs"].items():
+            if o["exists"]:
+                cached = results.cached(o["path"], d / "results.json", stage)
+                if cached:
+                    out["results"][stage] = cached
         return out
 
     @staticmethod
@@ -267,16 +275,28 @@ class App:
             except (ProcessLookupError, PermissionError):
                 pass
 
-    def quicklook(self, name, stage):
-        from . import quicklook
+    def output_path(self, name, stage):
         d = self.run_dir(name)
         st = json.loads((d / "status.json").read_text())
         path = st.get("outputs", {}).get(stage)
         if not path or not Path(path).is_file():
             raise ValueError(f"no {stage} output yet")
+        return d, path
+
+    def quicklook(self, name, stage, cuts=None):
+        from . import quicklook
+        _, path = self.output_path(name, stage)
+        stats = {}
         with self.plot_lock:
-            out = quicklook.make(path)
-        return out.name
+            out = quicklook.make(path, cuts=cuts, stats=stats)
+        return {"plot": out.name, "stats": stats}
+
+    def results(self, name, stage):
+        """The summary of an output, computed once per version of the file."""
+        d, path = self.output_path(name, stage)
+        cache = d / "results.json"
+        with self.results_lock:
+            return results.cached(path, cache, stage) or results.store(path, cache, stage, results.summarize(path))
 
     def preview(self, raw):
         raw = self.with_runs_dir(raw, self.runs_dir)
@@ -389,6 +409,8 @@ def make_handler(app):
                     # lets a bookmark without the token keep working.
                     return self.send_file(STATIC / "index.html",
                                           cookie=f"gcf_token={app.token}; HttpOnly; SameSite=Strict; Path=/")
+                if len(parts) == 2 and parts[0] == "static" and MODULE_RE.fullmatch(parts[1]):
+                    return self.send_file(STATIC / parts[1])
                 if parts == ["api", "schema"]:
                     return self.send_json({"schema": schema.to_json(), "examples": cli.EXAMPLES,
                                            "runs_dir": str(app.runs_dir), "cpus": os.cpu_count() or 1,
@@ -444,7 +466,9 @@ def make_handler(app):
                     app.cancel_run(parts[2])
                     return self.send_json({"ok": True})
                 if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "quicklook":
-                    return self.send_json({"plot": app.quicklook(parts[2], body.get("stage", "fsi"))})
+                    return self.send_json(app.quicklook(parts[2], body.get("stage", "fsi"), body.get("cuts")))
+                if len(parts) == 4 and parts[:2] == ["api", "runs"] and parts[3] == "results":
+                    return self.send_json(app.results(parts[2], body.get("stage", "fsi")))
                 self.send_error_json("not found", HTTPStatus.NOT_FOUND)
             except (config.ConfigError, runner.RunError, ValueError, RuntimeError,
                     subprocess.TimeoutExpired) as e:
