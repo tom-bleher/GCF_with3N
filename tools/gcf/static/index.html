@@ -101,6 +101,18 @@ details.adv > summary { cursor: pointer; color: var(--muted); font-size: 13px; u
 details.adv > summary .n { color: var(--accent); font-weight: 600; }
 details.adv > .grid { margin-top: 8px; }
 .chan { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 18px; margin-top: 4px; }
+.boxes { display: flex; gap: 14px; height: 32px; align-items: center; }
+.boxes label { display: flex; align-items: center; gap: 5px; margin: 0; font-weight: 400; cursor: pointer; }
+.slices-table td, .slices-table th { padding: 2px 6px 2px 0; border: 0; }
+.slices-table td:last-child { width: 1%; }
+.slices-tools { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; align-items: center; }
+#eic-estimate { color: var(--muted); font-size: 12px; margin-top: 4px; }
+.figs { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; margin-top: 8px; }
+.figs figure { margin: 0; min-width: 0; }
+.figs figcaption { font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+.figs img.plot { margin-top: 0; }
+.prov { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 2px 12px; font-size: 12px; margin-top: 6px; }
+.prov dt { color: var(--muted); } .prov dd { margin: 0; overflow-wrap: anywhere; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .chan h4 { grid-column: 1 / -1; margin: 6px 0 0; font-size: 12px; color: var(--muted); font-weight: 600; }
 .chan label { display: flex; align-items: center; gap: 6px; cursor: pointer; flex: 1 1 auto; min-width: 0; }
 .chan-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
@@ -214,7 +226,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 <body>
 <header>
   <h1>GCF_with3N</h1>
-  <p class="sub">Generate quasi-elastic events from the Generalized Contact Formalism (GCF, plane-wave impulse approximation), add GENIE final-state interactions, or both.</p>
+  <p class="sub">Generate quasi-elastic events from the Generalized Contact Formalism (GCF, plane-wave impulse approximation), add GENIE final-state interactions, or run them through the ePIC detector chain.</p>
   <span class="links"><span id="code-version" class="muted" title="The code the stage programs were built from"></span> <a id="docs-link" href="#" target="_blank" rel="noopener">docs</a></span>
 </header>
 <div id="banner" class="banner hidden"></div>
@@ -227,6 +239,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
       <label><input type="radio" name="stages" value="generate">Generate only</label>
       <label><input type="radio" name="stages" value="fsi">FSI on a file</label>
       <label><input type="radio" name="stages" value="program">Other generators</label>
+      <label><input type="radio" name="stages" value="eic">EIC / ePIC</label>
     </div>
     <div id="stage-help"></div>
     <div id="form-tabs-slot"></div>
@@ -250,6 +263,10 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
       <div class="grid" id="grid-program"></div>
       <p id="program-note" class="note note-warn hidden"></p>
       <details class="adv hidden"><summary>Advanced <span class="n" id="adv-program"></span></summary><div class="grid" id="adv-grid-program"></div></details>
+    </fieldset>
+    <fieldset id="fs-eic"><legend>ePIC chain (collider frame, afterburner, npsim, eicrecon)</legend>
+      <div class="grid" id="grid-eic"></div>
+      <details class="adv"><summary>Advanced <span class="n" id="adv-eic"></span></summary><div class="grid" id="adv-grid-eic"></div></details>
     </fieldset>
     </div>
 
@@ -310,7 +327,8 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 const TOKEN = new URLSearchParams(location.search).get("token") || "";
 const STORAGE_KEY = "gcf-gui-form";
 const MODULES = ["results", "compare", "physics", "runs", "scans"];    // static/<name>.js, each adding to the page
-let SCHEMA = null, CHANNELS = [], TARGETS = {};
+let SCHEMA = null, CHANNELS = [], TARGETS = {}, EIC = null, EIC_SOFTWARE = {};
+let eicScale = "test";   // which statistics the Q^2 slices were filled with; null once edited by hand
 let selected = null, detailsTimer = null;
 let validateTimer = null, lastPlot = {}, rates = {}, autoPlotted = {};
 
@@ -360,15 +378,22 @@ function tokenUrl(path) { return path + (path.includes("?") ? "&" : "?") + "toke
 
 // ---------------------------------------------------------------- form ----
 const SKIP = { run: ["output_dir", "stages", "scan"], fsi: ["off", "scale"] };
+const SECTIONS = ["run", "generate", "fsi", "program", "eic"];
 function fieldId(section, key, part) { return `f-${section}-${key}${part ? "-" + part : ""}`; }
 function opt(section, key) { return SCHEMA[section].find(o => o.key === key); }
 
 function makeField(section, o) {
   const id = fieldId(section, o.key);
   const unit = o.unit ? el("span", { class: "unit" }, ` (${o.unit})`) : null;
-  const ph = o.default === null ? "default" : null;
+  const ph = (section === "eic" && EIC_SOFTWARE[o.key]) || (o.default === null ? "default" : null);
   let input, parts;
-  if (o.kind === "bool") {
+  if (o.kind === "slices") {
+    parts = [el("label", {}, o.label, el("span", { class: "unit" }, " (GeV²)"), tip(o)), slicesEditor(), el("div", { id: "eic-estimate" })];
+  } else if (o.kind === "list") {
+    parts = [el("label", {}, o.label, tip(o)), el("div", { class: "boxes", role: "group", "aria-label": o.label },
+      ...o.choices.map(c => { const cid = fieldId(section, o.key, c);
+        return el("label", { for: cid }, el("input", { type: "checkbox", id: cid, "data-choice": c, checked: (o.default || []).includes(c) }), c); }))];
+  } else if (o.kind === "bool") {
     input = el("input", { type: "checkbox", id, checked: !!o.default });
     parts = [el("div", { class: "check" }, input, el("label", { for: id }, o.label, tip(o)))];
   } else if (o.kind === "range" || o.kind === "target") {
@@ -388,7 +413,7 @@ function makeField(section, o) {
   } else if (o.choices) {
     input = el("select", { id });
     if (o.default === null) input.append(el("option", { value: "" }, "default"));
-    for (const c of o.choices) input.append(el("option", { value: String(c), selected: c === o.default }, String(c)));
+    for (const c of o.choices) input.append(el("option", { value: String(c), selected: c === o.default }, (o.choice_labels && o.choice_labels[c]) || String(c)));
     parts = [el("label", { for: id }, o.label, unit, tip(o)), input];
   } else if (o.kind === "float" || o.kind === "int") {
     input = el("input", { type: "number", step: o.kind === "int" ? "1" : "any", id, min: o.min, max: o.max,
@@ -400,7 +425,8 @@ function makeField(section, o) {
     if (section === "fsi" && o.key === "input")
       parts[1] = el("div", { class: "pair" }, input, el("button", { type: "button", onclick: openFiles }, "Browse…"));
   }
-  const wide = section === "fsi" && (o.key === "input" || o.key === "keep");
+  const wide = (section === "fsi" && (o.key === "input" || o.key === "keep")) || o.kind === "slices"
+    || (section === "eic" && (o.key === "sample" || (o.kind === "str" && !o.choices)));
   return el("div", { class: "field" + (wide ? " wide" : "") + (o.kind === "bool" ? " check-field" : "") + (o.kind === "target" ? " target" : ""),
     "data-section": section, "data-key": o.key, "data-models": (o.models || []).join(","), "data-advanced": o.advanced ? "1" : "" },
     ...parts, el("span", { class: "ferr hidden" }));
@@ -419,10 +445,51 @@ const STAGE_HELP = {
   "generate": "PWIA events without final-state interactions.",
   "fsi": "GENIE FSI on any event file in the GCF format, also from other generators.",
   "program": "The suite's other generators, each writing its own tree. Plots, FSI and comparing are not available for their files.",
+  "eic": "Rest-frame events boosted to the collider, through the afterburner, npsim and eicrecon in eic-shell, for each beam setting and Q² slice; then the PRC 105, 034001 figure set.",
 };
 
+// -- Q^2 slices of the ePIC chain ----------------------------------------------
+function slicesEditor() {
+  const body = el("tbody", { id: "f-eic-slices" });
+  return el("div", {}, el("table", { class: "slices-table" },
+      el("thead", {}, el("tr", {}, el("th", { scope: "col" }, "Q² min"), el("th", { scope: "col" }, "Q² max"), el("th", { scope: "col" }, "Attempts"), el("th", {}))),
+      body),
+    el("div", { class: "slices-tools" },
+      el("button", { type: "button", class: "small", onclick: () => { const rows = readSlicesRaw(), last = rows[rows.length - 1];
+        rows.push([last ? last[1] : "", "", ""]); setSlices(rows); eicScale = null; changed(); } }, "Add slice"),
+      el("button", { type: "button", class: "small", title: "1% of the production statistics: minutes, a few GB", onclick: () => fillSlices("test") }, "Test statistics"),
+      el("button", { type: "button", class: "small", title: "As the 2026-10 productions; hours on many cores and hundreds of GB for the largest samples", onclick: () => fillSlices("production") }, "Production statistics")));
+}
+function readSlicesRaw() { return [...document.querySelectorAll("#f-eic-slices tr")].map(tr => [...tr.querySelectorAll("input")].map(i => i.value)); }
+function setSlices(rows) {
+  document.getElementById("f-eic-slices").replaceChildren(...rows.map((row, r) => {
+    const tr = el("tr", {}, ...row.map((v, i) => el("td", {}, el("input", { type: "number", step: i === 2 ? "1" : "any", min: "0", value: v,
+      "aria-label": `Slice ${r + 1} ${["Q² min", "Q² max", "attempts"][i]}`, oninput: () => { eicScale = null; } }))),
+      el("td", {}, el("button", { type: "button", class: "small", "aria-label": `Remove slice ${r + 1}`, onclick: () => { tr.remove(); eicScale = null; changed(); } }, "×")));
+    return tr; }));
+}
+function fillSlices(scale) {
+  const sample = document.getElementById(fieldId("eic", "sample")).value, ion = document.getElementById(fieldId("eic", "ion")).value;
+  setSlices(EIC.samples[sample][scale][ion]); eicScale = scale; changed();
+}
+function readSlices() {
+  return readSlicesRaw().map((row, r) => row.map((v, i) => {
+    const x = Number(v);
+    if (v.trim() === "" || !Number.isFinite(x)) throw new Error(`Q² slices: row ${r + 1} needs Q² min, Q² max and attempts`);
+    return x; }));
+}
+function updateEicEstimate() {
+  const box = document.getElementById("eic-estimate"); if (!box) return;
+  let rows; try { rows = readSlices(); } catch (e) { box.textContent = ""; return; }
+  const s = EIC.samples[document.getElementById(fieldId("eic", "sample")).value];
+  const beams = [...document.querySelectorAll('[data-key="beams"] input:checked')].map(c => c.dataset.choice);
+  const events = rows.reduce((t, r) => t + r[2] * s.pass_fraction, 0);
+  const hours = beams.reduce((t, b) => t + events * EIC.core_s_per_event[b] / 3600, 0), gb = beams.length * events * EIC.mb_per_event / 1000;
+  box.textContent = `Roughly ${fmtInt(Math.round(events * beams.length))} events through the detector, ${gb < 10 ? gb.toFixed(1) : Math.round(gb)} GB, ${hours < 10 ? hours.toFixed(1) : Math.round(hours)} core-hours (from the 2026-10 productions).`;
+}
+
 function buildForm() {
-  for (const section of ["run", "generate", "fsi", "program"]) {
+  for (const section of SECTIONS) {
     const grid = document.getElementById("grid-" + section), adv = document.getElementById("adv-grid-" + section);
     for (const o of SCHEMA[section]) {
       if ((SKIP[section] || []).includes(o.key)) continue;
@@ -447,6 +514,8 @@ function buildForm() {
   document.getElementById(fieldId("fsi", "model")).addEventListener("change", updateVisibility);
   document.getElementById(fieldId("program", "program")).addEventListener("change", () => {
     updateVisibility(); document.getElementById(fieldId("run", "name")).value = defaultName(); });
+  setSlices(opt("eic", "slices").default);
+  for (const key of ["sample", "ion"]) document.getElementById(fieldId("eic", key)).addEventListener("change", () => { if (eicScale) fillSlices(eicScale); });
   document.getElementById("form-card").addEventListener("input", changed);
   document.getElementById("form-card").addEventListener("change", changed);
   updateVisibility();
@@ -457,7 +526,7 @@ function model() { return document.getElementById(fieldId("generate", "model")).
 function fsiModel() { return document.getElementById(fieldId("fsi", "model")).value; }
 function defaultName() {
   const d = new Date(), p = n => String(n).padStart(2, "0");
-  const st = stages(), m = st.includes("generate") ? model() : st.includes("program") ? document.getElementById(fieldId("program", "program")).value : "fsi";
+  const st = stages(), m = st.includes("eic") ? "epic" : st.includes("generate") ? model() : st.includes("program") ? document.getElementById(fieldId("program", "program")).value : "fsi";
   return `${m}-${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
 }
 
@@ -471,17 +540,19 @@ function updateVisibility() {
   const st = stages(), m = model(), fm = fsiModel();
   document.getElementById("fs-generate").classList.toggle("hidden", !st.includes("generate"));
   document.getElementById("fs-fsi").classList.toggle("hidden", !st.includes("fsi"));
+  document.getElementById("fs-eic").classList.toggle("hidden", !st.includes("eic"));
   document.getElementById("fs-program").classList.toggle("hidden", !st.includes("program"));
   const prog = document.getElementById(fieldId("program", "program")).value, progInfo = (SCHEMA._programs || {})[prog] || {};
   const progNote = document.getElementById("program-note");
   progNote.textContent = progInfo.note || ""; progNote.classList.toggle("hidden", !progInfo.note);
-  const fsiOnly = !st.includes("generate");
+  const fsiOnly = !st.includes("generate") && !st.includes("eic");
   document.getElementById("stage-help").textContent = STAGE_HELP[st.join(",")] || "";
   document.querySelectorAll(".field").forEach(f => {
     let show = true;
     if (f.dataset.section === "generate") show = f.dataset.models.split(",").includes(m);
     if (f.dataset.section === "program") show = f.dataset.models.split(",").includes(prog);
     if (f.dataset.section === "fsi" && ["input", "target", "vertex_power", "keep", "tree", "overwrite"].includes(f.dataset.key)) show = fsiOnly;
+    if (f.dataset.section === "run" && ["jobs", "keep_chunks"].includes(f.dataset.key)) show = !st.includes("eic");
     f.classList.toggle("hidden", !show);
   });
   const preset = document.getElementById(fieldId("generate", "target", "preset"));
@@ -503,10 +574,11 @@ function updateVisibility() {
   }
   updateAdvancedCounts();
   if (typeof updatePhysicsTab === "function") { updatePhysicsTab(); refreshPhysics(); }
+  updateEicEstimate();
 }
 
 function updateAdvancedCounts() {
-  for (const section of ["run", "generate", "fsi", "program"]) {
+  for (const section of SECTIONS) {
     let n = 0;
     document.querySelectorAll(`#adv-grid-${section} .field:not(.hidden)`).forEach(f => {
       const o = opt(section, f.dataset.key);
@@ -525,6 +597,8 @@ function readNumber(id, kind, label) {
 }
 // Value of a field as it would go into the config (null = unset/default).
 function valueOf(section, o) {
+  if (o.kind === "slices") return readSlices();
+  if (o.kind === "list") return [...document.querySelectorAll(`[data-section="${section}"][data-key="${o.key}"] input:checked`)].map(c => c.dataset.choice);
   if (o.kind === "bool") {
     const c = document.getElementById(fieldId(section, o.key)).checked;
     return c === !!o.default ? null : c;
@@ -548,6 +622,7 @@ function collect() {
   if (st.includes("generate")) cfg.generate = {};
   if (st.includes("fsi")) cfg.fsi = {};
   if (st.includes("program")) cfg.program = {};
+  if (st.includes("eic")) cfg.eic = {};
   for (const section of Object.keys(cfg)) {
     for (const o of SCHEMA[section]) {
       if ((SKIP[section] || []).includes(o.key)) continue;
@@ -576,12 +651,14 @@ function applyConfig(cfg) {
   const radio = document.querySelector(`input[name=stages][value="${st.join(",")}"]`) || document.querySelector("input[name=stages]");
   radio.checked = true;
   resetFields();
-  for (const section of ["run", "generate", "fsi", "program"]) {
+  for (const section of SECTIONS) {
     const vals = cfg[section] || {};
     for (const o of SCHEMA[section]) {
       if ((SKIP[section] || []).includes(o.key) || !(o.key in vals)) continue;
       const v = vals[o.key];
-      if (o.kind === "bool") document.getElementById(fieldId(section, o.key)).checked = !!v;
+      if (o.kind === "slices") { setSlices(v); eicScale = null; }
+      else if (o.kind === "list") document.querySelectorAll(`[data-section="${section}"][data-key="${o.key}"] input`).forEach(c => { c.checked = v.includes(c.dataset.choice); });
+      else if (o.kind === "bool") document.getElementById(fieldId(section, o.key)).checked = !!v;
       else if (o.kind === "range" || o.kind === "target") {
         const names = o.kind === "range" ? ["min", "max"] : ["A", "Z"];
         names.forEach((n, i) => document.getElementById(fieldId(section, o.key, n)).value = v[i]);
@@ -595,9 +672,11 @@ function applyConfig(cfg) {
   updateVisibility();
 }
 function resetFields() {
-  for (const section of ["run", "generate", "fsi", "program"]) for (const o of SCHEMA[section]) {
+  for (const section of SECTIONS) for (const o of SCHEMA[section]) {
     if ((SKIP[section] || []).includes(o.key)) continue;
-    if (o.kind === "bool") document.getElementById(fieldId(section, o.key)).checked = !!o.default;
+    if (o.kind === "slices") { setSlices(o.default); eicScale = "test"; }
+    else if (o.kind === "list") document.querySelectorAll(`[data-section="${section}"][data-key="${o.key}"] input`).forEach(c => { c.checked = (o.default || []).includes(c.dataset.choice); });
+    else if (o.kind === "bool") document.getElementById(fieldId(section, o.key)).checked = !!o.default;
     else if (o.kind === "range" || o.kind === "target") {
       const names = o.kind === "range" ? ["min", "max"] : ["A", "Z"], d = o.default || [null, null];
       names.forEach((n, i) => document.getElementById(fieldId(section, o.key, n)).value = d[i] === null ? "" : d[i]);
@@ -620,6 +699,7 @@ function resetForm() {
 function changed() {
   updateAdvancedCounts();
   updatePhysicsTab(); refreshPhysics();
+  updateEicEstimate();
   if (msgOwner !== "validate") showMsg("");   // a check/start result no longer describes the edited form
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(collect())); } catch (e) {}
   clearTimeout(validateTimer);
@@ -680,7 +760,8 @@ async function checkConfig() {
   try {
     const r = await api("api/check", cfg);
     const p = document.getElementById("preview"); p.textContent = r.toml; p.classList.remove("hidden");
-    if (r.ok) showMsg("Setup check passed: the generator accepted these settings." + (r.estimate_text ? "\n" + r.estimate_text : ""), "ok", "check");
+    const cost = r.cost ? ` Roughly ${fmtInt(Math.round(r.cost.events))} events, ${Math.ceil(r.cost.gb)} GB, ${Math.ceil(r.cost.core_hours)} core-hours.` : "";
+    if (r.ok) showMsg((r.cost ? "Setup check passed: the installs are in place and eic-shell can see them." : "Setup check passed: the generator accepted these settings.") + cost + (r.estimate_text ? "\n" + r.estimate_text : ""), "ok", "check");
     else { showMsg("Problems:\n• " + r.problems.map(friendly).join("\n• "), "err", "check"); r.problems.forEach(markField); }
     return r;
   } catch (e) { showMsg(friendly(plain(e)), "err", "check"); markField(e.message); return null; }
@@ -879,10 +960,11 @@ async function refreshDetails(first) {
       }
     }
   }
+  if (d.eic) renderEic(body, d, name);
   if (d.config) body.append(el("details", {}, el("summary", {}, "Config"), el("pre", {}, d.config)));
   if (d.logs && d.logs.length) {
     const logs = el("details", { open: running || d.state === "failed" }, el("summary", {}, `Logs (${d.logs.length})` + (running ? " · live" : "")));
-    for (const l of d.logs) logs.append(el("div", { class: "muted", style: "margin-top:8px" }, l.name, l.state === "failed" ? " (failed)" : "", " · ", logLink(name, l)), el("pre", {}, l.tail || "(empty)"));
+    for (const l of d.logs) logs.append(el("div", { class: "muted", style: "margin-top:8px" }, l.name, l.state === "failed" ? " (failed)" : "", l.file ? " · " : "", logLink(name, l)), el("pre", {}, l.tail || "(empty)"));
     if (d.logs_hidden) logs.append(el("p", { class: "setup" }, `${d.logs_hidden} more logs are in ${d.logs_dir}`));
     body.append(logs);
   }
@@ -894,6 +976,27 @@ async function refreshDetails(first) {
   if (!running && !first) { clearInterval(detailsTimer); detailsTimer = null; }
 }
 
+function renderEic(body, d, name) {
+  const plotUrl = (f, extra) => tokenUrl(`api/runs/${encodeURIComponent(name)}/plots/${encodeURIComponent(f)}`) + (extra || "");
+  const chunks = (j, s) => !j ? "" : !(j[s + "_ok"] + j[s + "_failed"]) ? "" : `${j[s + "_ok"]} ok` + (j[s + "_failed"] ? `, ${j[s + "_failed"]} failed` : "");
+  body.append(el("h3", {}, "Slices"), el("table", {}, el("thead", {}, el("tr", {}, ...["Slice", "Attempts", "Events", "npsim chunks", "eicrecon chunks"].map(h => el("th", { scope: "col" }, h)))),
+    el("tbody", {}, d.eic.slices.map(s => el("tr", { title: s.path }, el("td", {}, s.label), el("td", {}, fmtInt(s.attempts)), el("td", {}, s.events === null ? "" : fmtInt(s.events)),
+      el("td", {}, chunks(s.jobs, "sim")), el("td", {}, chunks(s.jobs, "reco")))))));
+  if (d.eic.figures.length) {
+    body.append(el("details", { open: true }, el("summary", {}, `Figures (${d.eic.figures.length})`),
+      el("p", { class: "setup" }, el("span", { class: "path" }, d.eic.plots), d.eic.summary ? [" · ", el("a", { href: plotUrl("summary.json"), target: "_blank", rel: "noopener" }, "summary.json")] : null),
+      el("div", { class: "figs" }, d.eic.figures.map(f => el("figure", {},
+        el("a", { href: plotUrl(f.png), target: "_blank", rel: "noopener", title: "Open full size" },
+          el("img", { class: "plot", loading: "lazy", alt: `Figure ${f.name}`, src: plotUrl(f.png, "&t=" + f.mtime) })),
+        el("figcaption", {}, f.name, " · ", el("a", { href: plotUrl(f.pdf, "&download=1") }, "PDF")))))));
+  }
+  const p = d.eic.provenance;
+  if (p) {
+    const rows = [["GCF commit", p.gcf], ["Generator", p.generator], ["epic", p.epic], ["epic config", p.epic_config], ["epic commit", p.epic_commit], ["Detector path", p.detector_path],
+      ["EICrecon", p.eicrecon], ["EICrecon commit", p.eicrecon_commit], ["Afterburner preset", p.abconv_preset], ["Container image", p.container_image], ["Container", p.container_from], ["Container built", p.container_build_date]].filter(r => r[1]);
+    body.append(el("details", {}, el("summary", {}, "Software"), el("dl", { class: "prov" }, rows.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]))));
+  }
+}
 function useAsTemplate(d) {
   const cfg = JSON.parse(JSON.stringify(d.config_data));
   if (cfg.run) { delete cfg.run.output_dir; delete cfg.run.chunks; cfg.run.seed = 0; }
@@ -961,7 +1064,7 @@ async function init() {
   let info;
   try { info = await api("api/schema"); }
   catch (e) { document.getElementById("runs").replaceChildren(el("p", { class: "msg err" }, e.message)); return; }
-  SCHEMA = info.schema; CHANNELS = SCHEMA._channels || []; TARGETS = SCHEMA._targets || {};
+  SCHEMA = info.schema; CHANNELS = SCHEMA._channels || []; TARGETS = SCHEMA._targets || {}; EIC = SCHEMA._eic; EIC_SOFTWARE = info.eic_software || {};
   RUNS_DIR = info.runs_dir;
   document.getElementById("docs-link").href = tokenUrl("docs");
   if (info.version) document.getElementById("code-version").textContent = "version " + info.version + " · ";

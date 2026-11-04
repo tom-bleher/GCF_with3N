@@ -63,6 +63,7 @@ Choose what to run at the top of the form:
 | **Generate + FSI** | Quasi-elastic events, then the GENIE cascade. Two output files, before and after FSI. |
 | **Generate only** | Events without final-state interactions. |
 | **FSI on a file** | The cascade on an existing event file, also from another generator. |
+| **EIC / ePIC** | Events through the collider-frame boost, the afterburner, `npsim` and `eicrecon`, then the figures. |
 | **Other generators** | `genDIS`, `genCCQE`, `genPhoto`, `genElectro`, `genIon`, `sfSampler`. |
 
 Fill in the form. The **?** next to a field explains it, and the fields change with
@@ -94,6 +95,17 @@ empty field uses that value, and none of this needs a rebuild.
 
 For FSI, untick a channel to switch it off, or type a factor next to it to scale its
 rate. The other fates are renormalized.
+
+### EIC / ePIC
+
+This runs the chain in `tools/run_eic_sim.sh` inside `eic-shell`, for each beam setting
+and Q² slice, then draws the figures of PRC 105, 034001. Choose the sample, the beams, the
+target and the Q² slices. **Test statistics** fills in 1% of the production's, which takes
+minutes and a few GB, so start there. **Check** looks for the geometry, EICrecon and field
+maps and estimates the cost. The far-forward results depend on which geometry and EICrecon
+you use: see the warning about them in [PIPELINE.md](PIPELINE.md). Scans and **Use the
+finished jobs** aren't available for this stage, but **Resume** is: finished slices and
+chunks stay.
 
 ### Other generators
 

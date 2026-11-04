@@ -1,12 +1,14 @@
 """Run configurations: TOML in, validated dict out, and back to TOML.
 
-A config has up to three tables, [run], [generate] and [fsi]; their keys are
-listed in schema.py. Validation fills in defaults, so a saved (resolved)
+A config has up to four tables, [run], [generate], [fsi] and [eic]; their keys
+are listed in schema.py. Validation fills in defaults, so a saved (resolved)
 config records every setting a run used.
 """
 
 import math
 import os
+import re
+import shutil
 import tomllib
 from pathlib import Path
 
@@ -100,6 +102,8 @@ def _coerce(opt, value, where):
             raise ConfigError(f"{where}: expected [A, Z], got {value!r}")
         if value[0] < 1 or not 0 <= value[1] <= value[0]:
             raise ConfigError(f"{where}: invalid nucleus A={value[0]}, Z={value[1]}")
+    elif kind == "slices":
+        value = _coerce_slices(value, where)
     elif kind == "list":
         if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
             raise ConfigError(f"{where}: expected a list of strings, got {value!r}")
@@ -127,6 +131,76 @@ def _coerce(opt, value, where):
     return value
 
 
+def _coerce_slices(value, where):
+    """[[q2 min, q2 max, attempts], ...]: disjoint Q^2 ranges, in ascending order in the result."""
+    number = lambda x: isinstance(x, (int, float)) and not isinstance(x, bool)
+    if (not isinstance(value, list) or not value
+            or not all(isinstance(s, list) and len(s) == 3 and all(map(number, s)) for s in value)):
+        raise ConfigError(f"{where}: expected [[q2 min, q2 max, attempts], ...], got {value!r}")
+    out = []
+    for lo, hi, n in value:
+        if n != int(n) or n < 1:
+            raise ConfigError(f"{where}: attempts must be a positive whole number, got {n!r}")
+        if not 0 <= lo < hi < 1000:
+            raise ConfigError(f"{where}: need 0 <= Q^2 min < Q^2 max, got {lo:g}:{hi:g}")
+        out.append([float(lo), float(hi), int(n)])
+    out.sort()
+    for a, b in zip(out, out[1:]):
+        if b[0] < a[1]:
+            raise ConfigError(f"{where}: {a[0]:g}:{a[1]:g} and {b[0]:g}:{b[1]:g} overlap; slices add, "
+                              f"so they must be disjoint")
+    return out
+
+
+def eic_software_defaults():
+    """What an empty software path of [eic] resolves to on this machine."""
+    home = Path.home()
+    shell = os.environ.get("EIC_SHELL") or (str(home / "eic/eic-shell") if (home / "eic/eic-shell").exists()
+                                            else shutil.which("eic-shell") or str(home / "eic/eic-shell"))
+    return {"epic_install": os.environ.get("EPIC_INSTALL") or "/opt/detector/epic-main",
+            "eicrecon_install": os.environ.get("EICRECON_INSTALL") or "/opt/local",
+            "eic_shell": shell,
+            "fieldmaps": os.environ.get("FIELDMAPS") or str(home / "eic/fieldmaps")}
+
+
+def _validate_eic(cfg):
+    run, eic = cfg["run"], cfg["eic"]
+    if len(run["stages"]) > 1:
+        raise ConfigError("[run] stages: eic is a chain of its own and does not combine with generate or fsi")
+    if run["seed"] > schema.EIC_MAX_SEED:
+        raise ConfigError(f"[run] seed must be at most {schema.EIC_MAX_SEED} for the eic stage "
+                          f"(npsim is seeded with seed * 100000 + chunk)")
+    if not eic["beams"]:
+        raise ConfigError("[eic] beams: choose at least one beam setting")
+    eic["beams"] = [b for b in schema.EIC_BEAMS if b in eic["beams"]]
+    sample = schema.EIC_SAMPLES[eic["sample"]]
+    if eic["ion"] not in sample.ions:
+        raise ConfigError(f"[eic] ion: {eic['ion']} does not go with this sample "
+                          f"(allowed: {', '.join(sample.ions)})")
+    if eic["deexcite"] == "auto":
+        eic["deexcite"] = "geant4" if "geant4" in sample.deexcite else "none"
+    elif eic["deexcite"] not in sample.deexcite:
+        raise ConfigError(f"[eic] deexcite: {eic['deexcite']} is not available for this sample "
+                          f"(allowed: {', '.join(sample.deexcite)})")
+    cpus = os.cpu_count() or 1
+    for key in ("sim_jobs", "sim_threads", "reco_jobs", "chunk_size"):
+        if eic[key] < 1:
+            raise ConfigError(f"[eic] {key} must be at least 1")
+    if eic["sim_jobs"] * eic["sim_threads"] > cpus:
+        raise ConfigError(f"[eic] sim_jobs: {eic['sim_jobs']} x {eic['sim_threads']} threads is more than "
+                          f"the {cpus} CPUs of this machine")
+    if eic["reco_jobs"] > cpus:
+        raise ConfigError(f"[eic] reco_jobs must be at most {cpus} (the CPUs of this machine)")
+    if eic["compress"] < 0:
+        raise ConfigError("[eic] compress must be >= 0")
+    if eic["lumi_fb"] <= 0:
+        raise ConfigError("[eic] lumi_fb must be positive")
+    if eic["gen_args"] and not re.fullmatch(r"[-\w .:=+]*", eic["gen_args"]):
+        raise ConfigError(f"[eic] gen_args: only generator flags and numbers, got {eic['gen_args']!r}")
+    for key, value in eic_software_defaults().items():
+        eic[key] = str(Path(eic[key]).expanduser()) if eic[key] else value
+
+
 def validate(raw, base_dir="."):
     """Check a parsed config and return it with all defaults filled in."""
     unknown = set(raw) - set(schema.SECTIONS)
@@ -152,7 +226,7 @@ def validate(raw, base_dir="."):
 
     if not run["stages"]:
         raise ConfigError("[run] stages is empty")
-    run["stages"] = [s for s in ["generate", "fsi", "program"] if s in run["stages"]]
+    run["stages"] = [s for s in ["generate", "fsi", "program", "eic"] if s in run["stages"]]
     max_jobs = max(1, os.cpu_count() or 1)
     if not 1 <= run["jobs"] <= max_jobs:
         raise ConfigError(f"[run] jobs must be between 1 and {max_jobs} (the CPUs of this machine)")
@@ -174,6 +248,8 @@ def validate(raw, base_dir="."):
         for o in schema.PROGRAM:
             if o.key in given and name not in o.models:
                 raise ConfigError(f"[program] {o.key} does not apply to {name}")
+    if "eic" in run["stages"]:
+        _validate_eic(cfg)
     if "generate" in run["stages"]:
         if gen["beam"] <= 0:
             raise ConfigError("[generate] beam must be positive")
@@ -270,6 +346,8 @@ def dumps(cfg, comment=None):
                 continue
             if section == "program" and cfg["program"]["program"] not in o.models:
                 continue
+            if section == "run" and "eic" in stages and o.key in ("jobs", "keep_chunks"):
+                continue           # the chain has its own job counts and keeps its chunks
             lines.append(f"{o.key} = {_toml_value(v)}")
         lines.append("")
     return "\n".join(lines)
