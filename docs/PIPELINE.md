@@ -195,6 +195,8 @@ The stage programs can also be called directly
 
 ## The web interface
 
+[GUI.md](GUI.md) is the guide to using it. In brief:
+
 ```bash
 ./gcf gui --background       # prints an ssh -L command and a URL with a token
 ```

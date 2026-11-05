@@ -157,6 +157,7 @@ a.btn.small { padding: 2px 8px; font-size: 12px; }
 #doctor .doctor-bad { color: var(--bad); }
 #doctor code { font-size: 12px; }
 #example-select { width: auto; }
+button.small.link { border: 0; background: none; color: var(--accent); padding: 0 2px; text-decoration: underline; }
 .scan-axis { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto; gap: 6px; margin-bottom: 6px; align-items: center; }
 #scans { margin-bottom: 10px; }
 #scans h3 { margin-top: 0; }
@@ -214,7 +215,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 <header>
   <h1>GCF_with3N</h1>
   <p class="sub">Generate quasi-elastic events from the Generalized Contact Formalism (GCF, plane-wave impulse approximation), add GENIE final-state interactions, or both.</p>
-  <span class="links"><a id="docs-link" href="#" target="_blank" rel="noopener">docs</a></span>
+  <span class="links"><span id="code-version" class="muted" title="The code the stage programs were built from"></span> <a id="docs-link" href="#" target="_blank" rel="noopener">docs</a></span>
 </header>
 <div id="banner" class="banner hidden"></div>
 <div id="doctor" class="banner hidden" role="status"></div>
@@ -300,7 +301,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
   <div class="pair"><input type="text" id="f-path" aria-label="Directory"><button type="button" id="f-go">Go</button>
     <button type="button" id="f-up">Up</button></div>
   <div class="filelist" id="f-list"></div>
-  <div class="actions"><button type="button" id="f-close">Close</button></div>
+  <div class="actions"><button type="button" class="primary hidden" id="f-use">Use this folder</button><button type="button" id="f-close">Close</button></div>
 </dialog>
 <div class="toast" id="toast" role="status"></div>
 
@@ -782,6 +783,7 @@ async function refreshRuns() {
   if (banner.textContent.startsWith("Cannot reach") || banner.textContent.startsWith("This address")) banner.classList.add("hidden");
   runsCache = data.runs;
   renderMachine(data.machine);
+  if (data.machine) showRunsDir(data.machine.runs_dir);
   renderScans(data.scans);
   notifyChanges();
   document.getElementById("runs-filter").classList.toggle("hidden", runsCache.length < 6);
@@ -848,7 +850,7 @@ async function refreshDetails(first) {
   if (Object.entries(d.outputs || {}).some(([s, o]) => o.exists && s !== "program")) actions.append(el("button", { type: "button", onclick: () => openCompare(name) }, "Compare…"));
   actions.append(el("a", { class: "btn", href: tokenUrl(`api/runs/${encodeURIComponent(name)}/config.toml`) + "&download=1", download: "config.toml" }, "Download config"));
   actions.append(el("button", { type: "button", title: "Copy the terminal command that repeats this run (use --force to overwrite it)",
-    onclick: () => navigator.clipboard.writeText(`./gcf run '${RUNS_DIR}/${name}/config.toml'`).then(() => toast("Copied; run it from the repository root (add --force to overwrite this run)")) }, "Copy run command"));
+    onclick: () => copyText(`./gcf run '${RUNS_DIR}/${name}/config.toml'`, "Copied; run it from the repository root (add --force to overwrite this run)") }, "Copy run command"));
   if (!running) actions.append(el("button", { type: "button", class: "danger", onclick: () => deleteRun(name) }, "Delete"));
   body.append(actions);
 
@@ -857,7 +859,7 @@ async function refreshDetails(first) {
     body.append(el("h3", {}, "Outputs"));
     for (const [stage, o] of outs) {
       const plotBtn = stage === "program" ? null : el("button", { type: "button", class: "small", disabled: !o.exists, onclick: () => quicklook(name, stage) }, o.plot ? "Redraw plots" : "Quick-look plots");
-      const copyBtn = el("button", { type: "button", class: "small", disabled: !o.exists, onclick: () => { navigator.clipboard.writeText(o.path).then(() => toast("Path copied")); } }, "Copy path");
+      const copyBtn = el("button", { type: "button", class: "small", disabled: !o.exists, onclick: () => copyText(o.path, "Path copied") }, "Copy path");
       body.append(el("div", { class: "out" },
         el("div", {}, el("b", {}, stage === "generate" ? "PWIA events" : stage === "program" ? "Events (genT tree)" : "With FSI"), " ", el("span", { class: "muted" }, o.exists ? fmtBytes(o.size) : "(not written yet)")),
         el("div", { class: "output-buttons" }, plotBtn, copyBtn, ...outputButtons(name, stage, o, d)),
@@ -929,15 +931,19 @@ async function listDir(path) {
     document.getElementById("f-path").value = d.path;
     list.replaceChildren(
       ...d.dirs.map(n => el("button", { type: "button", onclick: () => listDir(d.path + "/" + n) }, el("span", {}, "📁 " + n))),
-      ...d.files.map(f => el("button", { type: "button", onclick: () => pick(d.path + "/" + f.name) }, el("span", {}, f.name), el("span", { class: "muted" }, fmtBytes(f.size)))));
-    if (!d.dirs.length && !d.files.length) list.append(el("div", { class: "muted" }, "No .root files or folders here."));
+      ...(fileMode === "dir" ? [] : d.files.map(f => el("button", { type: "button", onclick: () => pick(d.path + "/" + f.name) }, el("span", {}, f.name), el("span", { class: "muted" }, fmtBytes(f.size))))));
+    if (!d.dirs.length && (fileMode === "dir" || !d.files.length)) list.append(el("div", { class: "muted" }, fileMode === "dir" ? "No folders here." : "No .root files or folders here."));
     document.getElementById("f-up").onclick = () => listDir(d.parent);
   } catch (e) { list.replaceChildren(el("div", { class: "msg err" }, e.message)); }
 }
 function plain(e) {
   return /NetworkError|Failed to fetch|Load failed/.test(e.message) ? "Cannot reach gcf gui: it was stopped or the SSH tunnel is down. Restart it and reload this page." : e.message;
 }
+let fileMode = "input";   // what the file dialog is choosing: an input file or the runs directory
 function openFiles() {
+  fileMode = "input";
+  document.getElementById("files-title").textContent = "Choose an event file";
+  document.getElementById("f-use").classList.add("hidden");
   const cur = document.getElementById(fieldId("fsi", "input")).value;
   document.getElementById("files").showModal(); listDir(cur ? cur.replace(/\/[^/]*$/, "") : "");
 }
@@ -957,8 +963,8 @@ async function init() {
   catch (e) { document.getElementById("runs").replaceChildren(el("p", { class: "msg err" }, e.message)); return; }
   SCHEMA = info.schema; CHANNELS = SCHEMA._channels || []; TARGETS = SCHEMA._targets || {};
   RUNS_DIR = info.runs_dir;
-  document.getElementById("runs-dir").textContent = "in " + info.runs_dir;
   document.getElementById("docs-link").href = tokenUrl("docs");
+  if (info.version) document.getElementById("code-version").textContent = "version " + info.version + " · ";
   const jobsOpt = SCHEMA.run.find(o => o.key === "jobs"); if (jobsOpt && info.cpus) jobsOpt.help += ` This machine has ${info.cpus} CPUs.`;
   if (!info.binaries) {
     const b = document.getElementById("banner");
@@ -974,6 +980,7 @@ async function init() {
   buildForm();
   buildFormTabs();
   buildScanPanel();
+  showRunsDir(info.runs_dir);
   buildConfigTools(info.examples || {});
   buildNotifyToggle();
   renderDoctor(info.doctor);
@@ -984,6 +991,7 @@ async function init() {
   document.getElementById("btn-reset").onclick = resetForm;
   document.getElementById("f-go").onclick = () => listDir(document.getElementById("f-path").value);
   document.getElementById("f-close").onclick = () => document.getElementById("files").close();
+  document.getElementById("f-use").onclick = useRunsDir;
   document.getElementById("runs-filter").addEventListener("input", renderRuns);
   refreshRuns();
   setInterval(refreshRuns, 3000);

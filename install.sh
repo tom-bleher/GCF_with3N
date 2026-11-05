@@ -16,6 +16,7 @@
 #      (used by ./gcf, the command-line and web front end; docs/PIPELINE.md)
 #   8. write build/gcf_env.sh, the runtime environment for the FSI binaries
 #   9. smoke test: generate a few events with each generator, check the trees
+#  10. Python packages for ./gcf's plots and summaries, in .venv if python3 lacks them
 #
 # Usage:
 #   ./install.sh [options]
@@ -610,6 +611,13 @@ if [[ $DO_TEST -eq 1 ]]; then
     step_done
 fi
 
+# Not fatal, and only if python3 doesn't have them: the generators don't need them.
+if [[ $DO_FSI -eq 1 ]]; then
+    step "Python packages for ./gcf"
+    info "$("$REPO_DIR/tools/gcf/setup_python.sh" 2>&1 | tail -n 2 | tr '\n' ' ')"
+    step_done
+fi
+
 # ----------------------------------------------------------------------------
 # Summary
 # ----------------------------------------------------------------------------
@@ -630,7 +638,8 @@ if [[ $DO_FSI -eq 1 ]]; then
     echo
     echo " Easiest way to run: the ./gcf front end (no environment setup needed),"
     echo "   ./gcf example 3N > my_run.toml && ./gcf run my_run.toml"
-    echo "   ./gcf gui          # web interface, open it through an SSH tunnel"
+    echo "   ./gcf gui --background   # web interface, open it through an SSH tunnel"
+    echo "   ./gcf doctor             # check that everything is ready"
     echo " See docs/PIPELINE.md."
     echo
     echo " To run the FSI generators, in each new shell:"

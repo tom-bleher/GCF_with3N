@@ -106,6 +106,25 @@ def environment():
     return dict(env)
 
 
+FAILURE_HINTS = [
+    (r"No space left|Disk quota", "The disk is full. Free some space, then resume the run: it keeps what finished."),
+    (r"killed, for example|Killed|out of memory|bad_alloc", "It may have run out of memory. Resume the run with fewer "
+     "parallel jobs in its config, or wait until the machine is less busy."),
+    (r"error while loading shared libraries|cannot open shared object", "A program can't find its libraries. "
+     "./gcf doctor shows what is missing, and ./install.sh usually fixes it."),
+    (r"GENIE is not set|GXMLPATH", "The GENIE setup is missing. ./gcf doctor shows what is wrong."),
+    (r"Permission denied", "A file or directory can't be written. Check the permissions of the runs directory."),
+]
+
+
+def failure_hint(error):
+    """What someone can do about a failed run, from its error text."""
+    for pattern, hint in FAILURE_HINTS:
+        if error and re.search(pattern, error):
+            return hint
+    return None
+
+
 def default_runs_dir():
     """Where runs go without --runs-dir: $GCF_RUNS_DIR, <repo>/runs, or, in a
     checkout you can't write to, ~/gcf_runs."""

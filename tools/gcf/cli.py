@@ -359,43 +359,48 @@ def cmd_summary(args):
 
 def cmd_gui(args):
     from . import gui
-    running = gui.read_server(args.port)
     token = gui.stable_token(args.new_token)
+    servers = gui.my_servers(args.port)
     if args.status or args.stop:
-        if not running:
-            print(f"No gcf gui of yours is running on port {args.port}.")
+        if not servers:
+            print("No gcf gui of yours is running" + (f" on port {args.port}." if args.port else "."))
             return not args.stop
-        if args.stop:
-            os.kill(running["pid"], signal.SIGTERM)
-            print(f"Stopped the gcf gui on port {args.port}. Runs already started keep going.")
-            return True
-        print(f"gcf gui is running on port {args.port}, with runs in {running['runs_dir']}:\n"
-              f"    http://localhost:{args.port}/?token={token}")
+        for rec in servers:
+            if args.stop:
+                os.kill(rec["pid"], signal.SIGTERM)
+                print(f"Stopped the gcf gui on port {rec['port']}. Runs already started keep going.")
+            else:
+                print(f"gcf gui is running, with runs in {rec['runs_dir']}:\n"
+                      f"    http://localhost:{rec['port']}/?token={token}\n"
+                      f"It is on {os.uname().nodename}; from your laptop, first: "
+                      f"ssh -N -L {rec['port']}:localhost:{rec['port']} {os.environ.get('USER', 'you')}@{os.uname().nodename}")
         return True
-    runs_dir = Path(args.runs_dir).expanduser().resolve() if args.runs_dir else runner.default_runs_dir()
-    if args.background:
-        if running:
-            print(f"Already running on port {args.port}, with runs in {running['runs_dir']}:\n"
-                  f"    http://localhost:{args.port}/?token={token}")
-            return True
-        runs_dir.mkdir(parents=True, exist_ok=True)
-        again = ["gui", "--port", str(args.port), "--host", args.host, "--runs-dir", str(runs_dir), "--quiet"]
-        again += ["--max-cpus", str(args.max_cpus)] if args.max_cpus else []
-        log = gui.config_dir() / f"gui-{args.port}.log"
-        detach({"args": again, "log": log})
-        deadline = time.time() + 20
-        while time.time() < deadline and not gui.read_server(args.port):
-            time.sleep(0.1)
-        if not gui.read_server(args.port):
-            raise runner.RunError(f"the interface did not start; see {log}")
-        print(gui.banner(gui.App(runs_dir, serve=False, token=token), args.host, args.port))
-        print(f"\nRunning on its own: log out whenever you like. Stop it with: ./gcf gui --stop --port {args.port}\n"
-              f"Find this URL again with: ./gcf gui --status --port {args.port}")
+    runs_dir = Path(args.runs_dir).expanduser().resolve() if args.runs_dir else runner.default_runs_dir().resolve()
+    same = [rec for rec in servers if Path(rec["runs_dir"]) == runs_dir]
+    if same:
+        rec = same[0]
+        print(f"Already running, with runs in {rec['runs_dir']}:\n    http://localhost:{rec['port']}/?token={token}")
         return True
-    if running:
+    if args.port and servers:
         raise runner.RunError(f"a gcf gui of yours is already running on port {args.port}; see gcf gui --status, "
                               f"or use another --port")
-    gui.serve(args.host, args.port, runs_dir, token=token, max_cpus=args.max_cpus, quiet=args.quiet)
+    port = args.port or gui.free_port()
+    if args.background:
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        again = ["gui", "--port", str(port), "--host", args.host, "--runs-dir", str(runs_dir), "--quiet"]
+        again += ["--max-cpus", str(args.max_cpus)] if args.max_cpus else []
+        log = gui.config_dir() / f"gui-{port}.log"
+        detach({"args": again, "log": log})
+        deadline = time.time() + 20
+        while time.time() < deadline and not gui.read_server(port):
+            time.sleep(0.1)
+        if not gui.read_server(port):
+            raise runner.RunError(f"the interface did not start; see {log}")
+        print(gui.banner(gui.App(runs_dir, serve=False, token=token), args.host, port))
+        print(f"\nRunning on its own: log out whenever you like. Stop it with: ./gcf gui --stop\n"
+              f"Find this URL again with: ./gcf gui --status")
+        return True
+    gui.serve(args.host, port, runs_dir, token=token, max_cpus=args.max_cpus, quiet=args.quiet)
     return True
 
 
@@ -488,7 +493,7 @@ def main(argv=None):
     p.set_defaults(func=cmd_summary)
 
     p = sub.add_parser("gui", help="web interface (open it through an SSH tunnel)")
-    p.add_argument("--port", type=int, default=8765)
+    p.add_argument("--port", type=int, help="default: the first free one from 8765, as a shared machine may have several")
     p.add_argument("--host", default="127.0.0.1",
                    help="interface to listen on (default: localhost only)")
     p.add_argument("--runs-dir", help="where GUI runs are written (default: $GCF_RUNS_DIR, else <repo>/runs "
@@ -517,7 +522,7 @@ def main(argv=None):
     args = parser.parse_args(argv)
     try:
         ok = args.func(args)
-    except (config.ConfigError, runner.RunError, RuntimeError) as e:
+    except (config.ConfigError, runner.RunError, RuntimeError, OSError) as e:
         print(f"gcf: error: {e}", file=sys.stderr)
         return 2
     return 0 if ok else 1

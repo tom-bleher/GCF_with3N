@@ -35,6 +35,7 @@ function runActions(name, d, actions, body) {
     const text = Object.entries(d.partial).map(([s, p]) => `${STAGE_NAMES[s] || s}: ${fmtInt(p.events)} of ${fmtInt(p.total)} events`).join("; ");
     body.append(el("p", { class: "note note-warn" }, `These outputs hold part of the run: ${text}. Σw / attempts is still right, because each job's attempts are counted.`));
   }
+  if (d.hint) body.append(el("p", { class: "note note-warn" }, d.hint));
   if (d.size) body.append(el("p", { class: "setup" }, `${fmtSize(d.size)} on disk`));
   if (d.state === "stopped" && !d.orphans && d.resumable) {
     body.append(el("p", { class: "setup" }, "The run stopped without finishing, for example because the machine restarted. Nothing it finished is lost."));
@@ -164,4 +165,47 @@ function buildNotifyToggle() {
     try { localStorage.setItem("gcf-gui-notify", box.checked ? "1" : "0"); } catch (e) {}
   });
   document.getElementById("machine-line").append(el("label", { class: "notify", for: "notify-toggle", title: "A desktop notification when a run ends, while this page is open" }, box, "Notify me"));
+}
+
+// -- small things --------------------------------------------------------------
+function copyText(text, done) {
+  // The clipboard API exists only on localhost or https.
+  if (navigator.clipboard) navigator.clipboard.writeText(text).then(() => toast(done));
+  else window.prompt("Copy this:", text);
+}
+
+// -- the runs directory ----------------------------------------------------------
+function showRunsDir(path) {
+  if (path === RUNS_DIR && document.getElementById("runs-dir").dataset.ready) return;
+  RUNS_DIR = path;
+  const box = document.getElementById("runs-dir");
+  box.dataset.ready = "1";
+  box.replaceChildren("in " + path + " ", el("button", { type: "button", class: "small link", onclick: chooseRunsDir }, "Change…"));
+}
+
+function chooseRunsDir() {
+  fileMode = "dir";
+  document.getElementById("files-title").textContent = "Choose where runs are written";
+  document.getElementById("f-use").classList.remove("hidden");
+  document.getElementById("files").showModal();
+  listDir(RUNS_DIR);
+}
+
+async function useRunsDir() {
+  const path = document.getElementById("f-path").value.trim();
+  try {
+    let r;
+    try { r = await api("api/runs-dir", { path }); }
+    catch (e) {
+      if (!/does not exist/.test(e.message) || !confirm(`${path} does not exist. Create it?`)) throw e;
+      r = await api("api/runs-dir", { path, create: true });
+    }
+    document.getElementById("files").close();
+    selected = null; leaveScan();
+    document.getElementById("d-title").textContent = "Run details";
+    document.getElementById("d-body").replaceChildren(el("p", { class: "placeholder" }, "Select a run to see its progress, outputs, plots and logs."));
+    showRunsDir(r.runs_dir);
+    refreshRuns();
+    toast("Runs are now written to " + r.runs_dir);
+  } catch (e) { document.getElementById("f-list").replaceChildren(el("div", { class: "msg err" }, plain(e))); }
 }
