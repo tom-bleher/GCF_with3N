@@ -22,7 +22,8 @@ TARGETS = {
     "2N": [(2, 1, "2H"), (3, 1, "3H"), (3, 2, "3He"), (4, 2, "4He"), (6, 3, "6Li"), (12, 6, "12C"),
            (27, 13, "27Al"), (40, 18, "40Ar"), (40, 20, "40Ca"), (56, 26, "56Fe"), (208, 82, "208Pb")],
 }
-TARGETS["MF"] = TARGETS["2N"]
+# MF needs the A-1 residual masses, which the nucleus tables have only for 12C.
+TARGETS["MF"] = [(12, 6, "12C")]
 
 # Interaction channels of the GENIE cascade that gcf_fsi --channel can switch
 # off, and whether each is a separate fate in the hN / hA model.
@@ -67,9 +68,9 @@ GENERATE = [
     # De Forest: Nucl. Phys. A 392, 232 (1983), doi:10.1016/0375-9474(83)90124-0
     Opt("cs", "str", "--cs", "cc1", choices=["cc1", "cc2", "onshell"],
         label="eN cross section", help="De Forest cc1 (default), cc2, or on-shell.", advanced=True),
-    Opt("sigma_cm", "float", "--sigma-cm", None, label="sigma_CM", unit="GeV/c",
+    Opt("sigma_cm", "float", "--sigma-cm", None, models=["3N", "2N"], label="sigma_CM", unit="GeV/c",
         help="CM momentum width of the SRC cluster per component. Default: 0.15 (3N), "
-             "the nucleus table value (2N/MF).", advanced=True),
+             "the nucleus table value (2N).", advanced=True),
     Opt("q2", "range", "--q2", None, label="Q^2 window", unit="GeV^2",
         help="Generation-time Q^2 window MIN:MAX. Default: open (3N), 1:10 (2N/MF).", advanced=True),
     # 3N
@@ -86,10 +87,10 @@ GENERATE = [
     Opt("cm", "bool", "--no-cm", True, models=["3N"], invert=True,
         label="CM motion of the triplet", advanced=True),
     # 2N / MF
-    Opt("nn", "str", "--nn", None, models=["2N", "MF"], label="NN interaction",
+    Opt("nn", "str", "--nn", None, models=["2N"], label="NN interaction",
         choices=NN_INTERACTIONS,
         help="NN interaction behind the pair wave function and contacts (default AV18)."),
-    Opt("estar", "float", "--estar", None, models=["2N", "MF"], label="E*", unit="GeV",
+    Opt("estar", "float", "--estar", None, models=["2N"], label="E*", unit="GeV",
         help="Excitation energy of the residual nucleus.", advanced=True),
     Opt("kcut", "float", "--kcut", None, models=["2N"], label="k_rel cutoff", unit="GeV/c",
         help="Relative-momentum floor of the SRC pair (default 0.25).", advanced=True),

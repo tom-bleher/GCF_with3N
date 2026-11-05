@@ -82,7 +82,7 @@ events = 1000000              # accepted events, over all jobs
 target = [12, 6]
 wave_function = "AV18"        # 3N: AV18, AV18+UIX, AV18+TM, CDBonn, CDBonn+TM, or ...-pD
 theta_e = [5.0, 40.0]         # deg
-# 2N/MF: nn = "AV18" | "N2LO" | "N2LO12" | "N3LO" | "AV4" | "NV"; MF: fermi_gas = "global" | "local"
+# 2N: nn = "AV18" | "N2LO" | "N2LO12" | "N3LO" | "AV4" | "NV"; MF (12C only): fermi_gas = "global" | "local"
 
 [fsi]
 model = "hN"                  # hN or hA
