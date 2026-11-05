@@ -16,16 +16,18 @@ per generation attempt of each sample. Exits 1 if any p-value is below
 
 An unweighted test can't see a change that only moves weights, such as a
 different contact: the events are the same and only their weights differ.
---weighted decides on a weighted test instead. Its statistic is the chi^2 of the
-normalized weighted histograms, but the weights in this project are too
-heavy-tailed for that statistic to follow a chi^2 distribution: on samples of
-identical settings, 3N gave p < 0.001 in 5-8% of the tests. So its p-value comes
-from a permutation test: events are randomly reassigned between the samples,
-which needs no assumption about the weights. Each sample's weights are first
-scaled to sum to one, so the test is about shapes; the difference in scale is
-the pull of sum(w)/attempts. It starts with PERMUTATIONS relabellings and goes
-to PERMUTATIONS_MAX for a p-value below 0.05, so its smallest p-value is about
-1/PERMUTATIONS_MAX. Samples made with the same seed share events, which makes
+--weighted decides on a weighted test instead. Its statistic is Pearson's chi^2 of the
+normalized weighted histograms, with the pooled shape and each sample's effective number
+of events in the denominator; each bin's own sum of w^2 there made a bin that came out low
+look significant for that reason alone. The weights in this project are too heavy-tailed
+for that statistic to follow a chi^2 distribution, and the samples can have different
+weight distributions (say, with and without importance sampling), so swapping events
+between them isn't valid either. Its p-value comes from a centred bootstrap: each
+sample is resampled with its own weights, and the difference of each replica from its
+own sample is compared with the difference between the samples. This tests the shapes;
+the difference in scale is the pull of sum(w)/attempts. It starts with BOOTSTRAPS
+replicas and goes to BOOTSTRAPS_MAX for a p-value below 0.05, so its smallest p-value
+is about 1/BOOTSTRAPS_MAX. Samples made with the same seed share events, which makes
 this test conservative.
 
 Files without FSI (no part_* branches) get the generated observables only.
@@ -45,8 +47,8 @@ from scipy import stats
 
 M_N = 0.93892
 PROTON, NEUTRON = 2212, 2112
-PERMUTATIONS = 200
-PERMUTATIONS_MAX = 1000
+BOOTSTRAPS = 200
+BOOTSTRAPS_MAX = 1000
 FSI_BRANCHES = ["part_pdg", "part_px", "part_py", "part_pz", "part_rescatterCode"]
 
 
@@ -146,48 +148,61 @@ def weighted_hist(x, w, bins):
 
 
 def chi2_weighted(x1, w1, x2, w2, bins, rng=None):
-    """The chi^2 of two normalized weighted histograms, with a permutation p-value.
-    Returns (chi2, number of bins in use - 1, p); NaNs if there are too few bins."""
+    """Whether two weighted samples have the same shape: Pearson's chi^2 of their normalized
+    weighted histograms, with a p-value from a centred bootstrap. Returns (chi2, number
+    of bins in use - 1, p); NaNs if there are too few bins."""
     rng = rng or np.random.default_rng(20261104)
-    ok1, ok2 = np.isfinite(x1), np.isfinite(x2)
-    x = np.concatenate([x1[ok1], x2[ok2]])
-    sum1, sum2 = w1[ok1].sum(), w2[ok2].sum()
-    if sum1 <= 0 or sum2 <= 0:
-        return float("nan"), 0, float("nan")
-    w = np.concatenate([w1[ok1] / sum1, w2[ok2] / sum2])
-    first = np.zeros(len(x), dtype=bool)
-    first[:int(ok1.sum())] = True
+
+    def prepare(x, w):
+        ok = np.isfinite(x)
+        x, w = x[ok], w[ok]
+        nb = len(bins) - 1
+        idx = np.searchsorted(bins, x, side="right") - 1
+        idx[x == bins[-1]] = nb - 1
+        inside = (idx >= 0) & (idx < nb)
+        return idx[inside], w[inside]
+
     nb = len(bins) - 1
-    idx = np.searchsorted(bins, x, side="right") - 1
-    idx[x == bins[-1]] = nb - 1
-    inside = (idx >= 0) & (idx < nb)
-    idx, w, first = idx[inside], w[inside], first[inside]
-    w2 = w * w
-    total, total2 = np.bincount(idx, w, nb), np.bincount(idx, w2, nb)
-    use = total2 > 0
+    idx1, w1 = prepare(x1, w1)
+    idx2, w2 = prepare(x2, w2)
+    if not len(idx1) or not len(idx2) or w1.sum() <= 0 or w2.sum() <= 0:
+        return float("nan"), 0, float("nan")
+
+    def shape(idx, w):
+        """The normalized histogram of a sample and its effective number of events."""
+        total = np.bincount(idx, w, nb)
+        return total / total.sum(), w.sum()**2 / (w * w).sum()
+
+    p1, n1 = shape(idx1, w1)
+    p2, n2 = shape(idx2, w2)
+    # Pearson's denominator, of the pooled shape: the same for the data and its replicas,
+    # and hardly moved by a fluctuation in the bin. A bin's own sum of w^2 is neither, and
+    # a bin that came out low then looks significant because it came out low.
+    pooled = (n1 * p1 + n2 * p2) / (n1 + n2)
+    use = pooled > 0
     if use.sum() < 2:
         return float("nan"), 0, float("nan")
+    scale = 1 / (1 / n1 + 1 / n2)
 
-    def statistic(mask):
-        s1, v1 = np.bincount(idx[mask], w[mask], nb)[use], np.bincount(idx[mask], w2[mask], nb)[use]
-        s2, v2 = total[use] - s1, total2[use] - v1
-        W1, W2 = s1.sum(), s2.sum()
-        if W1 <= 0 or W2 <= 0:
-            return 0.
-        denominator = W2**2 * v1 + W1**2 * v2
-        filled = denominator > 0
-        return float(np.sum((W2 * s1[filled] - W1 * s2[filled])**2 / denominator[filled]))
+    def statistic(d):
+        return float(scale * np.sum(d[use]**2 / pooled[use]))
 
-    observed = statistic(first)
-    fraction = first.mean()
+    observed = statistic(p1 - p2)
+
+    def replica(idx, w, centre):
+        # A Poisson bootstrap of one sample, with its own weights.
+        total = np.bincount(idx, w * rng.poisson(1.0, len(w)), nb)
+        norm = total.sum()
+        return total / norm - centre if norm > 0 else np.zeros(nb)
+
     above = tried = 0
     while True:
-        target = PERMUTATIONS if tried < PERMUTATIONS else PERMUTATIONS_MAX
+        target = BOOTSTRAPS if tried < BOOTSTRAPS else BOOTSTRAPS_MAX
         for _ in range(target - tried):
-            above += statistic(rng.random(len(idx)) < fraction) >= observed
+            above += statistic(replica(idx1, w1, p1) - replica(idx2, w2, p2)) >= observed
         tried = target
         p = (1 + above) / (1 + tried)
-        if tried >= PERMUTATIONS_MAX or p >= 0.05:
+        if tried >= BOOTSTRAPS_MAX or p >= 0.05:
             return observed, int(use.sum()) - 1, p
 
 
