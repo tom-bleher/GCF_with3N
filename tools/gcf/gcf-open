@@ -103,7 +103,7 @@ else
     opened=
 fi
 if [ -n "$opened" ]; then
-    echo "Opened $url"
+    echo "Sent $url to your browser; if no window opens, open that address yourself."
 else
     echo "Open this address in your browser: $url"
 fi
