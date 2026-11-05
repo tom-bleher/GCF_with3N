@@ -20,6 +20,7 @@ import shlex
 import signal
 import subprocess
 import sys
+import threading
 import time
 import tomllib
 from pathlib import Path
@@ -447,7 +448,10 @@ def cmd_gui(args):
     same = [rec for rec in servers if Path(rec["runs_dir"]) == runs_dir]
     if same:
         rec = same[0]
-        print(f"Already running, with runs in {rec['runs_dir']}:\n    http://localhost:{rec['port']}/?token={token}")
+        url = f"http://localhost:{rec['port']}/?token={token}"
+        print(f"Already running, with runs in {rec['runs_dir']}:\n    {url}")
+        if open_browser(url, args.browser):
+            print("Opened it in your browser.")
         return True
     if args.port and servers:
         raise runner.RunError(f"a gcf gui of yours is already running on port {args.port}; see gcf gui --status, "
@@ -467,9 +471,44 @@ def cmd_gui(args):
         print(gui.banner(gui.App(runs_dir, serve=False, token=token), args.host, port))
         print(f"\nRunning on its own: log out whenever you like. Stop it with: ./gcf gui --stop\n"
               f"Find this URL again with: ./gcf gui --status")
+        if open_browser(f"http://localhost:{port}/?token={token}", args.browser):
+            print("Opened it in your browser.")
         return True
+    if not args.quiet and browser_here(args.browser):
+        def open_when_listening():
+            deadline = time.time() + 20
+            while time.time() < deadline and not gui.read_server(port):
+                time.sleep(0.1)
+            open_browser(f"http://localhost:{port}/?token={token}", True)
+        threading.Thread(target=open_when_listening, daemon=True).start()
     gui.serve(args.host, port, runs_dir, token=token, max_cpus=args.max_cpus, quiet=args.quiet)
     return True
+
+
+def browser_here(choice=None):
+    """Whether to open the page in a browser from here. --browser or --no-browser
+    decide; otherwise yes when the browser is the user's own: $BROWSER (a VS Code
+    remote terminal sets it, to open the laptop's browser and forward the port), or a
+    desktop session that isn't reached over SSH, where a browser would open on this
+    machine, or slowly over X11."""
+    if choice is not None:
+        return choice
+    if os.environ.get("BROWSER"):
+        return True
+    if os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY"):
+        return False
+    return sys.platform == "darwin" or bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+
+
+def open_browser(url, choice=None):
+    """Open the page if browser_here() says so; True if a browser took it."""
+    if not browser_here(choice):
+        return False
+    import webbrowser
+    try:
+        return webbrowser.open(url)
+    except Exception:  # noqa: BLE001 - not being able to open a browser is no error
+        return False
 
 
 def cmd_doctor(args):
@@ -573,6 +612,12 @@ def main(argv=None):
     p.add_argument("--max-cpus", type=int, help="CPUs its runs may use together; more runs wait in a queue "
                                                 "(default: all of this machine's)")
     p.add_argument("--new-token", action="store_true", help="replace the token in the URL, so old links stop working")
+    opening = p.add_mutually_exclusive_group()
+    opening.add_argument("--browser", dest="browser", action="store_const", const=True, default=None,
+                         help="open the page in a browser on this machine ($BROWSER, else the default one)")
+    opening.add_argument("--no-browser", dest="browser", action="store_const", const=False,
+                         help="don't open a browser. By default one opens if it is yours: in a VS Code remote "
+                              "terminal, or on a desktop not reached over SSH")
     p.add_argument("--quiet", action="store_true", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_gui)
 

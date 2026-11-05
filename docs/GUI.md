@@ -26,13 +26,27 @@ Do this once, on the machine that will run the jobs:
 ./gcf doctor         # checks that everything is ready, and says how to fix what isn't
 ```
 
-Then start the page:
+Then, **on your laptop**, one command starts the page (if it isn't running), opens an
+SSH tunnel to it and opens your browser:
+
+```bash
+ssh you@machine cat src/GCF_with3N/tools/gcf/gcf-open | sh -s you@machine
+```
+
+Put your checkout's path after the second `you@machine` if it isn't `~/src/GCF_with3N`,
+and `gcf gui` options after that. Run it again whenever you like: it reuses the page and
+a tunnel that still works. It needs a POSIX shell (macOS, Linux, WSL or Git Bash), and
+with SSH keys it doesn't ask for your password.
+
+Or, on the machine:
 
 ```bash
 ./gcf gui --background
 ```
 
-It prints an SSH command and an address:
+In a VS Code remote terminal, or on a desktop you're sitting at, this opens the page in
+your browser by itself (`--no-browser` stops that). Otherwise it prints an SSH command
+and an address:
 
 1. On your laptop, run the `ssh -N -L ...` command it printed and leave it running.
    VS Code Remote-SSH forwards the port for you, and you don't need a tunnel if the

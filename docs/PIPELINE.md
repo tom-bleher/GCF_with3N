@@ -253,7 +253,12 @@ A chunk that fails stops the run with a message naming its log; "Resume" (or
 
 The interface runs on the analysis machine. Open an SSH tunnel from your laptop
 (`ssh -N -L 8765:localhost:8765 you@machine`; VS Code Remote-SSH forwards the
-port automatically) and open the printed URL. From the page you can:
+port automatically) and open the printed URL. `tools/gcf/gcf-open`, run on the
+laptop, does all of that in one command (`ssh you@machine cat
+src/GCF_with3N/tools/gcf/gcf-open | sh -s you@machine`), and `gcf gui` opens the
+browser itself when the browser is yours: with `$BROWSER` set, as in a VS Code
+remote terminal, or on a desktop not reached over SSH (`--browser`, `--no-browser`
+decide instead). From the page you can:
 
 - choose the stages (generate + FSI, generate only, FSI on an existing file), or
   the ePIC detector chain (see [The EIC / ePIC chain](#the-eic--epic-chain));
