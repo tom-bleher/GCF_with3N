@@ -26,6 +26,7 @@ import shutil
 import signal
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 from pathlib import Path
@@ -41,6 +42,7 @@ STAGE_WRAPPER = 'echo $$ > "$0.pid"; "$@"; echo $? > "$0.exit"'
 POLL_SECONDS = 0.5
 # Without [run] chunks, a run has at least one job per this many events.
 EVENTS_PER_CHECKPOINT = 1000000
+SUITE_DIR = Path(os.environ.get("GCF_SUITE_DIR", REPO / "build/programs"))
 GENIE_DIR = REPO / "src/programs/genQE_FSI/Generator-R-3_06_02"
 FSI_CONFIG = REPO / "src/programs/genQE_FSI/config"
 
@@ -181,6 +183,50 @@ def fsi_args(fsi, inp, output, seed, first=None, count=None, copy_objects=True):
     return args
 
 
+_has_seed = {}
+
+
+def program_binary(name):
+    path = SUITE_DIR / ("sfSampler" if name == "sfSamplerLC" else name) / name
+    if not os.access(path, os.X_OK):
+        raise RunError(f"{name} is not built ({path} missing). Build it with ./install.sh, "
+                       f"or set GCF_SUITE_DIR to where the generators are.")
+    return str(path)
+
+
+def program_has_seed(name):
+    """Whether a generator takes -S yet (#137, PR #150): its usage says."""
+    if name not in _has_seed:
+        out = subprocess.run([program_binary(name), "-h"], capture_output=True, text=True, env=environment(), timeout=60)
+        _has_seed[name] = "-S:" in (out.stdout + out.stderr)
+    return _has_seed[name]
+
+
+def program_args(prog, events, output, seed):
+    """The command line of one of the suite's other generators, for one job."""
+    from .schema import PROGRAMS, PROGRAM
+    name = prog["program"]
+    a, z = prog["target"]
+    args = [program_binary(name), str(z), str(a - z)]
+    if PROGRAMS[name].beam:
+        args.append(repr(prog["beam"]))
+    if PROGRAMS[name].pdf:
+        args.append(prog.get("pdf") or str(REPO / "src/libraries/cross_sections/CTEQ/ct18nn.00.pds"))
+    args += [str(output), str(events), "-v"]   # -v: what it prints is its progress
+    for o in PROGRAM:
+        v = prog.get(o.key)
+        if o.flag is None or v is None or name not in o.models:
+            continue
+        if o.kind == "bool":
+            if v:
+                args.append(o.flag)
+        else:
+            args += [o.flag, str(v)]
+    if program_has_seed(name):
+        args += ["-S", str(seed)]
+    return args
+
+
 def check_setup(cfg):
     """Run the stages' own setup checks on a validated config, without
     generating anything: gcf_generate --check (nucleus tables, option
@@ -189,6 +235,19 @@ def check_setup(cfg):
     run, gen, fsi = cfg["run"], cfg["generate"], cfg["fsi"]
     problems = []
     env = environment()
+    if "program" in run["stages"]:
+        with tempfile.TemporaryDirectory(prefix="gcf-check-") as tmp:
+            try:
+                args = program_args(cfg["program"], 200, Path(tmp) / "check.root", 1)
+                out = subprocess.run(args, capture_output=True, text=True, env=env, timeout=120, stdin=subprocess.DEVNULL)
+            except RunError as e:
+                return [str(e)]
+            except subprocess.TimeoutExpired:
+                return ["[program] program: a test of 200 attempts took more than 2 minutes"]
+        if out.returncode != 0:
+            text = [l for l in (out.stderr + out.stdout).splitlines() if l.strip() and not l.startswith(("eNCrossSection", "You are using", "Working on", "Random seed"))]
+            problems.append("[program] target: the generator can't run this setup: " + (" ".join(text[-2:]) or f"exit {out.returncode}"))
+        return problems
     if "generate" in run["stages"]:
         args = generate_args(gen, 1, "/dev/null", 1)
         args = [a for a in args if a not in ("--output", "/dev/null")] + ["--check"]
@@ -340,12 +399,22 @@ def plan_from_config(cfg, run_dir, final_outputs=None, resume=False):
     plan.workers = run["jobs"]
     seed = run["seed"]
     stages = run["stages"]
-    final = {"generate": run_dir / f"{name}_pwia.root", "fsi": run_dir / f"{name}_fsi.root"}
+    final = {"generate": run_dir / f"{name}_pwia.root", "fsi": run_dir / f"{name}_fsi.root",
+             "program": run_dir / f"{name}_gen.root"}
     final.update({k: Path(v) for k, v in (final_outputs or {}).items()})
     for stage in stages:
         plan.outputs[stage] = final[stage]
 
-    if "generate" in stages:
+    if "program" in stages:
+        prog = cfg["program"]
+        parts = split(prog["events"], checkpoint_jobs(run, prog["events"]))
+        single = len(parts) == 1
+        outs = {"program": []}
+        for i, n in enumerate(parts):
+            g = final["program"] if single else chunks / f"gen_{i:03d}.root"
+            plan.jobs.append([Step("program", program_args(prog, n, g, seed + i), g, n, logs / f"program_{i:03d}.log")])
+            outs["program"].append(g)
+    elif "generate" in stages:
         parts = split(gen["events"], checkpoint_jobs(run, gen["events"]))
         single = len(parts) == 1
         outs = {"generate": [], "fsi": []}
@@ -425,7 +494,7 @@ def merge_finished(run_dir):
     st = read_status(run_dir)
     if not st.get("jobs"):
         raise RunError("this run has no jobs to merge")
-    if "generate" not in st.get("stages", {}):
+    if not {"generate", "program"} & set(st.get("stages", {})):
         raise RunError("an FSI-only run can't be merged in part: its first job carries the attempts "
                        "of the whole input file. Resume it instead")
     partial, outputs = {}, st.get("outputs", {})
@@ -561,11 +630,13 @@ class Runner:
             return offset, partial
         lines = (partial + data.decode(errors="replace")).split("\n")
         for line in lines[:-1]:
-            if line.startswith("Progress:"):
-                try:
+            try:
+                if line.startswith("Progress:"):
                     step.done = int(line.split()[1].split("/")[0])
-                except (IndexError, ValueError):
-                    pass
+                elif line.startswith("Working on event "):      # the suite's other generators
+                    step.done = int(line.split()[3])
+            except (IndexError, ValueError):
+                pass
         return offset + len(data), lines[-1]
 
     def run_step(self, step):

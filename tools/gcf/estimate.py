@@ -15,6 +15,7 @@ from . import runner
 
 PILOT_EVENTS = 2000
 PILOT_FSI_EVENTS = 300
+PILOT_PROGRAM_ATTEMPTS = 2000
 PILOT_TIMEOUT = 60        # seconds per stage; a slower setup is scaled from what it reached
 # For a quick look at the disk space without running anything (2N and 3N, measured).
 ROUGH_BYTES_PER_EVENT = {"generate": 200, "fsi": 480}
@@ -50,15 +51,16 @@ def timed_run(args, env):
     return (last[1] - first[1]) / (last[0] - first[0]), last[1]
 
 
-def effective_fraction(path):
-    """N_eff per event of a file, or None without uproot."""
+def pilot_statistics(path, tree="events"):
+    """(events stored, N_eff per event) of a test's file; (None, None) without uproot."""
     try:
         import uproot
         with uproot.open(path) as f:
-            w = f["events"]["weight"].array(library="np")
+            w = f[tree]["weight"].array(library="np")
     except Exception:  # noqa: BLE001 - only an extra in the estimate
-        return None
-    return float(w.sum()**2 / (w**2).sum() / len(w)) if len(w) and (w**2).sum() > 0 else None
+        return None, None
+    fraction = float(w.sum()**2 / (w**2).sum() / len(w)) if len(w) and (w**2).sum() > 0 else None
+    return len(w), fraction
 
 
 def estimate(cfg, runs_dir):
@@ -68,7 +70,20 @@ def estimate(cfg, runs_dir):
     out = {"pilot_events": 0, "rates": {}, "bytes_per_event": {}, "n_eff_fraction": None}
     with tempfile.TemporaryDirectory(prefix="gcf-estimate-") as tmp:
         tmp = Path(tmp)
-        if "generate" in run["stages"]:
+        if "program" in run["stages"]:
+            # They print no progress below 100000 attempts, so time the whole test.
+            events = cfg["program"]["events"]
+            result = tmp / "gen.root"
+            started = time.time()
+            subprocess.run(runner.program_args(cfg["program"], PILOT_PROGRAM_ATTEMPTS, result, 1), capture_output=True, env=env,
+                           timeout=PILOT_TIMEOUT, stdin=subprocess.DEVNULL, check=True)
+            out["pilot_events"] = PILOT_PROGRAM_ATTEMPTS
+            out["rates"]["program"] = PILOT_PROGRAM_ATTEMPTS / max(time.time() - started, 1e-3)
+            if result.is_file():
+                out["bytes_per_event"]["program"] = result.stat().st_size / PILOT_PROGRAM_ATTEMPTS
+                out["pilot_stored"], out["n_eff_fraction"] = pilot_statistics(result, "genT")
+            source = result
+        elif "generate" in run["stages"]:
             events = gen["events"]
             pwia = tmp / "pwia.root"
             rate, done = timed_run(runner.generate_args(gen, PILOT_EVENTS, pwia, 1, 1), env)
@@ -76,7 +91,7 @@ def estimate(cfg, runs_dir):
             out["rates"]["generate"] = rate
             if pwia.is_file() and done:
                 out["bytes_per_event"]["generate"] = pwia.stat().st_size / done
-                out["n_eff_fraction"] = effective_fraction(pwia)
+                out["pilot_stored"], out["n_eff_fraction"] = pilot_statistics(pwia)
             source = pwia
         else:
             events = runner.count_entries(fsi["input"], fsi.get("tree"))
@@ -106,7 +121,7 @@ def estimate(cfg, runs_dir):
 def rough_peak_bytes(cfg):
     """Disk space a run needs, without running anything; for refusing the impossible."""
     run, gen = cfg["run"], cfg["generate"]
-    if "generate" not in run["stages"]:
+    if "generate" not in run["stages"]:     # the other generators' sizes vary too much to guess
         return 0
     per_event = sum(ROUGH_BYTES_PER_EVENT[s] for s in run["stages"] if s in ROUGH_BYTES_PER_EVENT)
     return per_event * gen["events"] * (2 if runner.checkpoint_jobs(run, gen["events"]) > 1 else 1)

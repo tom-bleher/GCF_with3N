@@ -182,7 +182,7 @@ RUN = [
     Opt("output_dir", "str", None, "runs", label="Output directory",
         help="Relative paths are relative to the config file's directory."),
     Opt("stages", "list", None, ["generate", "fsi"], label="Stages",
-        choices=["generate", "fsi"]),
+        choices=["generate", "fsi", "program"]),
     Opt("jobs", "int", None, 1, label="Parallel jobs",
         help="Independent jobs run at the same time; their outputs are merged. "
              "Each needs one CPU core."),
@@ -198,13 +198,78 @@ RUN = [
     Opt("scan", "str", None, None, label="Scan", help="The parameter scan this run is a point of."),
 ]
 
-SECTIONS = {"run": RUN, "generate": GENERATE, "fsi": FSI}
+# ---------------------------------------------------------------------------
+# The suite's other generators. They write their own tree (genT) rather than the
+# event-file format, and most have no seed option yet (#137, PR #150).
+
+@dataclass
+class Program:
+    label: str
+    beam: str = ""               # what the beam-energy argument means ("" = no such argument)
+    pdf: bool = False            # takes a PDF table
+    note: str = ""               # what a user must know before trusting the output
+
+
+PROGRAMS = {
+    "genDIS": Program("DIS off an SRC pair", beam="Electron beam energy", pdf=True,
+                      note="Known issues: W² comes out too high (#63, PR #88), and radiation has no effect (#75, PR #95)."),
+    "genCCQE": Program("Neutrino CCQE off an SRC pair",
+                       note="Known issue: its cross section is a rescaled electromagnetic one, not a true CCQE cross section (#66)."),
+    "genPhoto": Program("Photoproduction off an SRC pair",
+                        note="Known issue: the default pi- p channel can put most of the summed weight in one event (#132). "
+                             "Check N_eff."),
+    "genElectro": Program("Electroproduction of J/psi off an SRC pair", beam="Electron beam energy",
+                          note="Known issues: J/psi events get the wrong outgoing baryon (#67, PR #96), and the form factor "
+                               "squares a mass that is already squared (#76, PR #100)."),
+    "genIon": Program("Proton-nucleus scattering off an SRC pair", beam="Beam energy per nucleon",
+                      note="Known issues: the pp cross section is zero above s = 8.3 GeV², which excludes the BM@N energy "
+                           "(#138, PR #174), and it is evaluated at a t that can be unphysical (#175)."),
+    "sfSampler": Program("Spectral function samples"),
+    "sfSamplerLC": Program("Light-cone spectral function samples"),
+}
+_ALL_PROGRAMS = list(PROGRAMS)
+_PAIR_INPUTS = ["genPhoto", "sfSampler", "sfSamplerLC"]
+_SAMPLERS = ["sfSampler", "sfSamplerLC"]
+
+PROGRAM = [
+    Opt("program", "str", None, "genDIS", choices=_ALL_PROGRAMS, models=_ALL_PROGRAMS, label="Generator",
+        help="The suite's other generators. They write their own tree, genT, so plots and FSI are not available for them."),
+    Opt("events", "int", None, 100000, models=_ALL_PROGRAMS, label="Attempts", ge=1,
+        help="Number of attempts in total, over all jobs. Only those with a positive weight are stored."),
+    Opt("target", "target", None, [12, 6], models=_ALL_PROGRAMS, label="Target (A, Z)"),
+    Opt("beam", "float", None, 6.0, models=[k for k, v in PROGRAMS.items() if v.beam], label="Beam energy", unit="GeV", gt=0, le=1e5),
+    Opt("pdf", "str", None, None, models=["genDIS"], label="PDF table",
+        help="A CTEQ .pds file. Default: CT18NN, from the repository."),
+    Opt("reaction", "str", "-R", None, models=["genPhoto"], label="Reaction",
+        choices=["pim", "rho0", "rhom", "omega", "phi", "phin", "deltapp", "deltappim"], help="Default: pi- p."),
+    Opt("fixed_beam", "float", "-B", None, models=["genPhoto"], label="Fixed beam energy", unit="GeV", gt=0,
+        help="Default: the GlueX spectrum."),
+    Opt("amorphous", "bool", "-A", False, models=["genPhoto"], label="Amorphous radiator spectrum"),
+    Opt("light_cone", "bool", "-l", False, models=["genPhoto"], label="Light-cone cross section"),
+    Opt("inverse", "bool", "-I", False, models=["genIon"], label="Inverse kinematics",
+        help="Boost to inverse kinematics; the beam energy is then the kinetic energy per nucleon."),
+    Opt("nn", "str", "-u", None, models=_PAIR_INPUTS, label="NN interaction", choices=NN_INTERACTIONS),
+    Opt("kcut", "float", "-k", None, models=_PAIR_INPUTS, label="k_rel cutoff", unit="GeV/c", gt=0, le=1.05),
+    Opt("sigma_cm", "float", "-s", None, models=_SAMPLERS, label="sigma_CM", unit="GeV/c", ge=0, le=1),
+    Opt("estar", "float", "-E", None, models=["genDIS"] + _SAMPLERS, label="E*", unit="GeV", ge=0, le=1),
+    Opt("estar_12c", "bool", "-M", False, models=["genDIS", "genCCQE"], label="12C E* distribution",
+        help="E* = 17.32 MeV with a 9.57 MeV spread, measured on 12C; it is applied whatever the target (#153)."),
+    Opt("randomize", "bool", "-r", False, models=_SAMPLERS, label="Vary the nuclear inputs",
+        help="Varied separately in each job, so use one job if they must all have the same inputs."),
+    Opt("rad", "bool", "-O", False, models=["genDIS"], label="Radiation (peaking approx.)",
+        help="Has no effect until PR #95 is merged (#75)."),
+    Opt("phase_space", "str", "-P", None, models=_ALL_PROGRAMS, label="Phase-space file",
+        help="gcfGenerator phase-space limits file."),
+]
+
+SECTIONS = {"run": RUN, "generate": GENERATE, "fsi": FSI, "program": PROGRAM}
 
 
 def to_json():
     """The schema as plain data, for the GUI."""
     out = {"_channels": [dict(name=n, label=l, hN=h, hA=a, scalable=n not in SWITCH_CHANNELS) for n, l, h, a in CHANNELS],
-           "_targets": {m: [dict(A=a, Z=z, name=n) for a, z, n in t] for m, t in TARGETS.items()}}
+           "_targets": {m: [dict(A=a, Z=z, name=n) for a, z, n in t] for m, t in TARGETS.items()},
+           "_programs": {k: dict(label=v.label, beam=v.beam, note=v.note) for k, v in PROGRAMS.items()}}
     for name, opts in SECTIONS.items():
         out[name] = [dict(key=o.key, kind=o.kind, default=o.default, help=o.help,
                           label=o.label or o.key, choices=o.choices, models=o.models,

@@ -168,6 +168,16 @@ their statistical errors. With `randomize = true`, a scan of `run.seed` makes
 replicas of the nuclear inputs. The web interface's **Scan** tab does the same
 through its queue.
 
+### The suite's other generators
+
+`stages = ["program"]` with a `[program]` table runs `genDIS`, `genCCQE`, `genPhoto`,
+`genElectro`, `genIon`, `sfSampler` or `sfSamplerLC` the same way as a stage: split
+into jobs, merged, resumable (`./gcf example dis`). They write their own `genT` tree,
+not the event-file format, so `gcf quicklook`, `gcf_fsi` and the comparison don't
+apply. `[program] events` counts attempts. Only `genDIS` takes a seed so far (#137,
+PR #150), so the others can't be repeated exactly; the runner passes `-S` as soon as
+a generator's usage lists it.
+
 ### Without a config
 
 ```bash

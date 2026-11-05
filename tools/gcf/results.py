@@ -58,17 +58,21 @@ def _provenance(f):
     return out
 
 
-def summarize(path, tree="events"):
-    """A dict of plain numbers for an event file; see the keys below."""
+def summarize(path, tree=None, attempts=None):
+    """A dict of plain numbers for an event file; see the keys below. `tree` is the
+    event-file format's or, without one, that of the suite's other generators;
+    `attempts` is for files that don't record theirs."""
     _need_modules()
     import numpy as np
     import uproot
 
     path = Path(path)
     with uproot.open(path) as f:
-        have = set(f[tree].keys())
         keys = {k.split(";")[0] for k in f.keys()}
-        attempts = float(f["hAttempts"].values()[0]) if "hAttempts" in keys else None
+        if tree is None:
+            tree = "events" if "events" in keys or "genT" not in keys else "genT"
+        have = set(f[tree].keys())
+        attempts = float(f["hAttempts"].values()[0]) if "hAttempts" in keys else attempts
         provenance = _provenance(f)
         n = sum_w = sum_w2 = max_w = 0.
         fsi_ran = 0
@@ -104,6 +108,9 @@ def summarize(path, tree="events"):
 def notes(s):
     """[(level, text)] about a summary: 'bad', 'warn' or 'info'."""
     out = []
+    if s.get("events") == 0:
+        out.append(("bad", "No attempt had a positive weight, so this file holds no events. "
+                           "Check the beam energy against the reaction's threshold, and the target and limits."))
     n_eff = s.get("n_eff")
     if n_eff is not None:
         err = 100 / math.sqrt(n_eff) if n_eff > 0 else float("inf")

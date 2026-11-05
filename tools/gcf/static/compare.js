@@ -10,14 +10,14 @@ function compareDialog() {
   return dlg;
 }
 
-const STAGE_NAMES = { generate: "PWIA", fsi: "with FSI" };
+const STAGE_NAMES = { generate: "PWIA", fsi: "with FSI", program: "events" };
 
 function comparableRuns() {
-  return runsCache.filter(r => Object.values(r.outputs || {}).some(o => o.exists));
+  return runsCache.filter(r => Object.entries(r.outputs || {}).some(([s, o]) => o.exists && s !== "program"));
 }
 
 function stageOptions(run) {
-  return Object.entries(run.outputs || {}).filter(([, o]) => o.exists).map(([s]) => el("option", { value: s }, STAGE_NAMES[s] || s));
+  return Object.entries(run.outputs || {}).filter(([s, o]) => o.exists && s !== "program").map(([s]) => el("option", { value: s }, STAGE_NAMES[s] || s));
 }
 
 function openCompare(name) {

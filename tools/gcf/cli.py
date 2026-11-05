@@ -9,7 +9,7 @@
   gcf summary FILE               the numbers of an event file
   gcf gui                        the web interface
   gcf doctor                     check that this machine is ready
-  gcf example [3N|2N|MF|fsi]     print an example config
+  gcf example [3N|2N|MF|fsi|dis] print an example config
   gcf env                        print the environment the stages run with
 """
 
@@ -81,6 +81,20 @@ beam = 4.5
 events = 50000
 target = [12, 6]
 fermi_gas = "local"
+""",
+    "dis": """\
+# Tagged DIS off an SRC pair on 12C at 6 GeV, with one of the suite's other generators.
+[run]
+name = "c12_DIS"
+output_dir = "runs"
+stages = ["program"]
+jobs = 4
+
+[program]
+program = "genDIS"
+events = 200000
+target = [12, 6]
+beam = 6.0
 """,
     "fsi": """\
 # GENIE FSI on an existing event file (from gcf_generate or any generator
@@ -180,7 +194,8 @@ def run_plan(cfg, run_dir, final_outputs=None, quiet=False, resume=False):
     lock = runner.RunLock(run_dir)     # held until this process ends  # noqa: F841
     if "chunks" not in cfg["run"] or cfg["run"]["chunks"] is None:
         # Part of what makes the run reproducible, so the saved config records it.
-        total = cfg["generate"]["events"] if "generate" in cfg["run"]["stages"] else None
+        stages = cfg["run"]["stages"]
+        total = cfg["generate"]["events"] if "generate" in stages else cfg["program"]["events"] if "program" in stages else None
         if total is not None:
             cfg["run"]["chunks"] = runner.checkpoint_jobs(cfg["run"], total)
     plan = runner.plan_from_config(cfg, run_dir, final_outputs, resume=resume)

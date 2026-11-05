@@ -27,9 +27,10 @@ and looking at the results. It runs everything through `./gcf run` and saves eac
 run's config, so anything you start in the browser can be repeated from a
 terminal.
 
-The page covers the `gcf_generate` and `gcf_fsi` stages only. Run the other
-generators (`genDIS`, `genPhoto`, ...) and the EIC chain
-(`tools/run_eic_sim.sh`) from the terminal.
+It covers the `gcf_generate` and `gcf_fsi` stages, with everything below, and
+runs the suite's other generators (`genDIS`, `genCCQE`, `genPhoto`, `genElectro`,
+`genIon`, `sfSampler`). Those write their own tree, so plots, FSI and comparing
+aren't available for their files, and the page lists each one's known issues.
 
 ### Start it
 

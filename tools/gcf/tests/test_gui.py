@@ -1057,6 +1057,90 @@ class TestScans(GuiCase):
             self.assertTrue((Path(tmp) / "runs/.scans/cl.json").is_file())
 
 
+class TestOtherGenerators(GuiCase):
+    def config(self, name, program, events=4000, jobs=2, **options):
+        return {"run": {"name": name, "stages": ["program"], "jobs": jobs, "seed": 11},
+                "program": {"program": program, "events": events, "target": [12, 6], **options}}
+
+    def run_program(self, program, suffix="", **options):
+        harness.need_suite(program)
+        name = f"g_{program}{suffix}"
+        from gcf import schema
+        if schema.PROGRAMS[program].beam:
+            # Above the J/psi threshold for genElectro.
+            options.setdefault("beam", 11.0)
+        self.gui.api("api/runs", self.config(name, program, **options))
+        d = self.gui.wait(name)
+        self.assertEqual(d["state"], "done", d.get("error"))
+        self.assertTrue(d["outputs"]["program"]["exists"])
+        return d, self.gui.api(f"api/runs/{name}/results", {"stage": "program"})
+
+    def test_every_generator_runs_and_merges(self):
+        for program in ("genDIS", "genCCQE", "genElectro", "genIon", "sfSampler", "sfSamplerLC"):
+            with self.subTest(program=program):
+                d, r = self.run_program(program)
+                self.assertGreater(r["events"], 0)
+                self.assertEqual(r["attempts"], 4000)
+                self.assertIsNotNone(r["n_eff"])
+                self.assertEqual(d["stages"]["program"]["done"], 4000)
+
+    def test_genphoto_options_reach_it(self):
+        d, r = self.run_program("genPhoto", reaction="phi", fixed_beam=8.0)
+        self.assertIn("-R phi -B 8.0", (self.gui.runs_dir / "g_genPhoto/logs/program_000.log").read_text().splitlines()[0])
+        self.assertGreater(r["events"], 0)
+
+    def test_gendis_seed_makes_it_repeatable(self):
+        import numpy as np
+        import uproot
+        harness.need_suite("genDIS")
+        for name in ("rep1", "rep2"):
+            self.gui.api("api/runs", self.config(name, "genDIS", events=5000, beam=6.0))
+        a, b = self.gui.wait("rep1"), self.gui.wait("rep2")
+        wa = uproot.open(a["outputs"]["program"]["path"])["genT"]["weight"].array(library="np")
+        wb = uproot.open(b["outputs"]["program"]["path"])["genT"]["weight"].array(library="np")
+        self.assertTrue(np.array_equal(wa, wb))
+
+    def test_options_of_another_generator_are_refused(self):
+        status, out = self.gui.request("api/check", self.config("x", "genCCQE", reaction="phi"))
+        self.assertEqual(status, 400)
+        self.assertIn("reaction", out["error"])
+        status, out = self.gui.request("api/check", {"run": {"name": "x", "stages": ["program", "fsi"]}, "program": {"program": "genDIS"}})
+        self.assertEqual(status, 400)
+
+    def test_plots_and_comparing_say_why_not(self):
+        harness.need_suite("genCCQE")
+        d, _ = self.run_program("genCCQE", suffix="_noplots")
+        status, out = self.gui.request("api/runs/g_genCCQE_noplots/quicklook", {"stage": "program"})
+        self.assertEqual(status, 400)
+        self.assertIn("its own", out["error"])
+        self.assertEqual(d["state"], "done")
+
+    def test_no_stored_events_are_explained(self):
+        """genElectro below the J/psi threshold: every attempt has zero weight."""
+        harness.need_suite("genElectro")
+        r = self.gui.api("api/check", self.config("thr", "genElectro", beam=6.0))
+        self.assertTrue(r["ok"], r["problems"])
+        self.assertIn("stored no events", r["estimate_text"])
+        d, s = self.run_program("genElectro", suffix="_thr", beam=6.0)
+        self.assertEqual(s["events"], 0)
+        self.assertTrue(any(level == "bad" and "No attempt" in text for level, text in s["notes"]), s["notes"])
+
+    def test_check_estimates_a_generator(self):
+        harness.need_suite("genDIS")
+        r = self.gui.api("api/check", self.config("e", "genDIS", events=100000, beam=6.0))
+        self.assertTrue(r["ok"], r["problems"])
+        self.assertGreater(r["estimate"]["bytes"], 0)
+        self.assertIn("job", r["estimate_text"])
+
+    def test_a_target_it_has_no_table_for_is_caught(self):
+        harness.need_suite("genCCQE")
+        cfg = self.config("t", "genCCQE")
+        cfg["program"]["target"] = [13, 6]
+        r = self.gui.api("api/check", cfg)
+        self.assertFalse(r["ok"])
+        self.assertIn("[program] target", r["problems"][0])
+
+
 class TestBrowser(GuiCase):
     @classmethod
     def setUpClass(cls):
@@ -1270,6 +1354,24 @@ class TestBrowser(GuiCase):
         self.driver.execute_script("document.getElementById('show-points').click()")
         self.driver.save_screenshot(str(Path(self.gui.tmp) / "scan.png"))
         self.driver.execute_script("resetForm(); showFormTab('setup')")
+
+    def test_other_generators_in_the_form(self):
+        from selenium.webdriver.common.by import By
+        self.open()
+        self.driver.execute_script("document.querySelector(\"input[name=stages][value='program']\").click()")
+        self.assertTrue(self.driver.find_element(By.ID, "fs-program").is_displayed())
+        self.assertFalse(self.driver.find_element(By.ID, "fs-generate").is_displayed())
+        self.assertIn("W²", self.driver.find_element(By.ID, "program-note").text)
+        self.assertTrue(self.driver.find_element(By.ID, "tab-physics").get_attribute("disabled"))
+        self.assertTrue(self.driver.find_element(By.ID, "tab-scan").get_attribute("disabled"))
+        cfg = self.driver.execute_script("return collect()")
+        self.assertEqual(cfg["run"]["stages"], ["program"])
+        self.assertEqual(cfg["program"]["program"], "genDIS")
+        self.driver.execute_script("""const p = document.getElementById('f-program-program'); p.value = 'genPhoto';
+                                      p.dispatchEvent(new Event('change', {bubbles: true}));""")
+        self.assertNotIn("hidden", self.driver.find_element(By.CSS_SELECTOR, '.field[data-section="program"][data-key="reaction"]').get_attribute("class"))
+        self.assertIn("hidden", self.driver.find_element(By.CSS_SELECTOR, '.field[data-section="program"][data-key="beam"]').get_attribute("class"))
+        self.driver.execute_script("resetForm()")
 
     def test_internal_run_options_are_not_in_the_form(self):
         from selenium.webdriver.common.by import By
