@@ -49,7 +49,8 @@ def _provenance(f):
         if "version" not in fields:
             continue
         s = out.setdefault(name, {"versions": [], "seeds": [], "command": fields.get("command", ""),
-                                  "date": fields.get("date", ""), "model": fields.get("model")})
+                                  "date": fields.get("date", ""), "model": fields.get("model"),
+                                  "inputs": fields.get("nuclear inputs")})
         if fields["version"] not in s["versions"]:
             s["versions"].append(fields["version"])
         if "seed" in fields:

@@ -31,6 +31,8 @@ class QEGenerator_3N
   void SetTargetNucleus(int A, int Z);
   int  GetTargetA() const { return fTargetA; }
   int  GetTargetZ() const { return fTargetZ; }
+  double GetTargetMass() const { return fTargetMass; }
+  double GetResidualMass() const { return fResidualMass; }
 
   // Per-component CM Gaussian width (GeV/c). Whether CM smearing is
   // applied at all is still controlled by the `use_CM` flag passed to

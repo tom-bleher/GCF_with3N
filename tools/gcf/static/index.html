@@ -102,7 +102,14 @@ details.adv > summary .n { color: var(--accent); font-weight: 600; }
 details.adv > .grid { margin-top: 8px; }
 .chan { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 18px; margin-top: 4px; }
 .chan h4 { grid-column: 1 / -1; margin: 6px 0 0; font-size: 12px; color: var(--muted); font-weight: 600; }
-.chan label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+.chan label { display: flex; align-items: center; gap: 6px; cursor: pointer; flex: 1 1 auto; min-width: 0; }
+.chan-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
+input.scale { width: 62px; flex: 0 0 auto; height: 24px; padding: 2px 4px; font-size: 12px; }
+#form-tabs { display: flex; gap: 4px; margin: 6px 0 2px; border-bottom: 1px solid var(--line); }
+#form-tabs button { border: 1px solid transparent; border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0; background: none; padding: 5px 12px; }
+#form-tabs button[aria-selected="true"] { border-bottom-color: var(--accent); font-weight: 600; }
+#form-tabs .n { color: var(--accent); font-weight: 600; }
+.tableval { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
 .chan label.na { color: var(--muted); cursor: default; }
 .chan label.na span { opacity: .8; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; align-items: center; }
@@ -187,7 +194,9 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
       <label><input type="radio" name="stages" value="fsi">FSI on a file</label>
     </div>
     <div id="stage-help"></div>
+    <div id="form-tabs-slot"></div>
 
+    <div data-tab-panel="setup" id="panel-setup" role="tabpanel" aria-labelledby="tab-setup">
     <fieldset><legend>Run</legend>
       <div class="grid" id="grid-run"></div>
       <details class="adv"><summary>Advanced <span class="n" id="adv-run"></span></summary><div class="grid" id="adv-grid-run"></div></details>
@@ -202,6 +211,21 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
       <div class="chan" id="channels"></div>
       <details class="adv"><summary>Advanced <span class="n" id="adv-fsi"></span></summary><div class="grid" id="adv-grid-fsi"></div></details>
     </fieldset>
+    </div>
+
+    <div data-tab-panel="physics" id="panel-physics" role="tabpanel" aria-labelledby="tab-physics" class="hidden">
+      <p id="physics-head" class="setup" aria-live="polite"></p>
+      <p id="physics-note" class="note hidden">The 3N generator has no contacts yet: its absolute scale is a placeholder (#73).</p>
+      <fieldset><legend>Nuclear inputs and model</legend>
+        <p class="setup">Leave a field empty to use the table value shown under it. Changing these needs no rebuild.</p>
+        <div class="grid" id="grid-physics"></div>
+        <p id="physics-masses" class="setup"></p>
+        <div class="actions">
+          <button type="button" class="small hidden" id="physics-preset" title="E* = 17.32 MeV with a 9.57 MeV spread, as genQE -M. Measured on 12C (#153)." onclick="fillEstar12C()">Use the 12C E* distribution</button>
+          <button type="button" class="small" onclick="clearPhysics()">Back to the table values</button>
+        </div>
+      </fieldset>
+    </div>
 
     <pre id="preview" class="hidden"></pre>
     <div class="actionbar">
@@ -241,7 +265,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 "use strict";
 const TOKEN = new URLSearchParams(location.search).get("token") || "";
 const STORAGE_KEY = "gcf-gui-form";
-const MODULES = ["results", "compare"];    // static/<name>.js, each adding to the page
+const MODULES = ["results", "compare", "physics"];    // static/<name>.js, each adding to the page
 let SCHEMA = null, CHANNELS = [], TARGETS = {};
 let selected = null, detailsTimer = null;
 let validateTimer = null, lastPlot = {}, rates = {}, autoPlotted = {};
@@ -291,7 +315,7 @@ function toast(text) {
 function tokenUrl(path) { return path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(TOKEN); }
 
 // ---------------------------------------------------------------- form ----
-const SKIP = { run: ["output_dir", "stages"], fsi: ["off"] };
+const SKIP = { run: ["output_dir", "stages"], fsi: ["off", "scale"] };
 function fieldId(section, key, part) { return `f-${section}-${key}${part ? "-" + part : ""}`; }
 function opt(section, key) { return SCHEMA[section].find(o => o.key === key); }
 
@@ -357,16 +381,18 @@ function buildForm() {
     const grid = document.getElementById("grid-" + section), adv = document.getElementById("adv-grid-" + section);
     for (const o of SCHEMA[section]) {
       if ((SKIP[section] || []).includes(o.key)) continue;
-      (o.advanced ? adv : grid).append(makeField(section, o));
+      (o.tab === "physics" ? document.getElementById("grid-physics") : o.advanced ? adv : grid).append(makeField(section, o));
     }
   }
   const chan = document.getElementById("channels");
   for (const kind of ["nucleon", "pion"]) {
     chan.append(el("h4", {}, kind === "nucleon" ? "Nucleons" : "Pions"));
     for (const c of CHANNELS.filter(c => c.name.startsWith(kind + "."))) {
+      const scale = c.scalable ? el("input", { type: "number", id: "scale-" + c.name, class: "scale", min: "0", step: "any", placeholder: "× 1",
+        "data-scale": c.name, "aria-label": `Scale factor of ${c.name}`, title: "Scale this channel's rate by a factor; the others are renormalized" }) : null;
       const cb = el("input", { type: "checkbox", id: "ch-" + c.name, checked: true, "data-channel": c.name,
-        onchange: () => { cb.dataset.wasOff = cb.checked ? "" : "1"; } });
-      chan.append(el("label", { for: "ch-" + c.name, "data-channel": c.name }, cb, el("span", {}, c.label)));
+        onchange: () => { cb.dataset.wasOff = cb.checked ? "" : "1"; if (scale) scale.disabled = !cb.checked; } });
+      chan.append(el("div", { class: "chan-row" }, el("label", { for: "ch-" + c.name, "data-channel": c.name }, cb, el("span", {}, c.label)), scale));
     }
   }
   document.getElementById(fieldId("run", "name")).value = defaultName();
@@ -417,11 +443,14 @@ function updateVisibility() {
     const ok = fm === "hA" ? c.hA : c.hN;
     lab.classList.toggle("na", !ok); cb.disabled = !ok;
     if (!ok) cb.checked = false; else if (cb.dataset.wasOff !== "1") cb.checked = true;
+    const scale = document.getElementById("scale-" + c.name);
+    if (scale) { scale.disabled = !ok || !cb.checked; scale.classList.toggle("hidden", !ok); }
     let note = lab.querySelector("small");
     if (!ok && !note) lab.append(note = el("small", {}, ` (not in ${fm})`)); else if (ok && note) note.remove(); else if (note) note.textContent = ` (not in ${fm})`;
     lab.title = ok ? "" : `${c.label} is not a separate fate in the ${fm} cascade model`;
   }
   updateAdvancedCounts();
+  if (typeof updatePhysicsTab === "function") { updatePhysicsTab(); refreshPhysics(); }
 }
 
 function updateAdvancedCounts() {
@@ -476,8 +505,14 @@ function collect() {
     }
   }
   if (cfg.fsi) {
-    const off = [...document.querySelectorAll(".chan input:not(:disabled):not(:checked)")].map(c => c.dataset.channel);
+    const off = [...document.querySelectorAll(".chan input[data-channel]:not(:disabled):not(:checked)")].map(c => c.dataset.channel);
     if (off.length) cfg.fsi.off = off;
+    const scale = {};
+    document.querySelectorAll("input[data-scale]:not(:disabled)").forEach(i => {
+      const v = readNumber(i.id, "float", `Scale factor of ${i.dataset.scale}`);
+      if (v !== null && v !== 1) scale[i.dataset.scale] = v;
+    });
+    if (Object.keys(scale).length) cfg.fsi.scale = scale;
   }
   return cfg;
 }
@@ -501,7 +536,9 @@ function applyConfig(cfg) {
     }
   }
   const off = new Set((cfg.fsi && cfg.fsi.off) || []);
-  document.querySelectorAll(".chan input").forEach(c => { c.checked = !off.has(c.dataset.channel); c.dataset.wasOff = c.checked ? "" : "1"; });
+  document.querySelectorAll(".chan input[data-channel]").forEach(c => { c.checked = !off.has(c.dataset.channel); c.dataset.wasOff = c.checked ? "" : "1"; });
+  const scales = (cfg.fsi && cfg.fsi.scale) || {};
+  document.querySelectorAll("input[data-scale]").forEach(i => { i.value = i.dataset.scale in scales ? scales[i.dataset.scale] : ""; });
   updateVisibility();
 }
 function resetFields() {
@@ -513,7 +550,8 @@ function resetFields() {
       names.forEach((n, i) => document.getElementById(fieldId(section, o.key, n)).value = d[i] === null ? "" : d[i]);
     } else document.getElementById(fieldId(section, o.key)).value = o.default === null ? "" : o.default;
   }
-  document.querySelectorAll(".chan input").forEach(c => { c.checked = true; c.dataset.wasOff = ""; });
+  document.querySelectorAll(".chan input[data-channel]").forEach(c => { c.checked = true; c.dataset.wasOff = ""; });
+  document.querySelectorAll("input[data-scale]").forEach(i => { i.value = ""; });
 }
 function resetForm() {
   resetFields();
@@ -528,6 +566,7 @@ function resetForm() {
 // -- live validation ---------------------------------------------------------
 function changed() {
   updateAdvancedCounts();
+  updatePhysicsTab(); refreshPhysics();
   if (msgOwner !== "validate") showMsg("");   // a check/start result no longer describes the edited form
   try { localStorage.setItem(STORAGE_KEY, JSON.stringify(collect())); } catch (e) {}
   clearTimeout(validateTimer);
@@ -549,6 +588,7 @@ function markField(message) {
   e.id = e.id || `ferr-${m[1]}-${m[2]}`;
   f.querySelectorAll("input, select").forEach(i => { i.setAttribute("aria-invalid", "true"); i.setAttribute("aria-describedby", e.id); });
   const adv = f.closest("details.adv"); if (adv) adv.open = true;
+  const panel = f.closest("[data-tab-panel]"); if (panel && panel.classList.contains("hidden")) showFormTab(panel.dataset.tabPanel);
   return true;
 }
 async function validate() {
@@ -860,6 +900,7 @@ async function init() {
     document.head.append(el("script", { src: tokenUrl(`static/${m}.js`), onload: resolve, onerror: () => reject(new Error(`cannot load ${m}.js`)) }));
   }).catch(e => { document.getElementById("banner").textContent = e.message; document.getElementById("banner").classList.remove("hidden"); });
   buildForm();
+  buildFormTabs();
   try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) { applyConfig(JSON.parse(saved)); document.getElementById(fieldId("run", "name")).value = defaultName(); } } catch (e) {}
   document.getElementById("btn-check").onclick = checkConfig;
   document.getElementById("btn-download").onclick = downloadConfig;

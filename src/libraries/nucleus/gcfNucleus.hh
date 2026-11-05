@@ -31,6 +31,8 @@ class gcfNucleus
   double get_mAmpn_random(double &Estar, TRandom3* myRand);
   double get_mAmnn_random(double &Estar, TRandom3* myRand);
   double get_sigmaCM();
+  double get_d_sigmaCM() const { return d_sigmaCM; }
+  double get_Estar_max() const { return Estar_max; }
   double get_Estar();
   double get_sigmaE();
   double get_Estar_random(TRandom3* myRand);

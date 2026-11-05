@@ -28,6 +28,7 @@ void Usage()
        << "Optional flags:\n"
        << "-v: Verbose\n"
        << "-P: Use text file to specify phase space\n"
+       << "-G: Nucleon form factors: kelly (default), ye or dipole\n"
        << "-M: Use randomized E* according to Barack's values\n"
        << "-h: Print this message and exit\n\n\n";
 }
@@ -63,7 +64,7 @@ bool init(int argc, char ** argv)
     uType = (char *)"AV18_deut";
 
   int c;
-  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:Mh")) != -1)
+  while ((c = getopt (argc-numargs+1, &argv[numargs-1], "vP:MG:h")) != -1)
     switch(c)
       {
 	
@@ -73,6 +74,13 @@ bool init(int argc, char ** argv)
       case 'P':
 	custom_ps = true;
 	phase_space = optarg;
+	break;
+      case 'G':
+	if (!parse_ffModel(optarg,ffMod))
+	  {
+	    cerr << "Invalid form-factor model. Allowed values are kelly, ye and dipole. Aborting...\n";
+	    return false;
+	  }
 	break;
       case 'M':
         do_Estar = true;

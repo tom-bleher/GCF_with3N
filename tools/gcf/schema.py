@@ -40,6 +40,8 @@ CHANNELS = [
     ("pion.absorption",    "absorption",           True,  True),
     ("pion.piprod",        "pion production",      False, True),
 ]
+# Channels gcf_fsi can only switch, not scale (a yes/no parameter of GENIE's).
+SWITCH_CHANNELS = {"nucleon.compound"}
 
 
 @dataclass
@@ -58,6 +60,7 @@ class Opt:
     invert: bool = False         # bool flag that is passed when the value is False
     unit: str = ""
     advanced: bool = False       # GUI: shown under "Advanced", folded by default
+    tab: str = ""                # GUI: shown on this tab of the form ("" = the main one)
 
 
 GENERATE = [
@@ -68,12 +71,18 @@ GENERATE = [
     Opt("events", "int", "--events", 10000, label="Events",
         help="Number of accepted (weight > 0) events in total, over all jobs."),
     Opt("target", "target", None, [12, 6], label="Target (A, Z)"),
+    # Kelly: PRC 70, 068202 (2004), doi:10.1103/PhysRevC.70.068202
+    # Ye et al.: PLB 777, 8 (2018), doi:10.1016/j.physletb.2017.11.023
+    Opt("ff", "str", "--ff", "kelly", choices=["kelly", "ye", "dipole"],
+        label="Nucleon form factors",
+        help="Kelly 2004 (default), Ye et al. 2018 z expansion, or dipole with Galster G_En.",
+        tab="physics"),
     # De Forest: Nucl. Phys. A 392, 232 (1983), doi:10.1016/0375-9474(83)90124-0
     Opt("cs", "str", "--cs", "cc1", choices=["cc1", "cc2", "onshell"],
-        label="eN cross section", help="De Forest cc1 (default), cc2, or on-shell.", advanced=True),
+        label="eN cross section", help="De Forest cc1 (default), cc2, or on-shell.", tab="physics"),
     Opt("sigma_cm", "float", "--sigma-cm", None, models=["3N", "2N"], label="sigma_CM", unit="GeV/c",
         help="CM momentum width of the SRC cluster per component. Default: 0.15 (3N), "
-             "the nucleus table value (2N).", advanced=True),
+             "the nucleus table value (2N).", tab="physics"),
     Opt("q2", "range", "--q2", None, label="Q^2 window", unit="GeV^2",
         help="Generation-time Q^2 window MIN:MAX. Default: open (3N), 1:10 (2N/MF).", advanced=True),
     # 3N
@@ -86,19 +95,37 @@ GENERATE = [
         label="Electron angle window", unit="deg", advanced=True),
     Opt("kF", "float", "--kF", None, models=["3N"], label="k_F cutoff", unit="GeV/c",
         help="Internal momenta k > k_F (default 0.25); also sets sigma_CM = "
-             "sqrt(3/5) k_F unless sigma_CM is given.", advanced=True),
+             "sqrt(3/5) k_F unless sigma_CM is given.", tab="physics"),
     Opt("cm", "bool", "--no-cm", True, models=["3N"], invert=True,
-        label="CM motion of the triplet", advanced=True),
+        label="CM motion of the triplet", tab="physics"),
     # 2N
     Opt("nn", "str", "--nn", None, models=["2N"], label="NN interaction",
         choices=NN_INTERACTIONS,
         help="NN interaction behind the pair wave function and contacts (default AV18)."),
-    Opt("estar", "float", "--estar", None, models=["2N"], label="E*", unit="GeV",
-        help="Excitation energy of the residual nucleus.", advanced=True),
+    Opt("estar", "float", "--estar", None, models=["3N", "2N"], label="E*", unit="GeV",
+        help="Excitation energy of the residual nucleus; default 0. Not for a target with no residual.", tab="physics"),
+    Opt("sigma_e", "float", "--sigma-e", None, models=["2N"], label="E* width", unit="GeV",
+        help="Draw E* per event from a Gaussian of this width around E*, keeping E* > 0. "
+             "Empty: the same E* for every event.", tab="physics"),
+    Opt("cpp0", "float", "--cpp0", None, models=["2N"], label="C_pp (S=0)", tab="physics",
+        help="pp contact, in the units of the nucleus table. A contact only changes the event weights."),
+    Opt("cnn0", "float", "--cnn0", None, models=["2N"], label="C_nn (S=0)", tab="physics",
+        help="nn contact, in the units of the nucleus table. A contact only changes the event weights."),
+    Opt("cpn0", "float", "--cpn0", None, models=["2N"], label="C_pn (S=0)", tab="physics",
+        help="Spin-singlet pn contact, in the units of the nucleus table. A contact only changes the event weights."),
+    Opt("cpn1", "float", "--cpn1", None, models=["2N"], label="C_pn (S=1)", tab="physics",
+        help="Spin-triplet (deuteron-channel) pn contact, in the units of the nucleus table. "
+             "A contact only changes the event weights."),
+    Opt("randomize", "bool", "--randomize", False, models=["2N"], label="Vary the inputs within their errors",
+        help="One draw per run: sigma_CM and the contacts from Gaussians of their uncertainties, E* uniform up to the "
+             "table's maximum, using the run's seed. Values you set here override the draw. For systematics studies.",
+        tab="physics"),
+    Opt("light_cone", "bool", "--light-cone", False, models=["2N"], label="Light-cone cross section",
+        help="Instead of the instant-form one. Excludes importance sampling of |p_rel| and the local onset.", tab="physics"),
     Opt("kcut", "float", "--kcut", None, models=["2N"], label="k_rel cutoff", unit="GeV/c",
-        help="Relative-momentum floor of the SRC pair (default 0.25).", advanced=True),
+        help="Relative-momentum floor of the SRC pair (default 0.25).", tab="physics"),
     Opt("onset", "str", "--onset", "fixed", choices=["fixed", "local"], models=["2N"],
-        label="SRC onset", help="fixed: k_rel > cutoff. local: k_rel > k_F(r) at the vertex.", advanced=True),
+        label="SRC onset", help="fixed: k_rel > cutoff. local: k_rel > k_F(r) at the vertex.", tab="physics"),
     Opt("prel_is", "bool", "--prel-is", False, models=["2N"],
         label="Importance-sample |p_rel|", help="Lower weight variance; same expectation values.", advanced=True),
     # MF
@@ -106,11 +133,11 @@ GENERATE = [
         models=["MF"], label="Fermi gas",
         help="global: one Fermi momentum for the whole nucleus. local: k_F(r) from the density."),
     Opt("kF_fg", "float", "--kF-fg", None, models=["MF"], label="Global Fermi momentum",
-        unit="GeV/c", help="Default 0.25.", advanced=True),
+        unit="GeV/c", help="Default 0.25.", tab="physics"),
     # 2N and MF
-    Opt("rad", "bool", "--rad", False, models=["2N", "MF"], label="Radiation (peaking approx.)", advanced=True),
+    Opt("rad", "bool", "--rad", False, models=["2N", "MF"], label="Radiation (peaking approx.)", tab="physics"),
     Opt("coulomb", "bool", "--coulomb", False, models=["2N", "MF"], label="Coulomb correction",
-        help="Applied at generation, i.e. before FSI.", advanced=True),
+        help="Applied at generation, i.e. before FSI.", tab="physics"),
     Opt("phase_space", "str", "--phase-space", None, models=["2N", "MF"],
         label="Phase-space file", help="gcfGenerator phase-space limits file.", advanced=True),
 ]
@@ -124,6 +151,9 @@ FSI = [
         label="Interaction channels switched off",
         help="Fates of the cascade to switch off (their rate is scaled to 0, the rest "
              "is renormalized). Which ones exist depends on the model: see --list-channels."),
+    Opt("scale", "scales", None, {}, label="Interaction channel scale factors",
+        help="Scale the rate of a fate of the cascade by a factor; the rest is renormalized. "
+             "Which ones exist depends on the model: see --list-channels."),
     Opt("nucleon_mfp_scale", "float", None, None, label="Nucleon mean-free-path scale",
         help="Multiplies the nucleon mean free path (> 1: fewer interactions).", advanced=True),
     Opt("pion_mfp_scale", "float", None, None, label="Pion mean-free-path scale",
@@ -160,10 +190,10 @@ SECTIONS = {"run": RUN, "generate": GENERATE, "fsi": FSI}
 
 def to_json():
     """The schema as plain data, for the GUI."""
-    out = {"_channels": [dict(name=n, label=l, hN=h, hA=a) for n, l, h, a in CHANNELS],
+    out = {"_channels": [dict(name=n, label=l, hN=h, hA=a, scalable=n not in SWITCH_CHANNELS) for n, l, h, a in CHANNELS],
            "_targets": {m: [dict(A=a, Z=z, name=n) for a, z, n in t] for m, t in TARGETS.items()}}
     for name, opts in SECTIONS.items():
         out[name] = [dict(key=o.key, kind=o.kind, default=o.default, help=o.help,
                           label=o.label or o.key, choices=o.choices, models=o.models,
-                          unit=o.unit, advanced=o.advanced) for o in opts]
+                          unit=o.unit, advanced=o.advanced, tab=o.tab) for o in opts]
     return out

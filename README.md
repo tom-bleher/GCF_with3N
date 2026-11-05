@@ -77,11 +77,20 @@ after you log out, start it inside `tmux`.
    accepted events over all jobs. Less common settings, such as the eN cross
    section, `sigma_CM`, the Q² window and E\*, are under **Advanced**.
 3. For FSI, choose the cascade model (hN or hA). Untick an interaction channel
-   to switch it off.
+   to switch it off, or type a factor next to it to scale its rate.
 4. Fix anything marked in red; the form checks your values as you type.
    **Check & show config** also asks the generator to validate the settings and
    shows the resulting config. **Download config** saves it as a TOML file.
 5. Press **Start run**. The run appears under **Runs**.
+
+The **Physics inputs** tab holds the settings of the physics model: the 2N
+contacts, `sigma_CM`, E\* and its width, the cross section and form factors,
+radiation, the cutoffs. Each field shows the value from the generator's tables
+for your target and interaction, with its uncertainty, and an empty field uses
+that value. None of this needs a rebuild. **Vary the inputs within their errors**
+makes one random draw per run, for systematics studies. Contacts only change event
+weights, so for a contact study you can also reweight existing events (`band` in
+`tools/eic_src_analysis.py` does this).
 
 For **FSI on a file**, use **Browse…** to pick an event file that has not been
 through FSI yet: a `*_pwia.root` file, or another generator's file in the

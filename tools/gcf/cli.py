@@ -102,6 +102,10 @@ def add_schema_args(parser, opts, skip=()):
             parser.add_argument("--off", dest="off", action="append", default=None, metavar="CHANNEL",
                                 help="switch a cascade channel off (repeatable; gcf_fsi --list-channels)")
             continue
+        if o.key == "scale":
+            parser.add_argument("--scale", dest="scale", action="append", default=None, metavar="CHANNEL=FACTOR",
+                                type=_scale, help="scale a cascade channel by a factor (repeatable)")
+            continue
         if o.key == "transport":
             parser.add_argument("--independent", dest="transport", action="store_const",
                                 const="independent", default=None,
@@ -128,6 +132,14 @@ def _range(text):
     except ValueError:
         raise argparse.ArgumentTypeError(f"expected MIN:MAX, got {text!r}") from None
     return [lo, hi]
+
+
+def _scale(text):
+    name, eq, factor = text.partition("=")
+    try:
+        return name, float(factor) if eq else None
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"expected CHANNEL=FACTOR, got {text!r}") from None
 
 
 def _target(text):
@@ -196,6 +208,8 @@ def cmd_generate(args):
 
 def cmd_fsi(args):
     fsi = section_from_args(args, schema.FSI)
+    if "scale" in fsi:
+        fsi["scale"] = dict(fsi["scale"])
     if args.target:
         fsi["target"] = args.target
     raw = {"run": {"name": Path(args.output).stem, "stages": ["fsi"], "jobs": args.jobs,

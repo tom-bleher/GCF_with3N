@@ -48,6 +48,20 @@ def _coerce(opt, value, where):
     elif kind == "list":
         if not isinstance(value, list) or not all(isinstance(v, str) for v in value):
             raise ConfigError(f"{where}: expected a list of strings, got {value!r}")
+    elif kind == "scales":
+        names = {c[0] for c in schema.CHANNELS}
+        if not isinstance(value, dict):
+            raise ConfigError(f"{where}: expected a table of channel = factor, got {value!r}")
+        out = {}
+        for name, factor in value.items():
+            if name not in names:
+                raise ConfigError(f"{where}: unknown channel {name!r}; allowed: {sorted(names)}")
+            if name in schema.SWITCH_CHANNELS:
+                raise ConfigError(f"{where}: {name} can only be switched off, not scaled")
+            if isinstance(factor, bool) or not isinstance(factor, (int, float)) or not factor >= 0:
+                raise ConfigError(f"{where}: the factor of {name} must be a number >= 0, got {factor!r}")
+            out[name] = float(factor)
+        value = out
     if opt.choices is not None:
         vals = value if kind == "list" else [value]
         for v in vals:
@@ -114,6 +128,16 @@ def validate(raw, base_dir="."):
             if not applicable[c]:
                 raise ConfigError(f"[fsi] off: '{c}' is not a separate fate in the {fsi['model']} "
                                   f"cascade (see gcf_fsi --list-channels)")
+        for c, factor in fsi["scale"].items():
+            if not applicable[c]:
+                raise ConfigError(f"[fsi] scale: '{c}' is not a separate fate in the {fsi['model']} "
+                                  f"cascade (see gcf_fsi --list-channels)")
+            if c in fsi["off"]:
+                raise ConfigError(f"[fsi] scale: '{c}' is also switched off")
+        # A factor of 0 is the same as switching the channel off: one spelling in the saved config.
+        zero = [c for c, factor in fsi["scale"].items() if factor == 0]
+        fsi["off"] = fsi["off"] + zero
+        fsi["scale"] = {c: factor for c, factor in fsi["scale"].items() if factor != 0}
         if fsi["model"] == "hA" and {"nucleon.inelastic", "nucleon.cex", "nucleon.absorption",
                                      "nucleon.piprod"} <= set(fsi["off"]):
             raise ConfigError("[fsi] off: in hA at least one of nucleon.inelastic/cex/absorption/"
@@ -153,6 +177,8 @@ def _toml_value(v):
         return '"' + out + '"'
     if isinstance(v, list):
         return "[" + ", ".join(_toml_value(x) for x in v) + "]"
+    if isinstance(v, dict):
+        return "{" + ", ".join(f"{_toml_value(k)} = {_toml_value(x)}" for k, x in v.items()) + "}"
     raise TypeError(f"cannot write {v!r} to TOML")
 
 

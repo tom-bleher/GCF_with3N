@@ -42,6 +42,7 @@ function resultsPanel(name, stage, o, d) {
       ...prov.map(([s, p]) => el("dl", { class: "numbers" },
         ...resultsRow("Stage", s), ...resultsRow("Code version", p.versions.join(", ")), ...resultsRow("Date", p.date),
         ...resultsRow("Jobs", String(p.seeds.length)), ...resultsRow("Seeds", p.seeds.slice(0, 6).join(", ") + (p.seeds.length > 6 ? ", …" : "")),
+        ...(p.inputs ? resultsRow("Nuclear inputs", p.inputs) : []),
         ...resultsRow("Command", el("code", {}, p.command))))));
   }
   return box;
