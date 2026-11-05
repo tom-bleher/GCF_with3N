@@ -1150,12 +1150,14 @@ class TestOtherGenerators(GuiCase):
         self.assertEqual(d["state"], "done")
 
     def test_no_stored_events_are_explained(self):
-        """genElectro below the J/psi threshold: every attempt has zero weight."""
+        """genElectro far below the J/psi threshold: every attempt has zero weight. Not
+        at 6 GeV: a nucleon moving fast towards the beam (SRC) can make a J/psi below
+        the free-proton threshold of 8.2 GeV, and now and then one was stored."""
         harness.need_suite("genElectro")
-        r = self.gui.api("api/check", self.config("thr", "genElectro", beam=6.0))
+        r = self.gui.api("api/check", self.config("thr", "genElectro", beam=2.0))
         self.assertTrue(r["ok"], r["problems"])
         self.assertIn("stored no events", r["estimate_text"])
-        d, s = self.run_program("genElectro", suffix="_thr", beam=6.0)
+        d, s = self.run_program("genElectro", suffix="_thr", beam=2.0)
         self.assertEqual(s["events"], 0)
         self.assertTrue(any(level == "bad" and "No attempt" in text for level, text in s["notes"]), s["notes"])
 
