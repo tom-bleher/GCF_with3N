@@ -48,13 +48,21 @@ pip install uproot awkward numpy matplotlib scipy
 
 If you use `uv`, `uv venv ~/gcf-venv` and `uv pip install` do the same job.
 
+`./gcf doctor` checks all of this and says how to fix what's missing.
+
 Then start the page on the machine that will run the jobs:
 
 ```
-./gcf gui                                # runs are written to <repo>/runs
-./gcf gui --runs-dir /path/with/space    # choose where runs are written
-./gcf gui --port 8800                    # if the default port 8765 is taken
+./gcf gui --background                   # stays up after you log out; prints its URL
+./gcf gui --background --runs-dir /path/with/space
+./gcf gui --status                       # is it running, and what is its URL?
+./gcf gui --stop                         # stops the page; runs keep going
 ```
+
+Without `--background` it runs in your terminal instead. Runs are written to
+`<repo>/runs`, or `~/gcf_runs` if you can't write to the checkout. On a shared
+machine, `--max-cpus N` limits what its runs use together. Use `--port` if the
+default port 8765 is taken.
 
 It prints an SSH tunnel command and a URL:
 
@@ -62,11 +70,31 @@ It prints an SSH tunnel command and a URL:
    running. VS Code Remote-SSH forwards the port for you, and you don't need a
    tunnel if the browser runs on the same machine.
 2. Open the URL in your browser, including the `?token=...` part. The token is
-   the password, and it changes every time the page is started.
+   the password, so don't share the URL. It stays the same across restarts, so
+   you can bookmark it. `--new-token` replaces it.
 
-Ctrl-C or closing the terminal stops the page but not the runs. Start it again
-with the same `--runs-dir` to see them, using the new URL. To keep the page up
-after you log out, start it inside `tmux`.
+### Leaving and coming back
+
+You don't need `tmux` or `screen`. Runs are started on their own, without a
+terminal, so you can close the page, close your laptop or log out, and they carry
+on. Come back to the same address to see them, or use `./gcf status` in a terminal.
+
+- **If the page stops,** the runs carry on. Start it again and the open page
+  reconnects by itself.
+- **If a run's supervising process dies,** for example because the machine ran out
+  of memory, its jobs carry on and the page gives them a new supervisor within
+  seconds.
+- **If the machine restarts,** runs that were in progress continue from where they
+  were as soon as the page is started again, at most 3 times per run. To start
+  the page by itself after a restart, add
+  `@reboot cd /path/to/GCF_with3N && ./gcf gui --background` to your `crontab`.
+- **Long runs lose little.** A run is split into jobs of at most a million events,
+  and only unfinished jobs run again, with the same seeds, so you get the same events.
+- **Logout:** on a few systems, logging out kills all your processes. `./gcf
+  doctor` warns about this, and the fix is `loginctl enable-linger $USER`.
+
+From a terminal, `./gcf run --detach CONFIG.toml` starts a run the same way, and
+`./gcf run --resume --detach <run>/config.toml` continues one.
 
 ### Set up a run
 
@@ -81,7 +109,12 @@ after you log out, start it inside `tmux`.
 4. Fix anything marked in red; the form checks your values as you type.
    **Check & show config** also asks the generator to validate the settings and
    shows the resulting config. **Download config** saves it as a TOML file.
-5. Press **Start run**. The run appears under **Runs**.
+5. Press **Start run**. The run appears under **Runs**. If its CPUs are in use by
+   other runs of this page, it waits in a queue and starts by itself.
+
+**Check & show config** also runs a short test and estimates the time, the disk
+space and the N_eff to expect. To reuse settings, **Load config…** fills the form
+from a saved TOML file, and **Examples…** from an example.
 
 The **Physics inputs** tab holds the settings of the physics model: the 2N
 contacts, `sigma_CM`, E\* and its width, the cross section and form factors,
@@ -104,9 +137,12 @@ Click a run to open its details:
 - **Progress and logs:** while it runs you see the rate, the time left and the
   last 40 lines of each job's log. **Cancel run** stops it.
 - **Output files:** these are `<name>_pwia.root` and `<name>_fsi.root` in
-  `<runs-dir>/<name>/`, next to `config.toml` and the full logs in `logs/`. The
-  page can't download event files, so use **Copy path** and read or `scp` them
-  from the machine.
+  `<runs-dir>/<name>/`, next to `config.toml` and the full logs in `logs/`. Use
+  **Download**, or **Copy path** to read them on the machine. **Add FSI…** fills
+  the form to run the cascade on a run's PWIA events.
+- **Stopped runs:** **Resume** finishes a cancelled or failed run, and **Use the
+  finished jobs** makes output files from what's there. Σw / attempts stays right,
+  because a partial file counts only its own jobs' attempts.
 - **Numbers:** each output lists its events, attempts, Σw / attempts (the
   [quantity to compare between samples](docs/PIPELINE.md#weights-and-normalization)),
   the effective number of events N_eff and what made it. Read the warnings before
@@ -133,15 +169,10 @@ documentation.
 
 ### Things to watch for
 
-- **A passed check doesn't guarantee a good run.** It checks the options and
-  that the generator can produce events, not everything about the input. For
-  example, FSI on a `*_fsi.root` file passes and then fails when the run starts.
+- **A passed check doesn't guarantee a good run.** It checks the options and that
+  the generator can produce events, not everything about the input. For example,
+  FSI on a `*_fsi.root` file passes and then fails when the run starts.
 - **Switching off the compound-nucleus channel does nothing in hA** (issue #177).
-- **Cancelled runs can't be resumed.** Finished job files stay in the run's
-  `chunks/` directory, unmerged. Start a new run instead.
-- **Runs don't share a CPU limit.** **Parallel jobs** is only checked against
-  the machine's CPU count for each run, so check what is already running before
-  you start another large one.
 
 More detail: [docs/PIPELINE.md](docs/PIPELINE.md#the-web-interface).
 

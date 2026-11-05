@@ -101,6 +101,8 @@ def validate(raw, base_dir="."):
         raise ConfigError(f"[run] jobs must be between 1 and {max_jobs} (the CPUs of this machine)")
     if run["seed"] < 0:
         raise ConfigError("[run] seed must be >= 0")
+    if run["chunks"] is not None and run["chunks"] < 1:
+        raise ConfigError("[run] chunks must be at least 1")
     if not run["name"] or "/" in run["name"] or not run["name"].isprintable():
         raise ConfigError("[run] name must be a non-empty file name without control characters")
     out = Path(run["output_dir"]).expanduser()

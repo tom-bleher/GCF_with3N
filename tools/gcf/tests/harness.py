@@ -50,10 +50,12 @@ class Gui:
 
     def start(self, args=()):
         out = open(self.log, "w")
+        # The token and the record of the server stay out of the user's own settings.
+        self.env = dict(os.environ, XDG_CONFIG_HOME=str(Path(self.tmp) / "config"))
         self.proc = subprocess.Popen(
             [sys.executable, str(REPO / "gcf"), "gui", "--port", str(self.port),
              "--runs-dir", str(self.runs_dir), *args],
-            stdout=out, stderr=subprocess.STDOUT, start_new_session=True)
+            stdout=out, stderr=subprocess.STDOUT, start_new_session=True, env=self.env)
         out.close()
         deadline = time.time() + 20
         while time.time() < deadline:

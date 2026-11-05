@@ -6,7 +6,11 @@
 Browser tests are skipped without selenium and Firefox.
 """
 
+import json
+import os
+import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
@@ -376,6 +380,420 @@ class TestChannelScales(unittest.TestCase):
         self.assertGreater(pions(b), pions(a))
 
 
+class TestResilience(GuiCase):
+    """A run goes on whatever happens to what started it, and loses little if it can't."""
+
+    def status(self, name):
+        return json.loads((self.gui.runs_dir / name / "status.json").read_text())
+
+    def wait_for(self, condition, what, timeout=60):
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            if condition():
+                return
+            time.sleep(0.2)
+        self.fail(f"timed out waiting for {what}")
+
+    def stage_pids(self, name):
+        return [s["pid"] for job in self.status(name)["jobs"] for s in job if s.get("pid")]
+
+    def test_jobs_outlive_a_killed_supervisor_and_get_a_new_one(self):
+        """They used to die within seconds, of SIGPIPE, with the supervisor."""
+        self.gui.api("api/runs", small_run("orphan", model="3N", events=60000, jobs=2, seed=9))
+        path = self.gui.runs_dir / "orphan/status.json"
+        self.wait_for(lambda: path.exists() and self.status("orphan")["stages"]["fsi"]["done"] > 0, "the cascade to start")
+        first = self.status("orphan")
+        pids = self.stage_pids("orphan")
+        self.assertTrue(pids)
+        os.kill(first["pid"], signal.SIGKILL)
+        time.sleep(1.0)
+        self.assertTrue(any(harness.runner.proc_start(p) is not None for p in pids), "the jobs died with the supervisor")
+        self.wait_for(lambda: self.status("orphan")["pid"] != first["pid"], "a new supervisor", 20)
+        d = self.gui.wait("orphan")
+        self.assertEqual(d["state"], "done", d.get("error"))
+        self.assertTrue(d["outputs"]["fsi"]["exists"])
+        self.assertEqual(self.gui.api("api/runs/orphan/results", {"stage": "fsi"})["events"], 60000)
+
+    def test_interrupted_runs_continue_when_the_server_comes_back(self):
+        """As after a reboot: supervisor and jobs are gone, and no server was running."""
+        import uproot
+        gui = Gui()
+        self.addCleanup(gui.close)
+        cfg = small_run("reboot", model="2N", events=40000, jobs=2, seed=12)
+        cfg["run"]["chunks"] = 8
+        gui.api("api/runs", cfg)
+        path = gui.runs_dir / "reboot/status.json"
+        self.wait_for(lambda: path.exists() and json.loads(path.read_text())["stages"]["fsi"]["finished"] >= 2, "some finished jobs")
+        gui.stop()
+        st = json.loads(path.read_text())
+        os.kill(st["pid"], signal.SIGKILL)
+        for record in (gui.runs_dir / "reboot/logs").glob("*.pid"):
+            try:
+                os.killpg(int(record.read_text()), signal.SIGKILL)
+            except OSError:
+                pass
+        time.sleep(0.5)
+        gui.start()
+        d = gui.wait("reboot")
+        self.assertEqual(d["state"], "done", d.get("error"))
+        with uproot.open(d["outputs"]["fsi"]["path"]) as f:
+            self.assertEqual(f["events"].num_entries, 40000)
+        self.assertIn("was interrupted; resuming", gui.log.read_text())
+
+    def test_a_run_that_keeps_dying_waits_for_a_person(self):
+        from gcf import gui as gui_module
+        self.gui.api("api/runs", small_run("dying", events=500, jobs=1, seed=44, fsi=None))
+        self.gui.wait("dying")
+        run_dir = self.gui.runs_dir / "dying"
+        st = self.status("dying")
+        st.update(state="running", pid=999999, pid_start=1)
+        (run_dir / ".auto_resumes").write_text(str(gui_module.MAX_AUTO_RESUMES))
+        (run_dir / "status.json").write_text(json.dumps(st))
+        time.sleep(gui_module.SCHEDULE_SECONDS * 2.5)
+        self.assertEqual(self.gui.api("api/runs/dying")["state"], "stopped")
+        self.assertTrue(self.gui.api("api/runs/dying")["resumable"])
+
+    def test_a_job_the_last_status_missed_is_not_started_twice(self):
+        """The supervisor writes its status once a second. A job started just before
+        it died isn't in there, and a second copy would write to the same file."""
+        cfg = small_run("missed", model="3N", events=60000, jobs=2, seed=19)
+        self.gui.api("api/runs", cfg)
+        path = self.gui.runs_dir / "missed/status.json"
+        self.wait_for(lambda: path.exists() and self.status("missed")["stages"]["fsi"]["done"] > 0, "the cascade to start")
+        st = self.status("missed")
+        os.kill(st["pid"], signal.SIGKILL)
+        records = {p.name: int(p.read_text()) for p in (self.gui.runs_dir / "missed/logs").glob("fsi_*.pid")}
+        self.assertTrue(records)
+        # Forget them, as a status written a moment earlier would have.
+        for job in st["jobs"]:
+            for step in job:
+                step["pid"] = step["pid_start"] = None
+        path.write_text(json.dumps(st))
+        self.wait_for(lambda: self.status("missed")["pid"] != st["pid"], "a new supervisor", 20)
+        d = self.gui.wait("missed")
+        self.assertEqual(d["state"], "done", d.get("error"))
+        after = {p.name: int(p.read_text()) for p in (self.gui.runs_dir / "missed/logs").glob("fsi_*.pid")}
+        self.assertEqual(records, after, "a job was started a second time")
+
+    def test_runs_outlive_the_server_and_it_finds_them_again(self):
+        gui = Gui()
+        self.addCleanup(gui.close)
+        gui.api("api/runs", small_run("alone", model="3N", events=40000, jobs=2, seed=4))
+        time.sleep(1.5)
+        token = gui.token
+        os.killpg(gui.proc.pid, signal.SIGHUP)     # as when the terminal closes
+        gui.proc.wait(timeout=10)
+        time.sleep(1)
+        st = json.loads((gui.runs_dir / "alone/status.json").read_text())
+        self.assertTrue(harness.runner.proc_is(st["pid"], st["pid_start"]))
+        gui.start()
+        self.assertEqual(gui.token, token, "the address stays valid across a restart")
+        d = gui.wait("alone")
+        self.assertEqual(d["state"], "done", d.get("error"))
+
+    def test_resume_reruns_only_what_did_not_finish_and_gives_the_same_events(self):
+        import numpy as np
+        import uproot
+        whole = small_run("whole", model="2N", events=40000, jobs=2, seed=77)
+        whole["run"]["chunks"] = 8
+        self.gui.api("api/runs", whole)
+        reference = self.gui.wait("whole")
+        self.assertEqual(reference["state"], "done", reference.get("error"))
+        cut = small_run("cut", model="2N", events=40000, jobs=2, seed=77)
+        cut["run"]["chunks"] = 8
+        self.gui.api("api/runs", cut)
+        self.wait_for(lambda: (self.gui.runs_dir / "cut/status.json").exists()
+                      and self.status("cut")["stages"]["fsi"]["finished"] >= 2, "some finished jobs")
+        self.gui.api("api/runs/cut/cancel", {})
+        d = self.gui.wait("cut")
+        self.assertEqual(d["state"], "cancelled")
+        self.assertTrue(d["resumable"])
+        finished = [i for i, job in enumerate(self.status("cut")["jobs"]) if all(s["state"] == "done" for s in job)]
+        self.assertTrue(finished)
+        path = self.gui.runs_dir / f"cut/chunks/fsi_{finished[0]:03d}.root"
+        kept = path.stat().st_mtime_ns
+        self.gui.api("api/runs/cut/resume", {})
+        d = self.gui.wait("cut")
+        self.assertEqual(d["state"], "done", d.get("error"))
+        with open(self.gui.runs_dir / "cut/config.toml") as f:
+            self.assertIn("chunks = 8", f.read())
+        # Same seeds and jobs: the same events as the run that was never interrupted.
+        for stage in ("generate", "fsi"):
+            a = uproot.open(reference["outputs"][stage]["path"])["events"]["weight"].array(library="np")
+            b = uproot.open(d["outputs"][stage]["path"])["events"]["weight"].array(library="np")
+            self.assertTrue(np.array_equal(a, b), stage)
+        self.assertEqual(self.gui.api("api/runs/cut/results", {"stage": "fsi"})["events"], 40000)
+        self.assertGreater(kept, 0)
+
+    def test_a_failed_job_does_not_take_the_others_with_it(self):
+        cfg = small_run("onefail", model="2N", events=8000, jobs=1, seed=5, fsi=None)
+        cfg["run"]["chunks"] = 4
+        self.gui.api("api/runs", cfg)
+        d = self.gui.wait("onefail")
+        self.assertEqual(d["state"], "done", d.get("error"))
+        # A run where one job can't write its output.
+        cfg = small_run("onefail2", model="2N", events=80000, jobs=1, seed=5, fsi=None)
+        cfg["run"]["chunks"] = 4
+        run_dir = self.gui.runs_dir / "onefail2"
+        (run_dir / "chunks").mkdir(parents=True)
+        (run_dir / "chunks/pwia_001.root").mkdir()   # a directory where a file must go,
+        (run_dir / "chunks/pwia_001.root/keep").write_text("")   # and not empty, or ROOT replaces it
+        (run_dir / "submitted.toml").write_text("")
+        import tomllib  # noqa: F401
+        from gcf import config
+        full = config.validate(dict(cfg, run=dict(cfg["run"], output_dir=str(self.gui.runs_dir))))
+        (run_dir / "config.toml").write_text(config.dumps(full))
+        out = subprocess.run([sys.executable, str(REPO / "gcf"), "run", "-q", "--resume", str(run_dir / "config.toml")],
+                             capture_output=True, text=True, env=harness.runner.environment())
+        self.assertEqual(out.returncode, 1, out.stderr)
+        st = self.status("onefail2")
+        states = [job[0]["state"] for job in st["jobs"]]
+        self.assertEqual(states.count("failed"), 1, states)
+        self.assertEqual(states.count("done"), 3, states)
+        self.assertIn("1 of 4 jobs failed; 3 finished and are kept", st["error"])
+        # Fixed: only that job runs again.
+        shutil.rmtree(run_dir / "chunks/pwia_001.root")
+        self.gui.api("api/runs/onefail2/resume", {})
+        d = self.gui.wait("onefail2")
+        self.assertEqual(d["state"], "done", d.get("error"))
+
+    def test_finished_jobs_can_be_merged_with_the_right_yield(self):
+        cfg = small_run("part", model="2N", events=40000, jobs=2, seed=31)
+        cfg["run"]["chunks"] = 8
+        self.gui.api("api/runs", cfg)
+        self.wait_for(lambda: (self.gui.runs_dir / "part/status.json").exists()
+                      and self.status("part")["stages"]["fsi"]["finished"] >= 2, "some finished jobs")
+        self.gui.api("api/runs/part/cancel", {})
+        d = self.gui.wait("part")
+        self.assertTrue(d["mergeable"])
+        out = self.gui.api("api/runs/part/merge", {})
+        d = self.gui.wait("part")
+        self.assertEqual(d["state"], "partial")
+        self.assertTrue(d["outputs"]["fsi"]["exists"])
+        self.assertEqual(out["partial"]["fsi"]["total"], 40000)
+        s = self.gui.api("api/runs/part/results", {"stage": "fsi"})
+        self.assertEqual(s["events"], out["partial"]["fsi"]["events"])
+        # Its attempts are those of the merged jobs, so the yield isn't diluted.
+        self.assertAlmostEqual(s["yield"], 9.4, delta=2.5)
+        self.assertTrue(d["resumable"])
+        self.gui.api("api/runs/part/resume", {})
+        d = self.gui.wait("part")
+        self.assertEqual(d["state"], "done", d.get("error"))
+        self.assertEqual(self.gui.api("api/runs/part/results", {"stage": "fsi"})["events"], 40000)
+
+    def test_a_run_has_one_supervisor(self):
+        cfg_path = None
+        self.gui.api("api/runs", small_run("single", model="3N", events=30000, jobs=1, seed=8))
+        self.wait_for(lambda: (self.gui.runs_dir / "single/config.toml").exists(), "the run's config")
+        cfg_path = self.gui.runs_dir / "single/config.toml"
+        out = subprocess.run([sys.executable, str(REPO / "gcf"), "run", "-q", "--resume", str(cfg_path)],
+                             capture_output=True, text=True, env=harness.runner.environment())
+        self.assertEqual(out.returncode, 2)
+        self.assertIn("being run by another process", out.stderr)
+        self.gui.wait("single")
+
+    def test_long_runs_get_checkpoints(self):
+        from gcf import runner
+        self.assertEqual(runner.checkpoint_jobs({"jobs": 8}, 100000), 8)
+        self.assertEqual(runner.checkpoint_jobs({"jobs": 8}, 100000000), 100)
+        self.assertEqual(runner.checkpoint_jobs({"jobs": 8, "chunks": 20}, 100000000), 20)
+
+
+class TestQueue(unittest.TestCase):
+    def test_runs_wait_for_cpus_in_order_and_can_be_removed(self):
+        harness.need_binaries()
+        gui = Gui(args=["--max-cpus", "2"])
+        self.addCleanup(gui.close)
+        gui.api("api/runs", small_run("q1", model="3N", events=30000, jobs=2, seed=1, fsi="hN"))
+        gui.api("api/runs", small_run("q2", events=500, jobs=1, seed=2, fsi=None))
+        gui.api("api/runs", small_run("q3", events=500, jobs=1, seed=3, fsi=None))
+        states = {r["name"]: r["state"] for r in gui.api("api/runs")["runs"]}
+        self.assertEqual(states["q2"], "queued")
+        self.assertEqual(states["q3"], "queued")
+        machine = gui.api("api/runs")["machine"]
+        self.assertEqual((machine["max_cpus"], machine["queued"]), (2, 2))
+        gui.api("api/runs/q3/cancel", {})
+        self.assertEqual(gui.api("api/runs/q3")["state"], "cancelled")
+        self.assertEqual(gui.wait("q1")["state"], "done")
+        self.assertEqual(gui.wait("q2")["state"], "done")
+        self.assertEqual(gui.api("api/runs/q3")["state"], "cancelled")
+
+    def test_too_many_jobs_for_the_limit_are_refused(self):
+        harness.need_binaries()
+        gui = Gui(args=["--max-cpus", "2"])
+        self.addCleanup(gui.close)
+        status, out = gui.request("api/runs", small_run("big", jobs=3, events=100, fsi=None))
+        self.assertEqual(status, 400)
+        self.assertIn("--max-cpus", out["error"])
+
+    def test_the_queue_survives_a_server_restart(self):
+        harness.need_binaries()
+        gui = Gui(args=["--max-cpus", "1"])
+        self.addCleanup(gui.close)
+        gui.api("api/runs", small_run("first", model="3N", events=30000, jobs=1, seed=1))
+        gui.api("api/runs", small_run("second", events=500, jobs=1, seed=2, fsi=None))
+        gui.stop()
+        gui.start(["--max-cpus", "1"])
+        self.assertEqual(gui.wait("first")["state"], "done")
+        self.assertEqual(gui.wait("second")["state"], "done")
+
+
+class TestEstimate(GuiCase):
+    def test_check_reports_time_disk_and_statistics(self):
+        r = self.gui.api("api/check", small_run("est", events=200000, jobs=4))
+        self.assertTrue(r["ok"], r["problems"])
+        e = r["estimate"]
+        self.assertGreater(e["seconds"], 0)
+        # 2N with FSI: a few hundred bytes per event in each file.
+        self.assertTrue(100 < e["bytes_per_event"]["generate"] < 1000, e)
+        self.assertTrue(200 < e["bytes_per_event"]["fsi"] < 1500, e)
+        self.assertEqual(e["peak_bytes"], 2 * e["bytes"])
+        self.assertIn("job", r["estimate_text"])
+        self.assertIn("N_eff", r["estimate_text"])
+
+    def test_estimate_is_close_to_a_real_run(self):
+        e = self.gui.api("api/check", small_run("est2", events=30000, jobs=2))["estimate"]
+        self.gui.api("api/runs", small_run("est2", events=30000, jobs=2))
+        d = self.gui.wait("est2")
+        size = d["outputs"]["generate"]["size"] + d["outputs"]["fsi"]["size"]
+        self.assertLess(abs(size - e["bytes"]) / size, 0.5)
+        took = d["finished"] - d["started"]
+        self.assertLess(e["seconds"], 5 * took + 5)
+
+    def test_impossible_disk_use_is_refused_before_it_starts(self):
+        status, out = self.gui.request("api/runs", small_run("huge", events=10**15, jobs=1))
+        self.assertEqual(status, 400)
+        self.assertIn("disk space", out["error"])
+        self.assertFalse((self.gui.runs_dir / "huge").exists())
+
+
+class TestFiles(GuiCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.gui.api("api/runs", small_run("files", events=3000, jobs=2, seed=2))
+        cls.details = cls.gui.wait("files")
+
+    def fetch(self, path, headers=None):
+        import urllib.request
+        req = urllib.request.Request(f"http://localhost:{self.gui.port}/{path}",
+                                     headers=dict(headers or {}, **{"X-GCF-Token": self.gui.token}))
+        with urllib.request.urlopen(req, timeout=60) as r:
+            return r.status, dict(r.headers), r.read()
+
+    def test_event_files_download_whole_and_in_part(self):
+        path = Path(self.details["outputs"]["fsi"]["path"])
+        status, headers, data = self.fetch(f"api/runs/files/{path.name}")
+        self.assertEqual(status, 200)
+        self.assertEqual(data, path.read_bytes())
+        self.assertIn("attachment", headers["Content-Disposition"])
+        status, headers, data = self.fetch(f"api/runs/files/{path.name}", {"Range": "bytes=100-199"})
+        self.assertEqual(status, 206)
+        self.assertEqual(data, path.read_bytes()[100:200])
+        self.assertEqual(headers["Content-Range"], f"bytes 100-199/{path.stat().st_size}")
+
+    def test_job_logs_can_be_read_but_nothing_outside_the_run(self):
+        self.assertEqual(self.gui.request("api/runs/files/logs/generate_000.log")[0], 200)
+        for bad in ("api/runs/files/logs/..%2F..%2F..%2Fserver.log", "api/runs/files/..%2Fserver.log",
+                    "api/runs/..%2F..%2Fserver.log/x", "api/runs/files/logs/generate_000.exit"):
+            self.assertIn(self.gui.request(bad)[0], (400, 404), bad)
+
+    def test_unauthorized_requests_get_nothing(self):
+        for path in ("api/runs", "api/runs/files/config.toml", "static/runs.js", "api/runs/files/logs/generate_000.log"):
+            self.assertEqual(self.gui.request(path, token="wrong")[0], 403, path)
+
+    def test_examples_and_saved_configs_load(self):
+        from gcf import cli
+        for name, text in cli.EXAMPLES.items():
+            cfg = self.gui.api("api/parse-config", {"text": text})
+            self.assertIn("run", cfg, name)
+        saved = (self.gui.runs_dir / "files/config.toml").read_text()
+        self.assertEqual(self.gui.api("api/parse-config", {"text": saved})["generate"]["events"], 3000)
+        status, out = self.gui.request("api/parse-config", {"text": "this is not toml ["})
+        self.assertEqual(status, 400)
+        self.assertIn("TOML", out["error"])
+        status, out = self.gui.request("api/parse-config", {"text": "[generate]\nbogus = 1\n"})
+        self.assertEqual(status, 400)
+        self.assertIn("bogus", out["error"])
+
+
+class TestCommands(unittest.TestCase):
+    def setUp(self):
+        self.home = tempfile.mkdtemp(prefix="gcf-cli-")
+        self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
+        self.env = dict(os.environ, XDG_CONFIG_HOME=self.home)
+
+    def gcf(self, *args):
+        return subprocess.run([sys.executable, str(REPO / "gcf"), *map(str, args)], capture_output=True,
+                              text=True, env=self.env, timeout=120)
+
+    def test_background_server_lifecycle(self):
+        harness.need_binaries()
+        port = harness.free_port()
+        runs = Path(self.home) / "runs"
+        out = self.gcf("gui", "--background", "--port", port, "--runs-dir", runs)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.addCleanup(self.gcf, "gui", "--stop", "--port", port)
+        token = re.search(r"token=(\S+)", out.stdout).group(1)
+        self.assertIn("log out whenever you like", out.stdout)
+        # The token file is private to the user.
+        mode = (Path(self.home) / "gcf/gui-token").stat().st_mode & 0o777
+        self.assertEqual(mode, 0o600)
+        again = self.gcf("gui", "--background", "--port", port, "--runs-dir", runs)
+        self.assertIn("Already running", again.stdout)
+        self.assertIn(token, again.stdout)
+        status = self.gcf("gui", "--status", "--port", port)
+        self.assertIn(token, status.stdout)
+        self.assertIn("is running", status.stdout)
+        clash = self.gcf("gui", "--port", port, "--runs-dir", runs)
+        self.assertEqual(clash.returncode, 2)
+        self.assertIn("already running", clash.stderr)
+        self.assertEqual(self.gcf("gui", "--stop", "--port", port).returncode, 0)
+        deadline = time.time() + 10
+        while time.time() < deadline and "No gcf gui" not in self.gcf("gui", "--status", "--port", port).stdout:
+            time.sleep(0.2)
+        self.assertIn("No gcf gui", self.gcf("gui", "--status", "--port", port).stdout)
+        # A new token invalidates the old address.
+        out = self.gcf("gui", "--background", "--port", port, "--runs-dir", runs, "--new-token")
+        self.assertNotIn(token, out.stdout)
+
+    def test_detached_run_and_status(self):
+        harness.need_binaries()
+        from gcf import config
+        runs = Path(self.home) / "runs"
+        path = Path(self.home) / "c.toml"
+        cfg = small_run("detached", events=2000, jobs=2)
+        cfg["run"]["output_dir"] = str(runs)
+        path.write_text(config.dumps(config.validate(cfg)))
+        out = self.gcf("run", "--detach", path)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("on its own", out.stdout)
+        deadline = time.time() + 120
+        while time.time() < deadline:
+            status = self.gcf("status", "--runs-dir", runs)
+            if re.search(r"detached\s+done", status.stdout):
+                break
+            time.sleep(0.5)
+        self.assertRegex(status.stdout, r"detached\s+done")
+
+    def test_doctor(self):
+        out = self.gcf("doctor")
+        self.assertIn("gcf_generate", out.stdout)
+        self.assertIn("runs survive logout", out.stdout)
+
+    def test_runs_directory_default(self):
+        from gcf import runner
+        self.assertEqual(runner.default_runs_dir(), REPO / "runs")
+        old = os.environ.get("GCF_RUNS_DIR")
+        os.environ["GCF_RUNS_DIR"] = "/some/where"
+        try:
+            self.assertEqual(runner.default_runs_dir(), Path("/some/where"))
+        finally:
+            del os.environ["GCF_RUNS_DIR"]
+            if old:
+                os.environ["GCF_RUNS_DIR"] = old
+
+
 class TestBrowser(GuiCase):
     @classmethod
     def setUpClass(cls):
@@ -409,7 +827,7 @@ class TestBrowser(GuiCase):
         self.driver.find_element(By.ID, "btn-start").click()
         WebDriverWait(self.driver, 60).until(lambda d: d.find_element(By.ID, "d-title").text == name)
         time.sleep(0.8)        # past the debounced validation of the reset form
-        self.assertIn(f"Started run {name}", self.driver.find_element(By.ID, "form-msg").text)
+        self.assertIn(f"Submitted run {name}", self.driver.find_element(By.ID, "form-msg").text)
         self.gui.wait(name)
 
     def test_outputs_show_numbers_and_warnings(self):
@@ -487,6 +905,81 @@ class TestBrowser(GuiCase):
         self.assertEqual(self.driver.execute_script("return collect()")["fsi"]["scale"], {"pion.absorption": 0.5})
         self.driver.execute_script("resetForm()")
         self.assertNotIn("scale", self.driver.execute_script("return collect()")["fsi"])
+
+    def test_first_visit_guide_and_small_test_run(self):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        gui = Gui()
+        self.addCleanup(gui.close)
+        self.driver.get(gui.url)
+        self.driver.execute_script("localStorage.clear()")
+        self.driver.get(gui.url)
+        WebDriverWait(self.driver, 20).until(lambda d: d.find_elements(By.CSS_SELECTOR, ".guide"))
+        self.assertIn("GETTING STARTED", self.driver.find_element(By.ID, "runs").text.upper())
+        self.driver.execute_script("fillTestRun()")
+        name = self.driver.find_element(By.ID, "f-run-name").get_attribute("value")
+        self.assertTrue(name.startswith("first-test-"))
+        time.sleep(0.5)
+        self.driver.execute_script("document.getElementById('btn-start').click()")
+        WebDriverWait(self.driver, 60).until(lambda d: d.find_element(By.ID, "d-title").text == name)
+        d = gui.wait(name)
+        self.assertEqual(d["state"], "done", d.get("error"))
+        WebDriverWait(self.driver, 120).until(lambda x: x.find_elements(By.CSS_SELECTOR, "#d-body img.plot"))
+        self.driver.execute_script("localStorage.clear()")
+
+    def test_stopped_run_offers_resume_and_add_fsi(self):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        cfg = small_run("brk", events=40000, jobs=2, seed=3)
+        cfg["run"]["chunks"] = 8
+        self.gui.api("api/runs", cfg)
+        deadline = time.time() + 60
+        path = self.gui.runs_dir / "brk/status.json"
+        while time.time() < deadline:
+            if path.exists() and json.loads(path.read_text())["stages"]["fsi"]["finished"] >= 2:
+                break
+            time.sleep(0.2)
+        self.gui.api("api/runs/brk/cancel", {})
+        self.gui.wait("brk")
+        self.open()
+        self.driver.execute_script("showDetails('brk')")
+        WebDriverWait(self.driver, 20).until(lambda x: "Resume" in x.find_element(By.ID, "d-body").text)
+        text = self.driver.find_element(By.ID, "d-body").text
+        self.assertRegex(text, r"Resume \(\d+ of 8 jobs left\)")
+        self.assertIn("Use the finished jobs", text)
+        self.driver.execute_script("[...document.querySelectorAll('#d-body button')].find(b => b.textContent.startsWith('Resume')).click()")
+        WebDriverWait(self.driver, 20).until(lambda x: self.gui.api("api/runs/brk")["state"] != "cancelled")
+        d = self.gui.wait("brk")
+        self.assertEqual(d["state"], "done", d.get("error"))
+        self.driver.execute_script("showDetails('brk')")
+        WebDriverWait(self.driver, 60).until(lambda x: "Add FSI" in x.find_element(By.ID, "d-body").text)
+        self.driver.execute_script("[...document.querySelectorAll('#d-body button')].find(b => b.textContent.startsWith('Add FSI')).click()")
+        self.assertEqual(self.driver.execute_script("return collect()")["run"]["stages"], ["fsi"])
+        self.assertTrue(self.driver.execute_script("return collect()")["fsi"]["input"].endswith("brk_pwia.root"))
+        self.driver.execute_script("resetForm()")
+
+    def test_page_reconnects_after_a_server_restart(self):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        gui = Gui()
+        self.addCleanup(gui.close)
+        self.driver.get(gui.url)
+        WebDriverWait(self.driver, 20).until(lambda d: d.find_elements(By.CSS_SELECTOR, "#grid-run .field"))
+        gui.stop()
+        WebDriverWait(self.driver, 15).until(lambda d: "Cannot reach" in d.find_element(By.ID, "banner").text)
+        self.assertIn("Your runs carry on", self.driver.find_element(By.ID, "banner").text)
+        gui.start()
+        WebDriverWait(self.driver, 15).until(lambda d: "hidden" in d.find_element(By.ID, "banner").get_attribute("class"))
+
+    def test_examples_fill_the_form(self):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        self.open()
+        self.driver.execute_script("""const s = document.getElementById('example-select'); s.value = '2N';
+                                      s.dispatchEvent(new Event('change'));""")
+        WebDriverWait(self.driver, 15).until(lambda d: d.find_element(By.ID, "f-generate-model").get_attribute("value") == "2N")
+        self.assertEqual(self.driver.find_element(By.ID, "f-generate-beam").get_attribute("value"), "4.5")
+        self.driver.execute_script("resetForm()")
 
     def test_run_row_keeps_keyboard_focus(self):
         """The table is rebuilt every few seconds; that must not drop the focus."""

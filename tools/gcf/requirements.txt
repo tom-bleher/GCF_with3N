@@ -1,0 +1,7 @@
+# What the web interface and gcf quicklook / summary need besides the standard library.
+# The pipeline itself runs without them.
+uproot
+awkward
+numpy
+matplotlib
+scipy

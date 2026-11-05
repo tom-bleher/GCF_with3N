@@ -182,6 +182,12 @@ RUN = [
              "Each needs one CPU core."),
     Opt("seed", "int", None, 0, label="Base seed",
         help="0 = draw one and record it in the saved config. Job i uses seed + i.", advanced=True),
+    Opt("note", "str", None, None, label="Note", advanced=True,
+        help="What this run is for. Shown in the list of runs and searched by its filter."),
+    Opt("chunks", "int", None, None, label="Split into jobs", advanced=True,
+        help="More jobs than run at a time means an interruption loses less: a resume reruns only the jobs "
+             "that didn't finish. Default: one per million events, and at least Parallel jobs. "
+             "Job i uses seed + i, so this is part of what makes a run reproducible."),
     Opt("keep_chunks", "bool", None, False, label="Keep per-job files", advanced=True),
 ]
 

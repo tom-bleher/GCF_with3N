@@ -1,19 +1,25 @@
 """The `gcf` command: run pipeline stages from a config file or the command line.
 
   gcf run CONFIG.toml            run the stages a config describes
+  gcf status                     the runs in a directory and how far they are
   gcf generate [options]         PWIA events -> event file   (gcf_generate)
   gcf fsi [options]              event file -> + GENIE FSI   (gcf_fsi)
   gcf quicklook FILE             a page of control plots, with an optional selection
   gcf summary FILE               the numbers of an event file
   gcf gui                        the web interface
+  gcf doctor                     check that this machine is ready
   gcf example [3N|2N|MF|fsi]     print an example config
   gcf env                        print the environment the stages run with
 """
 
 import argparse
 import json
+import os
 import shlex
+import signal
+import subprocess
 import sys
+import time
 from pathlib import Path
 
 from . import config, runner, schema
@@ -167,9 +173,15 @@ def work_dir_for(output):
     return output.parent / f".{output.name}.gcf"
 
 
-def run_plan(cfg, run_dir, final_outputs=None, quiet=False):
+def run_plan(cfg, run_dir, final_outputs=None, quiet=False, resume=False):
     cfg = runner.resolve_seed(cfg)
-    plan = runner.plan_from_config(cfg, run_dir, final_outputs)
+    lock = runner.RunLock(run_dir)     # held until this process ends  # noqa: F841
+    if "chunks" not in cfg["run"] or cfg["run"]["chunks"] is None:
+        # Part of what makes the run reproducible, so the saved config records it.
+        total = cfg["generate"]["events"] if "generate" in cfg["run"]["stages"] else None
+        if total is not None:
+            cfg["run"]["chunks"] = runner.checkpoint_jobs(cfg["run"], total)
+    plan = runner.plan_from_config(cfg, run_dir, final_outputs, resume=resume)
     Path(run_dir).mkdir(parents=True, exist_ok=True)
     (Path(run_dir) / "config.toml").write_text(
         config.dumps(cfg, comment="Resolved configuration of this run (re-run with: gcf run config.toml)"))
@@ -179,15 +191,61 @@ def run_plan(cfg, run_dir, final_outputs=None, quiet=False):
     return runner.execute(plan, quiet=quiet)
 
 
+def detach(argv):
+    """Start this command again, on its own: no terminal, its output in a log."""
+    log = Path(argv["log"])
+    log.parent.mkdir(parents=True, exist_ok=True)
+    with open(log, "a") as out:
+        subprocess.Popen([sys.executable, str(runner.REPO / "gcf"), *argv["args"]], stdout=out, stderr=subprocess.STDOUT,
+                         stdin=subprocess.DEVNULL, start_new_session=True, cwd=str(log.parent))
+
+
 def cmd_run(args):
     cfg = config.load(args.config)
     if args.jobs:
         cfg["run"]["jobs"] = args.jobs
     run_dir = Path(cfg["run"]["output_dir"]) / cfg["run"]["name"]
-    if (run_dir / "status.json").exists() and not args.force:
-        raise config.ConfigError(f"{run_dir} already holds a run; pick another [run] name "
-                                 f"or pass --force to overwrite it")
-    return run_plan(cfg, run_dir, quiet=args.quiet)
+    if args.merge_finished:
+        partial = runner.merge_finished(run_dir)
+        for stage, p in partial.items():
+            print(f"{stage}: merged {p['jobs']} of {p['jobs_total']} jobs, {p['events']} of {p['total']} events")
+        return True
+    if args.resume:
+        if not cfg["run"]["seed"]:
+            raise config.ConfigError(f"--resume needs the seed of the run: use {run_dir}/config.toml")
+    elif (run_dir / "status.json").exists() and not args.force:
+        raise config.ConfigError(f"{run_dir} already holds a run; pick another [run] name, pass --resume "
+                                 f"with its config.toml to finish it, or --force to overwrite it")
+    if args.detach:
+        again = ["run", "-q", str(Path(args.config).resolve())]
+        again += ["--resume"] if args.resume else []
+        again += ["--force"] if args.force else []
+        again += ["-j", str(args.jobs)] if args.jobs else []
+        detach({"args": again, "log": run_dir / "gcf.log"})
+        print(f"Started {cfg['run']['name']} on its own; it goes on after you log out.\n"
+              f"Follow it with: ./gcf status --runs-dir {cfg['run']['output_dir']}")
+        return True
+    return run_plan(cfg, run_dir, quiet=args.quiet, resume=args.resume)
+
+
+def cmd_status(args):
+    from . import gui
+    runs_dir = Path(args.runs_dir) if args.runs_dir else runner.default_runs_dir()
+    app = gui.App(runs_dir, serve=False)
+    runs = app.list_runs()
+    if args.json:
+        print(json.dumps(runs, indent=1))
+        return True
+    if not runs:
+        print(f"No runs in {runs_dir}")
+        return True
+    print(f"Runs in {runs_dir}:")
+    for r in runs:
+        progress = ", ".join(f"{k} {100.0 * v['done'] / max(v['total'], 1):.0f}%" for k, v in r["stages"].items())
+        print(f"  {r['name']:32s} {r['state']:10s} {progress:28s} {r['setup']}")
+        if r["state"] in ("stopped", "failed", "cancelled") and r["resumable"]:
+            print(f"      resume with: ./gcf run --resume --detach {runs_dir / r['name'] / 'config.toml'}")
+    return True
 
 
 def cmd_generate(args):
@@ -240,8 +298,51 @@ def cmd_summary(args):
 
 def cmd_gui(args):
     from . import gui
-    gui.serve(args.host, args.port, Path(args.runs_dir))
+    running = gui.read_server(args.port)
+    token = gui.stable_token(args.new_token)
+    if args.status or args.stop:
+        if not running:
+            print(f"No gcf gui of yours is running on port {args.port}.")
+            return not args.stop
+        if args.stop:
+            os.kill(running["pid"], signal.SIGTERM)
+            print(f"Stopped the gcf gui on port {args.port}. Runs already started keep going.")
+            return True
+        print(f"gcf gui is running on port {args.port}, with runs in {running['runs_dir']}:\n"
+              f"    http://localhost:{args.port}/?token={token}")
+        return True
+    runs_dir = Path(args.runs_dir).expanduser().resolve() if args.runs_dir else runner.default_runs_dir()
+    if args.background:
+        if running:
+            print(f"Already running on port {args.port}, with runs in {running['runs_dir']}:\n"
+                  f"    http://localhost:{args.port}/?token={token}")
+            return True
+        runs_dir.mkdir(parents=True, exist_ok=True)
+        again = ["gui", "--port", str(args.port), "--host", args.host, "--runs-dir", str(runs_dir), "--quiet"]
+        again += ["--max-cpus", str(args.max_cpus)] if args.max_cpus else []
+        log = gui.config_dir() / f"gui-{args.port}.log"
+        detach({"args": again, "log": log})
+        deadline = time.time() + 20
+        while time.time() < deadline and not gui.read_server(args.port):
+            time.sleep(0.1)
+        if not gui.read_server(args.port):
+            raise runner.RunError(f"the interface did not start; see {log}")
+        print(gui.banner(gui.App(runs_dir, serve=False, token=token), args.host, args.port))
+        print(f"\nRunning on its own: log out whenever you like. Stop it with: ./gcf gui --stop --port {args.port}\n"
+              f"Find this URL again with: ./gcf gui --status --port {args.port}")
+        return True
+    if running:
+        raise runner.RunError(f"a gcf gui of yours is already running on port {args.port}; see gcf gui --status, "
+                              f"or use another --port")
+    gui.serve(args.host, args.port, runs_dir, token=token, max_cpus=args.max_cpus, quiet=args.quiet)
     return True
+
+
+def cmd_doctor(args):
+    from . import doctor
+    results = doctor.checks(args.runs_dir)
+    print(doctor.text(results))
+    return all(c["ok"] or not c["required"] for c in results)
 
 
 def cmd_example(args):
@@ -269,8 +370,20 @@ def main(argv=None):
     p.add_argument("config")
     p.add_argument("-j", "--jobs", type=int, default=0, help="override [run] jobs")
     p.add_argument("--force", action="store_true", help="overwrite an existing run")
+    p.add_argument("--resume", action="store_true",
+                   help="with a run's config.toml: finish it, keeping the jobs that finished and taking over "
+                        "those still running")
+    p.add_argument("--detach", action="store_true",
+                   help="run on its own, without this terminal; follow it with gcf status")
+    p.add_argument("--merge-finished", action="store_true",
+                   help="with a stopped run's config.toml: make the final files from the jobs that finished")
     p.add_argument("-q", "--quiet", action="store_true")
     p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("status", help="the runs in a directory and how far they are")
+    p.add_argument("--runs-dir", help="default: as for gcf gui")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_status)
 
     p = sub.add_parser("generate", help="PWIA events -> event file (optionally + FSI)")
     p.add_argument("-o", "--output", required=True, help="output event file")
@@ -308,9 +421,21 @@ def main(argv=None):
     p.add_argument("--port", type=int, default=8765)
     p.add_argument("--host", default="127.0.0.1",
                    help="interface to listen on (default: localhost only)")
-    p.add_argument("--runs-dir", default=str(runner.REPO / "runs"),
-                   help="where GUI runs are written (default: <repo>/runs)")
+    p.add_argument("--runs-dir", help="where GUI runs are written (default: $GCF_RUNS_DIR, else <repo>/runs "
+                                      "if you can write there, else ~/gcf_runs)")
+    p.add_argument("--background", action="store_true",
+                   help="run on its own, so that it stays up after you log out; prints its URL")
+    p.add_argument("--status", action="store_true", help="say whether it is running, and its URL")
+    p.add_argument("--stop", action="store_true", help="stop one started with --background; runs keep going")
+    p.add_argument("--max-cpus", type=int, help="CPUs its runs may use together; more runs wait in a queue "
+                                                "(default: all of this machine's)")
+    p.add_argument("--new-token", action="store_true", help="replace the token in the URL, so old links stop working")
+    p.add_argument("--quiet", action="store_true", help=argparse.SUPPRESS)
     p.set_defaults(func=cmd_gui)
+
+    p = sub.add_parser("doctor", help="check that this machine is ready, and say how to fix what isn't")
+    p.add_argument("--runs-dir")
+    p.set_defaults(func=cmd_doctor)
 
     p = sub.add_parser("example", help="print an example config")
     p.add_argument("kind", nargs="?", default="3N", choices=sorted(EXAMPLES))

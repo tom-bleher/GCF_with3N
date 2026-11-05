@@ -48,7 +48,9 @@ The existing combined programs are unchanged and still work.
 ## The `gcf` command
 
 ```text
-gcf run CONFIG.toml        run the stages a config describes
+gcf run CONFIG.toml        run the stages a config describes (--detach, --resume)
+gcf status                 the runs in a directory and how far they are
+gcf doctor                 check that this machine is ready, and say how to fix what isn't
 gcf generate [options]     PWIA events -> event file           (gcf_generate)
 gcf fsi [options]          event file -> + GENIE FSI           (gcf_fsi)
 gcf quicklook FILE         control plots of an event file, with an optional selection
@@ -99,6 +101,23 @@ scale = { "pion.cex" = 0.8 }  # or to scale by a factor
 
 Every run directory holds the resolved `config.toml` (including the seed),
 per-job logs and a `status.json`; `gcf run runs/<name>/config.toml` repeats it.
+
+### Interrupted runs
+
+A run has a supervisor process (`gcf run`) and stage processes, each in a session
+of its own, so a closed terminal doesn't reach them. The stages write straight to
+their logs and record their exit codes next to them, so they also outlive the
+supervisor. `gcf run --resume <run>/config.toml` starts a new one: it keeps the
+jobs that finished, takes over stage processes that are still running, and runs
+the others again with the same seeds. The result is the same events as a run that
+was never interrupted. A file lock stops two supervisors working on one run.
+
+`[run] jobs` is how many jobs run at a time. `[run] chunks` is how many jobs the
+run is split into; by default one per million events, and at least `jobs`. A
+failed job doesn't stop the others, and a resume reruns only it. `gcf run
+--merge-finished <run>/config.toml` makes output files from the jobs that finished;
+each job's file carries its own `hAttempts`, so Σw/attempts stays right. It isn't
+available for FSI-only runs, whose first job carries the whole input's attempts.
 
 ### Interaction channels of the cascade
 
@@ -154,7 +173,7 @@ The stage programs can also be called directly
 ## The web interface
 
 ```bash
-./gcf gui                    # prints an ssh -L command and a URL with a token
+./gcf gui --background       # prints an ssh -L command and a URL with a token
 ```
 
 The interface runs on the analysis machine. Open an SSH tunnel from your laptop
@@ -181,13 +200,21 @@ port automatically) and open the printed URL. From the page you can:
   does the same);
 - compare the outputs of two runs (`tools/validation/compare_samples.py
   --weighted`, see [Validation](#validation));
-- reuse a finished run as a template for a new one, or delete it.
+- reuse a finished run as a template for a new one, or delete it;
+- resume a run that stopped, or use the jobs that finished; download outputs and
+  full logs; add FSI to a run's PWIA events; load a saved config or an example;
+- leave: runs don't depend on the page or a terminal. Runs the page starts share a
+  CPU limit (`--max-cpus`) and wait in a queue that survives restarts.
 
 Everything the page does goes through `gcf run`, and each run keeps its
 config, so a run set up in the browser can be repeated or scaled up from a
 terminal. The server listens on localhost only and every request needs the
-random token from the URL, because other users of a shared machine can reach
-localhost ports. Stopping it (Ctrl-C) does not stop runs already started.
+token from the URL, because other users of a shared machine can reach localhost
+ports. The token is kept in `~/.config/gcf/gui-token`, readable only by you, so the
+URL survives restarts; `--new-token` replaces it. `--host` changes the interface it
+listens on, over plain HTTP, so anyone on that network can read the token. Stopping
+the page does not stop runs already started. When started again it continues runs
+that were interrupted, such as by a machine restart, up to 3 times per run.
 
 ## Event-file format
 
