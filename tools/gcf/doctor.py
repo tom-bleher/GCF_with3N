@@ -7,7 +7,7 @@ import shutil
 import subprocess
 from pathlib import Path
 
-from . import runner, schema
+from . import config, runner, schema
 
 LOW_DISK_BYTES = 10 * 1000**3
 
@@ -97,6 +97,8 @@ def checks(runs_dir=None):
     scipy = has_module("scipy")
     out.append(check("Python package for comparing runs", scipy, "" if scipy else "missing: scipy",
                      "" if scipy else "pip install -r tools/gcf/requirements.txt", required=False))
+    shell = config.eic_software_defaults()["eic_shell"]
+    out.append(check("eic-shell, for the ePIC chain", True, "" if Path(shell).exists() else f"not found at {shell}; only the EIC / ePIC stage needs it"))
     base = runs_dir if runs_dir.exists() else next((p for p in runs_dir.parents if p.exists()), Path("/"))
     writable = os.access(base, os.W_OK)
     out.append(check(f"runs directory {runs_dir}", writable, "" if writable else "not writable",

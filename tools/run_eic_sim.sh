@@ -59,7 +59,7 @@
 #
 # Environment:
 #   EPIC_INSTALL      epic install prefix (required), e.g. ~/eic/dev/epic_craterlake_5x41/install
-#   EICRECON_INSTALL  EICrecon install prefix (required for reco)
+#   EICRECON_INSTALL  EICrecon install prefix (required for reco); /opt/local is the container's
 #   EIC_SHELL         eic-shell launcher (default ~/eic/eic-shell)
 #   BEAGLESYS, FLUPRO, LHAPATH
 #                     BeAGLE checkout, FLUKA 4 installation and LHAPDF 5 PDF sets for --deexcite beagle
@@ -140,7 +140,12 @@ fi
 [[ -x $EIC_SHELL ]] || die "EIC_SHELL=$EIC_SHELL is not executable"
 [[ -d $FIELDMAPS ]] || die "FIELDMAPS=$FIELDMAPS is not a directory"
 if [[ $STAGE == all || $STAGE == reco || $STAGE == resume ]]; then
-  [[ -n ${EICRECON_INSTALL:-} && -f $EICRECON_INSTALL/bin/eicrecon-this.sh ]] || die "set EICRECON_INSTALL"
+  [[ -n ${EICRECON_INSTALL:-} ]] || die "set EICRECON_INSTALL"
+  if [[ ! -f $EICRECON_INSTALL/bin/eicrecon-this.sh ]]; then
+    # the container's own (/opt/local) is checked inside eic-shell, like a container-only epic
+    [[ $EICRECON_INSTALL == /opt/* ]] || die "EICRECON_INSTALL=$EICRECON_INSTALL has no bin/eicrecon-this.sh"
+    echo "run_eic_sim: $EICRECON_INSTALL is not visible on the host; assuming it exists in the container" >&2
+  fi
 fi
 DEEX_BIN=$GCF/tools/deexcite/build/deexcite
 : "${BEAGLESYS:=$HOME/src/BeAGLE}" "${FLUPRO:=$HOME/src/beagle-deps/fluka}" "${LHAPATH:=$HOME/src/beagle-deps/lhapdf5/share/lhapdf/PDFsets}"
@@ -404,13 +409,14 @@ def git(path):
     r = lambda *a: subprocess.run(["git", "-C", str(src), *a], capture_output=True, text=True).stdout.strip()
     return {"dir": str(src), "commit": r("rev-parse", "HEAD"), "describe": r("describe", "--always", "--dirty"),
             "branch": r("rev-parse", "--abbrev-ref", "HEAD")}
-sif = re.findall(r"/[^ ${}:]+\.sif", Path(shell).read_text())
-sif = [s for s in sif if Path(s).exists()]
-image = {"path": sif[0], "size": Path(sif[0]).stat().st_size,
-         "mtime": datetime.fromtimestamp(Path(sif[0]).stat().st_mtime).isoformat(timespec="seconds")} if sif else None
 info = {}
 if (o / "container_info.txt").exists():
     info = dict(l.split("=", 1) for l in (o / "container_info.txt").read_text().splitlines() if "=" in l)
+# the image the container stage reported (SIF can override the one named in eic-shell), else eic-shell's
+sif = ([info["container_image"]] if info.get("container_image") else []) + re.findall(r"/[^ ${}:]+\.sif", Path(shell).read_text())
+sif = [s for s in sif if Path(s).exists()]
+image = {"path": sif[0], "size": Path(sif[0]).stat().st_size,
+         "mtime": datetime.fromtimestamp(Path(sif[0]).stat().st_mtime).isoformat(timespec="seconds")} if sif else None
 expected_mm = Path(epic).resolve().parent / "calibrations" / "materials-map.cbor"
 exp_sha = None
 if expected_mm.exists():

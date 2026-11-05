@@ -16,7 +16,9 @@ stages, from config files, the command line or a web interface:
 ```
 
 The FSI stage also accepts events from other generators, and lets you switch
-individual cascade channels (absorption, charge exchange, ...) off. What the
+individual cascade channels (absorption, charge exchange, ...) off. The `eic`
+stage (`./gcf example eic`, or "EIC / ePIC" in the web interface) runs the events
+through the ePIC simulation and reconstruction. What the
 generators compute, assumptions and expressions: [docs/PHYSICS.md](docs/PHYSICS.md). Event format, options
 and validation: [docs/PIPELINE.md](docs/PIPELINE.md).
 

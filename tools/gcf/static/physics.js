@@ -47,7 +47,7 @@ function updatePhysicsTab() {
   tab.title = tab.disabled ? "These settings are for the Generate stage" : "";
   if (tab.disabled && tab.getAttribute("aria-selected") === "true") showFormTab("setup");
   const scanTab = document.getElementById("tab-scan");
-  scanTab.disabled = stages().includes("program");
+  scanTab.disabled = stages().includes("program") || stages().includes("eic");
   scanTab.title = scanTab.disabled ? "Scans are for the Generate and FSI stages" : "";
   if (scanTab.disabled && scanTab.getAttribute("aria-selected") === "true") showFormTab("setup");
   let n = 0;

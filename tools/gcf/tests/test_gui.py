@@ -1174,6 +1174,66 @@ class TestOtherGenerators(GuiCase):
         self.assertIn("[program] target", r["problems"][0])
 
 
+class TestEicStage(GuiCase):
+    """The ePIC chain's place in the front end; a real run needs eic-shell and takes minutes."""
+
+    def config(self, name="e1", **eic):
+        return {"run": {"name": name, "stages": ["eic"], "seed": 7},
+                "eic": {"sample": "src", "beams": ["5x41"], "ion": "C12", "slices": [[3, 5, 300]], **eic}}
+
+    def test_config_round_trip_and_limits(self):
+        from gcf import config, runner
+        cfg = config.validate(self.config())
+        self.assertEqual(cfg["run"]["stages"], ["eic"])
+        self.assertIn("[eic]", config.dumps(cfg))
+        self.assertNotIn("jobs =", config.dumps(cfg).split("[eic]")[0])
+        self.assertEqual(len(runner.eic_slices(cfg["eic"])), 1)
+        with self.assertRaises(config.ConfigError):
+            config.validate({"run": {"stages": ["eic", "generate"]}, "eic": {}, "generate": {}})
+
+    def test_it_counts_towards_the_cpu_limit(self):
+        from gcf import gui
+        self.assertEqual(gui.App.cpus_of_config({"run": {"stages": ["eic"]}, "eic": {"sim_jobs": 4, "sim_threads": 8, "reco_jobs": 6}}), 32)
+        self.assertEqual(gui.App.cpus_of_config({"run": {"stages": ["generate"], "jobs": 3}, "eic": {"sim_jobs": 4}}), 3)
+        limited = Gui(args=["--max-cpus", "2"])
+        self.addCleanup(limited.close)
+        problems = limited.api("api/check", self.config(sim_jobs=8))["problems"]
+        self.assertTrue(any("--max-cpus" in p for p in problems), problems)
+
+    def test_finished_jobs_are_not_merged_for_it(self):
+        from gcf import runner
+        run_dir = Path(self.gui.tmp) / "epic"
+        run_dir.mkdir()
+        (run_dir / "status.json").write_text(json.dumps({"stages": {"generate": {}, "simulate": {}}, "jobs": [[]], "outputs": {}}))
+        with self.assertRaises(runner.RunError) as e:
+            runner.merge_finished(run_dir)
+        self.assertIn("ePIC", str(e.exception))
+
+    def test_a_resume_stops_what_the_last_supervisor_left_running(self):
+        """It plans other steps than those it continues, so two copies could work on one set of chunks."""
+        from gcf import runner
+        run_dir = Path(self.gui.tmp) / "leftover"
+        (run_dir / "logs").mkdir(parents=True)
+        base = run_dir / "logs/simulate_x"
+        proc = subprocess.Popen(["/bin/sh", "-c", runner.STAGE_WRAPPER, str(base), "sleep", "60"], start_new_session=True)
+        self.addCleanup(proc.wait)
+        deadline = time.time() + 5
+        while time.time() < deadline and not base.with_suffix(".pid").exists():
+            time.sleep(0.05)
+        unrelated = run_dir / "logs/other.pid"
+        unrelated.write_text(str(os.getpid()))     # a record of a process that isn't a step of this run
+        runner.stop_leftover_steps(run_dir)
+        self.assertIsNotNone(proc.poll() if proc.wait(timeout=5) is not None else None)
+
+    def test_page_offers_it_and_the_other_stages_still_work(self):
+        schema = self.gui.api("api/schema")
+        self.assertIn("eic", schema["schema"])
+        self.assertIn("program", schema["schema"])
+        self.assertIn("eic_shell", schema["eic_software"])
+        self.gui.api("api/runs", small_run("next_to_eic", events=500, jobs=1))
+        self.assertEqual(self.gui.wait("next_to_eic")["state"], "done")
+
+
 class TestBrowser(GuiCase):
     @classmethod
     def setUpClass(cls):
@@ -1441,6 +1501,17 @@ class TestBrowser(GuiCase):
         self.assertIn("web interface", self.driver.find_element(By.CSS_SELECTOR, "#doc h1").text.lower())
         self.assertIn("Your first run", self.driver.find_element(By.ID, "doc").text)
         self.assertEqual(self.driver.execute_script("return [...document.images].filter(i => i.complete && !i.naturalWidth).length"), 0)
+
+    def test_eic_in_the_form(self):
+        from selenium.webdriver.common.by import By
+        self.open()
+        self.driver.execute_script("document.querySelector(\"input[name=stages][value='eic']\").click()")
+        self.assertTrue(self.driver.find_element(By.ID, "fs-eic").is_displayed())
+        self.assertTrue(self.driver.find_element(By.ID, "tab-scan").get_attribute("disabled"))
+        self.assertTrue(self.driver.find_element(By.ID, "tab-physics").get_attribute("disabled"))
+        self.assertEqual(self.driver.execute_script("return collect()")["run"]["stages"], ["eic"])
+        self.driver.execute_script("resetForm()")
+        self.assertTrue(self.driver.find_element(By.ID, "fs-generate").is_displayed())
 
     def test_internal_run_options_are_not_in_the_form(self):
         from selenium.webdriver.common.by import By

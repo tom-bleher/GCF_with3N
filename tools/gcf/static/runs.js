@@ -79,12 +79,13 @@ function addFsi(path) {
 }
 
 function logLink(name, l) {
+  if (!l.file) return null;
   const base = `api/runs/${encodeURIComponent(name)}/` + l.file.split("/").map(encodeURIComponent).join("/");
   return el("a", { href: tokenUrl(base), target: "_blank", rel: "noopener", class: "loglink" }, `full log (${fmtSize(l.size)})`);
 }
 
 // -- config files and examples ---------------------------------------------
-const EXAMPLE_LABELS = { "3N": "3N on 12C, with FSI", "2N": "2N on 12C, with FSI", MF: "Mean field on 12C", fsi: "FSI on an existing file", dis: "Tagged DIS on 12C (genDIS)" };
+const EXAMPLE_LABELS = { "3N": "3N on 12C, with FSI", "2N": "2N on 12C, with FSI", MF: "Mean field on 12C", fsi: "FSI on an existing file", dis: "Tagged DIS on 12C (genDIS)", eic: "12C through the ePIC chain" };
 
 async function loadConfigText(text, source, keepName) {
   let cfg;

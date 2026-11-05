@@ -207,7 +207,8 @@ class App:
                 "workers": st.get("workers"), "partial": st.get("partial"),
                 "resumable": bool(stopped and has_config and jobs),
                 "mergeable": bool(state in ("stopped", "failed", "cancelled") and any_step_done
-                                  and {"generate", "program"} & set(st.get("stages", {}))),
+                                  and {"generate", "program"} & set(st.get("stages", {}))
+                                  and "simulate" not in st.get("stages", {})),
                 "note": self.read_config(d).get("run", {}).get("note"),
                 "scan": self.read_config(d).get("run", {}).get("scan"),
                 "setup": self.setup_summary(d), "mtime": d.stat().st_mtime}
@@ -231,7 +232,7 @@ class App:
         except (OSError, tomllib.TOMLDecodeError):
             return ""
         parts = []
-        g, f, r, program = c.get("generate"), c.get("fsi"), c.get("run", {}), c.get("program")
+        g, f, e, r, program = c.get("generate"), c.get("fsi"), c.get("eic"), c.get("run", {}), c.get("program")
         if program:
             parts.append(program.get("program", "?"))
             if "target" in program:
@@ -244,6 +245,17 @@ class App:
                 parts.append((f"{n / 1e6:g}M" if n >= 1e6 else f"{n / 1e3:g}k" if n >= 1e3 else str(n)) + " attempts")
             if r.get("jobs", 1) > 1:
                 parts.append(f"{r['jobs']} jobs")
+            return " · ".join(parts)
+        if e:
+            sample = schema.EIC_SAMPLES.get(e.get("sample"))
+            slices = e.get("slices") or [[0, 0, 0]]
+            attempts = sum(x[2] for x in slices)
+            parts += ["ePIC", sample.label.split(" (")[0] if sample else str(e.get("sample")),
+                      schema.EIC_IONS.get(e.get("ion"), str(e.get("ion"))), " + ".join(e.get("beams", [])),
+                      f"Q2 {slices[0][0]:g}-{slices[-1][1]:g}",
+                      (f"{attempts / 1e6:g}M" if attempts >= 1e6 else f"{attempts / 1e3:g}k") + " attempts"]
+            if e.get("deexcite") not in (None, "none", "auto"):
+                parts.append(e["deexcite"])
             return " · ".join(parts)
         if g:
             parts.append(g.get("model", "?"))
@@ -309,7 +321,7 @@ class App:
             except tomllib.TOMLDecodeError:
                 pass
         logs = []
-        order = {"generate": 0, "fsi": 1, "merge": 2}
+        order = {"generate": 0, "fsi": 1, "simulate": 2, "reconstruct": 3, "resume": 4, "analyze": 5, "merge": 6}
         files = sorted((d / "logs").glob("*.log"), key=lambda p: (order.get(p.name.split("_")[0], 9), p.name)) \
             if (d / "logs").is_dir() else []
         # With many jobs: those that failed or are running, before the others.
@@ -337,7 +349,45 @@ class App:
                 cached = results.cached(o["path"], d / "results.json", stage)
                 if cached:
                     out["results"][stage] = cached
+        if out["config_data"] and "eic" in out["config_data"]:
+            out["eic"] = self.eic_details(d, out["config_data"]["eic"])
+            # while the container works the step logs are silent; each slice's run.log is not
+            for s in out["eic"]["slices"]:
+                run_log = d / s["label"] / "run.log"
+                if run_log.is_file():
+                    logs.append({"name": f"{s['label']}/run.log", "tail": "\n".join(tail_lines(run_log, 15))})
         return out
+
+    def eic_details(self, d, eic):
+        """Per slice: events and chunks; the software that made them; the figures."""
+        slices, provenance = [], None
+        for label, beams, lo, hi, attempts in runner.eic_slices(eic):
+            s = d / label
+            info = {"label": label, "beams": beams, "q2": [lo, hi], "attempts": attempts,
+                    "path": str(s), "events": None, "jobs": None}
+            gen = runner._read_json(s / "gen.hepmc3.json")
+            if gen:
+                info["events"] = gen.get("events_written")
+            rec = runner._read_json(s / "run.json")
+            if rec:
+                info["jobs"] = rec.get("jobs")
+                if provenance is None and rec.get("container"):
+                    git = lambda part: (rec.get(part) or {}).get("git") or {}
+                    provenance = {"gcf": " ".join(rec.get("gcf") or []), "generator": " ".join(rec.get("generator") or []),
+                                  "epic": rec.get("epic", {}).get("install"), "epic_config": rec.get("epic", {}).get("config"),
+                                  "epic_commit": git("epic").get("commit"), "eicrecon": rec.get("eicrecon", {}).get("install"),
+                                  "eicrecon_commit": git("eicrecon").get("commit"), "abconv_preset": rec.get("abconv_preset"),
+                                  "container_image": rec["container"].get("container_image"),
+                                  "container_from": rec["container"].get("container_from"),
+                                  "container_build_date": rec["container"].get("container_build_date"),
+                                  "detector_path": rec["container"].get("detector_path")}
+            slices.append(info)
+        figures, plots = [], d / "plots"
+        if plots.is_dir():
+            figures = [{"name": p.stem, "png": p.name, "pdf": p.with_suffix(".pdf").name, "mtime": p.stat().st_mtime}
+                       for p in sorted(plots.glob("*.png"))]
+        return {"slices": slices, "provenance": provenance, "figures": figures,
+                "summary": (plots / "summary.json").is_file(), "plots": str(plots)}
 
     @staticmethod
     def with_runs_dir(raw, runs_dir):
@@ -350,7 +400,7 @@ class App:
 
     def check(self, raw):
         """Validate a config and run the stages' setup checks; returns the
-        resolved TOML and a list of problems."""
+        resolved TOML, a list of problems and, for the ePIC chain, what it will cost."""
         raw = self.with_runs_dir(raw, self.runs_dir)
         cfg = config.validate(raw, base_dir=self.runs_dir)
         problems = []
@@ -362,7 +412,8 @@ class App:
         problems += runner.check_setup(cfg)
         problems += self.resource_problems(cfg)
         cost = None
-        if not problems:
+        eic = "eic" in cfg["run"]["stages"]
+        if not problems and not eic:
             try:
                 cost = estimate.estimate(cfg, self.runs_dir)
             except (runner.RunError, OSError, subprocess.SubprocessError) as e:
@@ -370,12 +421,21 @@ class App:
         if cost and cost["peak_bytes"] > cost["free_bytes"]:
             problems.append(f"this run needs about {estimate.human_bytes(cost['peak_bytes'])} of disk space, and "
                             f"{self.runs_dir} has {estimate.human_bytes(cost['free_bytes'])} free")
-        return {"toml": config.dumps(cfg, comment="Run with:  gcf run <this file>"),
-                "problems": problems, "ok": not problems, "estimate": cost,
-                "estimate_text": estimate_text(cost, cfg) if cost else None}
+        out = {"toml": config.dumps(cfg, comment="Run with:  gcf run <this file>"),
+               "problems": problems, "ok": not problems, "estimate": cost,
+               "estimate_text": estimate_text(cost, cfg) if cost else None}
+        if eic:
+            out["cost"] = dict(zip(("events", "gb", "core_hours"), runner.eic_cost(cfg)))
+        return out
 
     def resource_problems(self, cfg):
         problems = []
+        if "eic" in cfg["run"]["stages"]:
+            needed = self.cpus_of_config(cfg)
+            if needed > self.max_cpus:
+                problems.append(f"[eic] sim_jobs: this chain needs {needed} CPUs at a time, more than the {self.max_cpus} "
+                                f"this interface may use (gcf gui --max-cpus)")
+            return problems
         if cfg["run"]["jobs"] > self.max_cpus:
             problems.append(f"[run] jobs: {cfg['run']['jobs']} is more than the {self.max_cpus} CPUs "
                             f"this interface may use (gcf gui --max-cpus)")
@@ -588,10 +648,18 @@ class App:
                     continue
         return [d for _, _, d in sorted(found)]
 
+    @staticmethod
+    def cpus_of_config(cfg):
+        """CPUs a config uses at a time: its jobs, or the larger stage of the ePIC chain."""
+        eic = cfg.get("eic")
+        if eic and "eic" in cfg.get("run", {}).get("stages", ["eic"]):
+            return max(eic.get("sim_jobs", 1) * eic.get("sim_threads", 1), eic.get("reco_jobs", 1))
+        jobs = cfg.get("run", {}).get("jobs", 1)
+        return jobs if isinstance(jobs, int) else 1
+
     def run_cpus(self, d):
-        """CPUs a run may use: its jobs at a time."""
-        jobs = self.read_config(d).get("run", {}).get("jobs", 1)
-        return max(1, min(jobs if isinstance(jobs, int) else 1, self.max_cpus))
+        """CPUs a run may use; a run larger than the limit still gets its turn, alone."""
+        return max(1, min(self.cpus_of_config(self.read_config(d)), self.max_cpus))
 
     def cpus_in_use(self):
         """CPUs reserved by the runs in the directories this server looks after,
@@ -1012,6 +1080,7 @@ def make_handler(app):
                 if parts == ["api", "schema"]:
                     return self.send_json({"schema": schema.to_json(), "examples": cli.EXAMPLES,
                                            "doctor": doctor.checks(app.runs_dir), "version": doctor.built_version(),
+                                           "eic_software": config.eic_software_defaults(),
                                            "runs_dir": str(app.runs_dir), "cpus": app.max_cpus,
                                            "binaries": all(os.access(runner.BIN_DIR / b, os.X_OK)
                                                            for b in ("gcf_generate", "gcf_fsi"))})
@@ -1037,6 +1106,13 @@ def make_handler(app):
                 if parts == ["api", "nuclear"]:
                     q = {k: query.get(k, [""])[0] for k in ("model", "A", "Z", "nn")}
                     return self.send_json(app.nuclear(q["model"], q["A"], q["Z"], q["nn"]))
+                if len(parts) == 5 and parts[:2] == ["api", "runs"] and parts[3] == "plots":
+                    plots = app.run_dir(parts[2]) / "plots"
+                    f = (plots / parts[4]).resolve()
+                    if f.parent != plots.resolve() or f.suffix not in (".png", ".pdf", ".json", ".txt") \
+                            or not f.is_file():
+                        raise FileNotFoundError(parts[4])
+                    return self.send_file(f, download="download" in query)
                 if parts == ["api", "files"]:
                     return self.send_json(app.list_files(query.get("path", [""])[0]))
                 if parts == ["docs"]:

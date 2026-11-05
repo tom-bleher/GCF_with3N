@@ -9,7 +9,7 @@
   gcf summary FILE               the numbers of an event file
   gcf gui                        the web interface
   gcf doctor                     check that this machine is ready
-  gcf example [3N|2N|MF|fsi|dis] print an example config
+  gcf example [3N|2N|MF|fsi|dis|eic]  print an example config
   gcf env                        print the environment the stages run with
 """
 
@@ -109,6 +109,30 @@ jobs = 8
 input = "my_events.root"
 model = "hA"
 target = [12, 6]      # only needed if the file has no target_A/target_Z
+""",
+    "eic": """\
+# 12C SRC pairs through the ePIC chain at both light-ion settings (tools/run_eic_sim.sh:
+# generator -> gcf2hepmc -> afterburner -> npsim -> eicrecon), then the PRC 105, 034001 figures.
+# These are 1% of the production statistics, about 2000 events per setting.
+[run]
+name = "c12_epic"
+output_dir = "runs"
+stages = ["eic"]
+seed = 0              # 0: draw one; the saved config records it. Slice i uses seed + i.
+
+[eic]
+sample = "src"        # src, fsi, mf, 3n, 3n_fsi, dis
+beams = ["5x41", "10x110"]
+ion = "C12"           # C12, d, He4
+slices = [[3, 5, 9600], [5, 12, 3770], [12, 25, 2260]]   # Q2 min, Q2 max [GeV^2], attempts
+deexcite = "auto"     # auto, none, geant4, beagle
+sim_jobs = 8
+sim_threads = 1
+reco_jobs = 8
+# Empty software paths resolve to $EPIC_INSTALL, $EICRECON_INSTALL, $EIC_SHELL, $FIELDMAPS,
+# else the container's nightly geometry and EICrecon. The saved config records the result.
+# epic_install = "/path/to/epic/install"
+# eicrecon_install = "/path/to/EICrecon/install"
 """,
 }
 
@@ -227,12 +251,21 @@ def cmd_run(args):
         for stage, p in partial.items():
             print(f"{stage}: merged {p['jobs']} of {p['jobs_total']} jobs, {p['events']} of {p['total']} events")
         return True
+    eic = "eic" in cfg["run"]["stages"]
     if args.resume:
         if not cfg["run"]["seed"]:
             raise config.ConfigError(f"--resume needs the seed of the run: use {run_dir}/config.toml")
-    elif (run_dir / "status.json").exists() and not args.force:
-        raise config.ConfigError(f"{run_dir} already holds a run; pick another [run] name, pass --resume "
-                                 f"with its config.toml to finish it, or --force to overwrite it")
+    elif (run_dir / "status.json").exists():
+        if eic:
+            raise config.ConfigError(f"{run_dir} already holds a run; pick another [run] name, or pass --resume "
+                                     f"to finish it (--force does not apply: it would mix two runs' chunks)")
+        if not args.force:
+            raise config.ConfigError(f"{run_dir} already holds a run; pick another [run] name, pass --resume "
+                                     f"with its config.toml to finish it, or --force to overwrite it")
+    if eic:
+        problems = runner.check_setup(cfg)
+        if problems:
+            raise config.ConfigError("\n".join(problems))
     if args.detach:
         again = ["run", "-q", str(Path(args.config).resolve())]
         again += ["--resume"] if args.resume else []
