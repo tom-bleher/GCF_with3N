@@ -18,23 +18,24 @@ function showFormTab(name) {
   });
   try { localStorage.setItem("gcf-gui-tab", name); } catch (e) {}
   if (name === "physics") refreshPhysics();
+  if (name === "scan" && typeof refreshScanPanel === "function") refreshScanPanel();
 }
 
 function buildFormTabs() {
   const strip = el("div", { id: "form-tabs", role: "tablist", "aria-label": "Parts of the form" },
-    ...[["setup", "Run setup"], ["physics", "Physics inputs"]].map(([name, label]) =>
+    ...[["setup", "Run setup"], ["physics", "Physics inputs"], ["scan", "Scan"]].map(([name, label]) =>
       el("button", { type: "button", role: "tab", "data-tab": name, id: `tab-${name}`, "aria-controls": `panel-${name}`,
         onclick: () => showFormTab(name),
         onkeydown: e => {
           if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
-          const next = name === "setup" ? "physics" : "setup";
-          if (document.getElementById(`tab-${next}`).disabled) return;
+          const order = ["setup", "physics", "scan"].filter(t => !document.getElementById(`tab-${t}`).disabled);
+          const next = order[(order.indexOf(name) + (e.key === "ArrowRight" ? 1 : order.length - 1)) % order.length];
           showFormTab(next); document.getElementById(`tab-${next}`).focus();
         } }, label, el("span", { class: "n", id: `tab-count-${name}` }))));
   document.getElementById("form-tabs-slot").replaceWith(strip);
   let start = "setup";
   try { start = localStorage.getItem("gcf-gui-tab") || "setup"; } catch (e) {}
-  showFormTab(start === "physics" ? "physics" : "setup");
+  showFormTab(["physics", "scan"].includes(start) ? start : "setup");
 }
 
 function physicsAvailable() { return stages().includes("generate"); }

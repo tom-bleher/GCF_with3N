@@ -49,6 +49,7 @@ The existing combined programs are unchanged and still work.
 
 ```text
 gcf run CONFIG.toml        run the stages a config describes (--detach, --resume)
+gcf scan CONFIG.toml --set generate.sigma_cm=0.1,0.15   the config for several values
 gcf status                 the runs in a directory and how far they are
 gcf doctor                 check that this machine is ready, and say how to fix what isn't
 gcf generate [options]     PWIA events -> event file           (gcf_generate)
@@ -154,6 +155,18 @@ A nucleon left with no allowed fate (e.g. a slow nucleon with elastic
 scattering off) leaves the nucleus without interacting; GENIE logs that at
 ERROR level for every step, so with a channel off `gcf_fsi` quiets the two
 cascade log streams and says so.
+
+### Scans
+
+`gcf scan CONFIG.toml --set OPTION=VALUES` runs a config for several values of an
+option: `generate.sigma_cm=0.1,0.15,0.2`, `fsi.scale:pion.absorption=0.5:1.5:5`
+(start:stop:count) or `run.seed=1:20:20`. Several `--set` make a grid. Each point
+is an ordinary run named `<name>_<option>-<value>`, one after the other. All points
+share a base seed, so for an option that only changes the weights, such as a
+contact, they hold the same events, and differences between them are smaller than
+their statistical errors. With `randomize = true`, a scan of `run.seed` makes
+replicas of the nuclear inputs. The web interface's **Scan** tab does the same
+through its queue.
 
 ### Without a config
 

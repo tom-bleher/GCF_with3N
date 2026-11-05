@@ -130,6 +130,13 @@ through FSI yet: a `*_pwia.root` file, or another generator's file in the
 [event-file format](docs/PIPELINE.md#event-file-format). To redo the cascade on a
 `*_fsi.root` file, tick **Replace earlier FSI in the input** under **Advanced**.
 
+The **Scan** tab runs the setup for several values of a parameter, or a grid of
+two, such as `sigma_CM` at `0.10, 0.15, 0.20` or a channel's factor at `0.5:1.5:5`
+(start, stop, count). Each point is an ordinary run that waits its turn, and all
+share a seed. The scan shows a table and a plot of Σw / attempts, and a CSV to
+download. A mistake in one point starts none of them. In a terminal: `./gcf scan
+CONFIG.toml --set generate.sigma_cm=0.1,0.15,0.2`.
+
 The form refuses values outside their sensible range and combinations where one
 setting would silently cancel another, such as a `k_rel` cutoff with the local SRC
 onset. It says which field to change.

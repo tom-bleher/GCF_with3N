@@ -157,6 +157,23 @@ a.btn.small { padding: 2px 8px; font-size: 12px; }
 #doctor .doctor-bad { color: var(--bad); }
 #doctor code { font-size: 12px; }
 #example-select { width: auto; }
+.scan-axis { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) auto; gap: 6px; margin-bottom: 6px; align-items: center; }
+#scans { margin-bottom: 10px; }
+#scans h3 { margin-top: 0; }
+.scan-row { display: flex; width: 100%; justify-content: space-between; gap: 10px; flex-wrap: wrap; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; background: none; text-align: left; padding: 5px 6px; }
+.scan-row:hover { background: var(--code-bg); }
+.scan-row.selected { background: var(--accent-soft); }
+.scan-table tr.run td { padding: 3px 8px 3px 0; }
+.scan-chart-box { margin: 8px 0; }
+.scan-chart { width: 100%; height: auto; display: block; }
+.scan-grid { stroke: var(--line); stroke-width: 1; opacity: .5; }
+.scan-axis-line { stroke: var(--muted); stroke-width: 1; }
+.scan-tick { fill: var(--muted); font-size: 11px; }
+.scan-label { fill: var(--muted); font-size: 12px; }
+.scan-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; }
+.scan-err { stroke: var(--accent); stroke-width: 2; stroke-linecap: round; }
+.scan-dot { fill: var(--accent); stroke: var(--card); stroke-width: 2; }
+.scan-hit { fill: transparent; }
 .bar { height: 7px; background: var(--bar-bg); border-radius: 4px; overflow: hidden; min-width: 90px; }
 .bar > div { height: 100%; background: var(--accent); transition: width .5s; }
 .barlabel { font-size: 11px; color: var(--muted); white-space: nowrap; }
@@ -243,6 +260,8 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
       </fieldset>
     </div>
 
+    <div data-tab-panel="scan" id="panel-scan" role="tabpanel" aria-labelledby="tab-scan" class="hidden"></div>
+
     <pre id="preview" class="hidden"></pre>
     <div class="actionbar">
       <div id="form-msg" class="msg hidden" role="alert"></div>
@@ -260,6 +279,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
       <h2>Runs <span class="muted" id="runs-dir" style="font-size:12px"></span></h2>
       <div id="machine-line"><span id="machine" class="setup" aria-live="off"></span></div>
       <input type="search" id="runs-filter" class="hidden" placeholder="Filter runs by name or setup…" aria-label="Filter runs" style="margin-bottom:8px">
+      <div id="scans" class="hidden"></div>
       <div id="runs"><p class="muted">Loading…</p></div>
     </section>
     <section class="card" id="details">
@@ -282,7 +302,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 "use strict";
 const TOKEN = new URLSearchParams(location.search).get("token") || "";
 const STORAGE_KEY = "gcf-gui-form";
-const MODULES = ["results", "compare", "physics", "runs"];    // static/<name>.js, each adding to the page
+const MODULES = ["results", "compare", "physics", "runs", "scans"];    // static/<name>.js, each adding to the page
 let SCHEMA = null, CHANNELS = [], TARGETS = {};
 let selected = null, detailsTimer = null;
 let validateTimer = null, lastPlot = {}, rates = {}, autoPlotted = {};
@@ -332,7 +352,7 @@ function toast(text) {
 function tokenUrl(path) { return path + (path.includes("?") ? "&" : "?") + "token=" + encodeURIComponent(TOKEN); }
 
 // ---------------------------------------------------------------- form ----
-const SKIP = { run: ["output_dir", "stages"], fsi: ["off", "scale"] };
+const SKIP = { run: ["output_dir", "stages", "scan"], fsi: ["off", "scale"] };
 function fieldId(section, key, part) { return `f-${section}-${key}${part ? "-" + part : ""}`; }
 function opt(section, key) { return SCHEMA[section].find(o => o.key === key); }
 
@@ -708,13 +728,20 @@ let runsCache = [], RUNS_DIR = "";
 function renderRuns() {
   const box = document.getElementById("runs");
   const q = document.getElementById("runs-filter").value.trim().toLowerCase();
-  const runs = runsCache.filter(r => !q || (r.name + " " + (r.setup || "") + " " + (r.note || "")).toLowerCase().includes(q));
+  // The points of a scan are listed with the scan, unless you ask for them or search.
+  const inScans = runsCache.filter(r => r.scan).length;
+  const showPoints = document.getElementById("show-points") && document.getElementById("show-points").checked;
+  const runs = runsCache.filter(r => (q ? (r.name + " " + (r.setup || "") + " " + (r.note || "") + " " + (r.scan || "")).toLowerCase().includes(q) : showPoints || !r.scan));
   // The rows are rebuilt on every refresh; a keyboard user stays on the same run.
-  const focused = document.activeElement && document.activeElement.closest ? document.activeElement.closest("tr.run") : null;
+  const focused = document.activeElement && document.activeElement.closest ? document.activeElement.closest("#runs tr.run") : null;
   const focusedName = focused ? focused.dataset.run : null;
+  const toggleHadFocus = document.activeElement && document.activeElement.id === "show-points";
   box.replaceChildren();
   if (!runsCache.length) { box.append(startingGuide()); return; }
-  if (!runs.length) { box.append(el("p", { class: "muted" }, "No run matches the filter.")); return; }
+  const pointsToggle = inScans && !q ? el("label", { class: "notify", style: "margin-bottom:6px" },
+    el("input", { type: "checkbox", id: "show-points", checked: showPoints, onchange: renderRuns }), `Show the ${inScans} runs in scans`) : null;
+  if (pointsToggle) box.append(pointsToggle);
+  if (!runs.length) { box.append(el("p", { class: "muted" }, q ? "No run matches the filter." : "All runs are in the scans above.")); return; }
   const rows = runs.map(r => el("tr", { class: "run" + (r.name === selected ? " selected" : ""), onclick: () => showDetails(r.name),
       "data-run": r.name, tabindex: "0", role: "button", "aria-current": r.name === selected ? "true" : null, "aria-label": `${r.name}, ${r.state}`,
       onkeydown: e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); showDetails(r.name); } }, title: r.setup || "" },
@@ -724,6 +751,7 @@ function renderRuns() {
   box.append(el("table", {}, el("thead", {}, el("tr", {}, el("th", { scope: "col" }, "Run"), el("th", { scope: "col" }, "State"),
     el("th", { scope: "col" }, "Progress"))), el("tbody", {}, rows)));
   if (focusedName) { const row = rows.find(tr => tr.dataset.run === focusedName); if (row) row.focus({ preventScroll: true }); }
+  if (toggleHadFocus && document.getElementById("show-points")) document.getElementById("show-points").focus({ preventScroll: true });
 }
 async function refreshRuns() {
   let data;
@@ -739,6 +767,7 @@ async function refreshRuns() {
   if (banner.textContent.startsWith("Cannot reach") || banner.textContent.startsWith("This address")) banner.classList.add("hidden");
   runsCache = data.runs;
   renderMachine(data.machine);
+  renderScans(data.scans);
   notifyChanges();
   document.getElementById("runs-filter").classList.toggle("hidden", runsCache.length < 6);
   const running = runsCache.filter(r => ["running", "merging", "starting"].includes(r.state)).length;
@@ -748,6 +777,7 @@ async function refreshRuns() {
 }
 
 function showDetails(name) {
+  leaveScan();
   selected = name;
   try { localStorage.setItem("gcf-gui-selected", name); } catch (e) {}
   document.getElementById("d-title").textContent = name;
@@ -928,6 +958,7 @@ async function init() {
   }).catch(e => { document.getElementById("banner").textContent = e.message; document.getElementById("banner").classList.remove("hidden"); });
   buildForm();
   buildFormTabs();
+  buildScanPanel();
   buildConfigTools(info.examples || {});
   buildNotifyToggle();
   renderDoctor(info.doctor);

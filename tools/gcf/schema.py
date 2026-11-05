@@ -195,6 +195,7 @@ RUN = [
              "that didn't finish. Default: one per million events, and at least Parallel jobs. "
              "Job i uses seed + i, so this is part of what makes a run reproducible."),
     Opt("keep_chunks", "bool", None, False, label="Keep per-job files", advanced=True),
+    Opt("scan", "str", None, None, label="Scan", help="The parameter scan this run is a point of."),
 ]
 
 SECTIONS = {"run": RUN, "generate": GENERATE, "fsi": FSI}

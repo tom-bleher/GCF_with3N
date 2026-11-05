@@ -1,6 +1,7 @@
 """The `gcf` command: run pipeline stages from a config file or the command line.
 
   gcf run CONFIG.toml            run the stages a config describes
+  gcf scan CONFIG.toml --set ... run it for several values of an option
   gcf status                     the runs in a directory and how far they are
   gcf generate [options]         PWIA events -> event file   (gcf_generate)
   gcf fsi [options]              event file -> + GENIE FSI   (gcf_fsi)
@@ -20,6 +21,7 @@ import signal
 import subprocess
 import sys
 import time
+import tomllib
 from pathlib import Path
 
 from . import config, runner, schema
@@ -228,6 +230,50 @@ def cmd_run(args):
     return run_plan(cfg, run_dir, quiet=args.quiet, resume=args.resume)
 
 
+def cmd_scan(args):
+    """Run the points of a scan one after the other, in this process."""
+    from . import gui, scan
+    with open(args.config, "rb") as f:
+        raw = tomllib.load(f)
+    axes = []
+    for item in args.set:
+        path, eq, values = item.partition("=")
+        if not eq:
+            raise config.ConfigError(f"--set expects OPTION=VALUES, got {item!r}")
+        axes.append({"path": path, "values": values})
+    base = Path(args.config).resolve().parent
+    run = raw.setdefault("run", {})
+    if args.name:
+        run["name"] = args.name
+    try:
+        points = scan.expand(raw, axes)
+        parsed = [(name, values, config.validate(point, base_dir=base)) for name, values, point in points]
+    except ValueError as e:
+        raise config.ConfigError(str(e)) from None
+    runs_dir = Path(parsed[0][2]["run"]["output_dir"])
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    group = raw["run"]["name"]
+    record = runs_dir / gui.SCANS_DIR / f"{group}.json"
+    record.parent.mkdir(exist_ok=True)
+    record.write_text(json.dumps({"name": group, "created": time.time(),
+                                  "axes": [{"path": a["path"], "label": scan.axis_label(a["path"])} for a in axes],
+                                  "points": [{"name": n, "values": v} for n, v, _ in parsed]}, indent=1))
+    if args.detach:
+        again = ["scan", str(Path(args.config).resolve()), "-q", "--name", group]
+        for item in args.set:
+            again += ["--set", item]
+        detach({"args": again, "log": runs_dir / gui.SCANS_DIR / f"{group}.log"})
+        print(f"Started scan {group} with {len(parsed)} runs, on its own.\nFollow it with: ./gcf status --runs-dir {runs_dir}")
+        return True
+    ok = True
+    for name, _, cfg in parsed:
+        if (runs_dir / name / "status.json").exists():
+            print(f"{name}: already there, skipping")
+            continue
+        ok = run_plan(cfg, runs_dir / name, quiet=args.quiet) and ok
+    return ok
+
+
 def cmd_status(args):
     from . import gui
     runs_dir = Path(args.runs_dir) if args.runs_dir else runner.default_runs_dir()
@@ -379,6 +425,15 @@ def main(argv=None):
                    help="with a stopped run's config.toml: make the final files from the jobs that finished")
     p.add_argument("-q", "--quiet", action="store_true")
     p.set_defaults(func=cmd_run)
+
+    p = sub.add_parser("scan", help="run a config for several values of one or more options, one after the other")
+    p.add_argument("config")
+    p.add_argument("--set", action="append", required=True, metavar="OPTION=VALUES",
+                   help="e.g. generate.sigma_cm=0.1,0.15,0.2 or fsi.scale:pion.absorption=0.5:1.5:5 (start:stop:count); repeat for a grid")
+    p.add_argument("--name", help="the scan's name (default: the config's [run] name)")
+    p.add_argument("--detach", action="store_true", help="run on its own, without this terminal")
+    p.add_argument("-q", "--quiet", action="store_true")
+    p.set_defaults(func=cmd_scan)
 
     p = sub.add_parser("status", help="the runs in a directory and how far they are")
     p.add_argument("--runs-dir", help="default: as for gcf gui")
