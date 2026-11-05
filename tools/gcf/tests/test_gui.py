@@ -794,6 +794,152 @@ class TestCommands(unittest.TestCase):
                 os.environ["GCF_RUNS_DIR"] = old
 
 
+class TestValidation(unittest.TestCase):
+    """What the config refuses as you type, and that the binary agrees."""
+
+    def problem(self, generate=None, fsi=None, stages=("generate", "fsi")):
+        from gcf import config
+        raw = {"run": {"stages": list(stages)}}
+        if "generate" in stages:
+            raw["generate"] = {"model": "2N", **(generate or {})}
+        if "fsi" in stages:
+            raw["fsi"] = dict(fsi or {})
+        try:
+            config.validate(raw)
+        except config.ConfigError as e:
+            return str(e)
+        return None
+
+    def test_values_outside_their_range_are_refused(self):
+        for gen, key in (({"estar": -1.0}, "estar"), ({"estar": 5.0}, "estar"), ({"sigma_cm": -0.1}, "sigma_cm"),
+                         ({"sigma_cm": 50.0}, "sigma_cm"), ({"beam": 0.0}, "beam"), ({"beam": 1e6}, "beam"),
+                         ({"events": 0}, "events"), ({"cpn1": -1.0}, "cpn1"), ({"sigma_e": 0.0}, "sigma_e"),
+                         ({"kcut": 2.0}, "kcut"), ({"q2": [-1.0, 5.0]}, "q2")):
+            message = self.problem(gen)
+            self.assertIsNotNone(message, gen)
+            self.assertIn(f"[generate] {key}", message)
+        self.assertIn("[generate] theta_e", self.problem({"model": "3N", "theta_e": [10.0, 200.0]}))
+        self.assertIn("nucleon_mfp_scale", self.problem(fsi={"nucleon_mfp_scale": 0.0}))
+
+    def test_values_in_range_pass(self):
+        for gen in ({"estar": 0.02}, {"estar": 0.0}, {"sigma_cm": 0.0}, {"sigma_cm": 0.15}, {"beam": 437.0},
+                    {"cpp0": 0.0}, {"kcut": 0.3}, {"q2": [1.0, 10.0]}):
+            self.assertIsNone(self.problem(gen), gen)
+
+    def test_settings_that_would_silently_cancel_each_other(self):
+        """Each is valid alone; together one of them would be ignored (#123)."""
+        self.assertIn("[generate] kcut", self.problem({"kcut": 0.4, "onset": "local"}))
+        self.assertIn("[generate] sigma_cm", self.problem({"model": "3N", "sigma_cm": 0.2, "cm": False}))
+        self.assertIn("[generate] kF_fg", self.problem({"model": "MF", "kF_fg": 0.2, "fermi_gas": "local"}))
+        self.assertIn("[generate] prel_is", self.problem({"light_cone": True, "prel_is": True}))
+        self.assertIn("[generate] onset", self.problem({"light_cone": True, "onset": "local"}))
+
+    def test_what_means_nothing_for_a_nucleus_is_refused(self):
+        d = {"target": [2, 1]}
+        for key in ({"sigma_cm": 0.1}, {"estar": 0.02}, {"sigma_e": 0.01}, {"cpn1": 50.0}, {"randomize": True}):
+            self.assertIn("deuteron", self.problem({**d, **key}), key)
+        he3 = {"model": "3N", "target": [3, 2]}
+        self.assertIn("A = 3", self.problem({**he3, "sigma_cm": 0.1}))
+        self.assertIn("A = 3", self.problem({**he3, "estar": 0.02}))
+
+    def test_all_zero_contacts_are_refused(self):
+        self.assertIn("zero", self.problem({"cpp0": 0.0, "cnn0": 0.0, "cpn0": 0.0, "cpn1": 0.0}))
+        self.assertIsNone(self.problem({"cpp0": 0.0, "cnn0": 0.0}))
+
+    def test_mf_is_offered_only_where_it_works(self):
+        self.assertIsNone(self.problem({"model": "MF", "target": [12, 6]}))
+        self.assertIn("target", self.problem({"model": "MF", "target": [56, 26]}))
+
+    def test_hA_has_no_compound_channel(self):
+        """hA reads the flag but never uses it (#177)."""
+        self.assertIn("nucleon.compound", self.problem(fsi={"model": "hA", "off": ["nucleon.compound"]}))
+        self.assertIsNone(self.problem(fsi={"model": "hN", "off": ["nucleon.compound"]}))
+
+    def test_the_binary_refuses_the_same(self):
+        harness.need_binaries()
+        env = harness.runner.environment()
+        generate = harness.runner.binary("gcf_generate")
+        for args in (["--model", "2N", "--kcut", "0.4", "--onset", "local"], ["--model", "3N", "--sigma-cm", "0.2", "--no-cm"],
+                     ["--model", "MF", "--kF-fg", "0.2", "--fermi-gas", "local"], ["--model", "2N", "--beam", "1e6"],
+                     ["--model", "2N", "--sigma-cm", "50"], ["--model", "2N", "-A", "2", "-Z", "1", "--estar", "0.02"],
+                     ["--model", "3N", "-A", "3", "-Z", "2", "--sigma-cm", "0.1"]):
+            full = args if "--beam" in args else ["--beam", "6", *args]
+            out = subprocess.run([generate, "--check", *full], capture_output=True, text=True, env=env, timeout=120)
+            self.assertEqual(out.returncode, 1, (args, out.stdout[-200:], out.stderr[-200:]))
+        fsi = harness.runner.binary("gcf_fsi")
+        out = subprocess.run([fsi, "--input", "x.root", "--output", "y.root", "--fsi-model", "hA", "--channel", "nucleon.compound=0"],
+                             capture_output=True, text=True, env=env, timeout=60)
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("nucleon.compound", out.stderr)
+
+
+class TestFsiPreflight(GuiCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.gui.api("api/runs", small_run("base", events=1500, jobs=1, seed=3))
+        cls.details = cls.gui.wait("base")
+
+    def fsi_config(self, name, path, **fsi):
+        return {"run": {"name": name, "stages": ["fsi"], "seed": 5}, "fsi": {"input": str(path), "model": "hA", **fsi}}
+
+    def test_a_file_that_had_fsi_is_caught_by_the_check(self):
+        cfg = self.fsi_config("again", self.details["outputs"]["fsi"]["path"])
+        r = self.gui.api("api/check", cfg)
+        self.assertFalse(r["ok"])
+        self.assertIn("already been through FSI", r["problems"][0])
+        self.assertTrue(r["problems"][0].startswith("[fsi] input"))
+        status, out = self.gui.request("api/runs", cfg)
+        self.assertEqual(status, 400)
+        self.assertFalse((self.gui.runs_dir / "again").exists())
+
+    def test_replacing_earlier_fsi_when_asked(self):
+        cfg = self.fsi_config("redo", self.details["outputs"]["fsi"]["path"], overwrite=True)
+        self.assertTrue(self.gui.api("api/check", cfg)["ok"])
+        self.gui.api("api/runs", cfg)
+        d = self.gui.wait("redo")
+        self.assertEqual(d["state"], "done", d.get("error"))
+        self.assertEqual(self.gui.api("api/runs/redo/results", {"stage": "fsi"})["events"], 1500)
+
+    def test_pwia_file_passes(self):
+        self.assertTrue(self.gui.api("api/check", self.fsi_config("ok", self.details["outputs"]["generate"]["path"]))["ok"])
+
+    def test_missing_file_and_missing_branches_are_explained(self):
+        r = self.gui.api("api/check", self.fsi_config("missing", "/no/such/file.root"))
+        self.assertFalse(r["ok"])
+        self.assertTrue(r["problems"][0].startswith("[fsi] input"), r["problems"])
+        import uproot
+        import numpy as np
+        path = Path(self.gui.tmp) / "bare.root"
+        with uproot.recreate(path) as f:
+            f["events"] = {"weight": np.ones(5)}
+        r = self.gui.api("api/check", self.fsi_config("bare", path))
+        self.assertFalse(r["ok"])
+        self.assertIn("nuc_pdg", r["problems"][0])
+
+    def test_another_tree_name(self):
+        import numpy as np
+        import uproot
+        path = Path(self.gui.tmp) / "other.root"
+        with uproot.open(self.details["outputs"]["generate"]["path"]) as f:
+            a = f["events"].arrays(["nuc_pdg", "nuc_px", "nuc_py", "nuc_pz", "nuc_E"])
+        with uproot.recreate(path) as f:
+            f.mktree("mytree", {k: "var * int32" if k == "nuc_pdg" else "var * float64" for k in a.fields} | {"weight": "float64"})
+            f["mytree"].extend({k: a[k] for k in a.fields} | {"weight": np.ones(len(a))})
+        wrong = self.gui.api("api/check", self.fsi_config("t1", path, target=[12, 6]))
+        self.assertFalse(wrong["ok"])
+        cfg = self.fsi_config("t2", path, target=[12, 6], tree="mytree")
+        self.assertTrue(self.gui.api("api/check", cfg)["ok"])
+        self.gui.api("api/runs", cfg)
+        d = self.gui.wait("t2")
+        self.assertEqual(d["state"], "done", d.get("error"))
+
+    def test_an_interaction_without_contacts_points_at_that_field(self):
+        r = self.gui.api("api/check", small_run("n3lo", nn="N3LO", events=100, fsi=None))
+        self.assertFalse(r["ok"])
+        self.assertTrue(r["problems"][0].startswith("[generate] nn"), r["problems"])
+
+
 class TestBrowser(GuiCase):
     @classmethod
     def setUpClass(cls):
@@ -980,6 +1126,18 @@ class TestBrowser(GuiCase):
         WebDriverWait(self.driver, 15).until(lambda d: d.find_element(By.ID, "f-generate-model").get_attribute("value") == "2N")
         self.assertEqual(self.driver.find_element(By.ID, "f-generate-beam").get_attribute("value"), "4.5")
         self.driver.execute_script("resetForm()")
+
+    def test_a_bad_value_marks_its_field(self):
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        self.open()
+        self.driver.execute_script("""const m = document.getElementById('f-generate-model'); m.value = '2N';
+                                      m.dispatchEvent(new Event('change', {bubbles: true})); showFormTab('physics');""")
+        self.assertEqual(self.driver.find_element(By.ID, "f-generate-estar").get_attribute("min"), "0")
+        self.set_value("f-generate-estar", -1)
+        WebDriverWait(self.driver, 10).until(lambda d: "invalid" in d.find_element(By.CSS_SELECTOR, '.field[data-key="estar"]').get_attribute("class"))
+        self.assertIn("at least 0", self.driver.find_element(By.CSS_SELECTOR, '.field[data-key="estar"] .ferr').text)
+        self.driver.execute_script("resetForm(); showFormTab('setup')")
 
     def test_run_row_keeps_keyboard_focus(self):
         """The table is rebuilt every few seconds; that must not drop the focus."""

@@ -162,6 +162,10 @@ def fsi_args(fsi, inp, output, seed, first=None, count=None, copy_objects=True):
         args += ["--target", f"{fsi['target'][0]}:{fsi['target'][1]}"]
     if fsi.get("keep"):
         args += ["--keep", fsi["keep"]]
+    if fsi.get("tree"):
+        args += ["--tree", fsi["tree"]]
+    if fsi.get("overwrite"):
+        args.append("--overwrite")
     for c in fsi.get("off") or []:
         args += ["--channel", f"{c}=0"]
     for c, factor in (fsi.get("scale") or {}).items():
@@ -195,17 +199,38 @@ def check_setup(cfg):
             text = " ".join(msg[-3:]) or f"exit {out.returncode}"
             text = re.sub(r"\s*Add it to constants/nuclearMasses\.hh.*$", "", text)
             text = re.sub(r"^\w+::\w+: ", "", text)
-            problems.append("[generate] target: the generator can't run this setup: " + text)
+            # Point at the field that causes it.
+            key = "nn" if "does not have contacts" in text else \
+                  "target" if re.search(r"nucleus|nuclei|residual|mass", text) else "model"
+            problems.append(f"[generate] {key}: the generator can't run this setup: " + text)
     else:
-        try:
-            n = count_entries(fsi["input"])
-            if n == 0:
-                problems.append(f"{fsi['input']} has no events")
-        except RunError as e:
-            problems.append(str(e))
+        problems += check_fsi_input(fsi, env)
     if "fsi" in run["stages"] and not (GENIE_DIR / "lib").is_dir():
         problems.append("GENIE is not built (no lib/ in the vendored tree); run ./install.sh")
     return problems
+
+
+def check_fsi_input(fsi, env):
+    """gcf_fsi --check on an FSI-only run's input: can it read the file and tree,
+    has it the branches, has it been through FSI already. Problems as a list."""
+    args = [binary("gcf_fsi"), "--input", str(fsi["input"]), "--check", "--fsi-model", fsi["model"]]
+    if fsi.get("target"):
+        args += ["--target", f"{fsi['target'][0]}:{fsi['target'][1]}"]
+    if fsi.get("tree"):
+        args += ["--tree", fsi["tree"]]
+    if fsi.get("overwrite"):
+        args.append("--overwrite")
+    try:
+        out = subprocess.run(args, capture_output=True, text=True, env=env, timeout=120)
+    except subprocess.TimeoutExpired:
+        return [f"reading {fsi['input']} took more than 2 minutes"]
+    if out.returncode == 0:
+        return []
+    errors = [l[len("Error: "):] for l in out.stderr.splitlines() if l.startswith("Error: ")]
+    if any("already went through FSI" in e for e in errors):
+        return ["[fsi] input: this file has already been through FSI. Choose the *_pwia.root file, "
+                "or tick \"Replace earlier FSI in the input\" under Advanced."]
+    return [f"[fsi] input: {errors[0] if errors else out.stderr.strip()[-300:] or f'exit {out.returncode}'}"]
 
 
 def nuclear_params(model, target, nn=None):
@@ -223,9 +248,9 @@ def nuclear_params(model, target, nn=None):
     raise RunError(" ".join(text[-2:]) or f"gcf_generate --print-params: exit {out.returncode}")
 
 
-def count_entries(path):
+def count_entries(path, tree=None):
     try:
-        out = subprocess.run([binary("gcf_fsi"), "--input", str(path), "--count"],
+        out = subprocess.run([binary("gcf_fsi"), "--input", str(path), "--count"] + (["--tree", tree] if tree else []),
                              capture_output=True, text=True, env=environment(), timeout=60)
     except subprocess.TimeoutExpired:
         raise RunError(f"reading {path} took more than 60 s") from None
@@ -336,7 +361,7 @@ def plan_from_config(cfg, run_dir, final_outputs=None, resume=False):
                 outs["fsi"].append(f)
             plan.jobs.append(steps)
     else:
-        total = count_entries(fsi["input"])
+        total = count_entries(fsi["input"], fsi.get("tree"))
         if total == 0:
             raise RunError(f"{fsi['input']} has no events")
         parts = split(total, checkpoint_jobs(run, total))

@@ -79,7 +79,7 @@ def estimate(cfg, runs_dir):
                 out["n_eff_fraction"] = effective_fraction(pwia)
             source = pwia
         else:
-            events = runner.count_entries(fsi["input"])
+            events = runner.count_entries(fsi["input"], fsi.get("tree"))
             source = Path(fsi["input"])
         if "fsi" in run["stages"] and source.is_file():
             result = tmp / "fsi.root"

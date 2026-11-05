@@ -338,7 +338,21 @@ int main(int argc, char **argv)
       if (find(given.begin(), given.end(), flag) != given.end())
         fail(string(flag) + " does not apply to the deuteron: it uses a momentum distribution, not contacts");
   }
+  auto isGiven = [&given](const char *flag) { return find(given.begin(), given.end(), flag) != given.end(); };
   if (model == "3N" && A == 3 && estarSet) fail("--estar does not apply to A = 3: a triplet leaves no residual");
+  if (model == "3N" && A == 3 && sigCMSet) fail("--sigma-cm does not apply to A = 3: the triplet is the whole nucleus, at rest");
+  if (model == "2N" && A == 2) {
+    for (const char *flag : {"--sigma-cm", "--estar", "--sigma-e"})
+      if (isGiven(flag)) fail(string(flag) + " does not apply to the deuteron: a pair is the whole nucleus, with no residual");
+  }
+  // Pairs of options that are each valid, where one would silently cancel the other (#123).
+  if (kcutSet && onset == "local") fail("--kcut has no effect with --onset local, which replaces the cut with k_F(r)");
+  if (sigCMSet && !useCM) fail("--sigma-cm has no effect with --no-cm");
+  if (kFfgSet && fermiGas == "local") fail("--kF-fg has no effect with --fermi-gas local, which takes k_F(r) from the density");
+  if (beamE > 1e5) fail("--beam is in GeV in the target rest frame; above 100 TeV it is surely a mistake");
+  if (sigCMSet && (sigCM < 0. || sigCM > 1.)) fail("--sigma-cm is in GeV/c and must be between 0 and 1");
+  if (estarSet && estar > 1.) fail("--estar is in GeV and must be at most 1");
+  if (sigmaESet && sigmaE > 1.) fail("--sigma-e is in GeV and must be at most 1");
   if (!ok) { cerr << "(gcf_generate --help for usage)\n"; return 1; }
   if (!output.empty()) output = AbsolutePath(output);
 

@@ -33,7 +33,7 @@ CHANNELS = [
     ("nucleon.cex",        "charge exchange",      False, True),
     ("nucleon.absorption", "absorption",           False, True),
     ("nucleon.piprod",     "pion production",      False, True),
-    ("nucleon.compound",   "compound nucleus",     True,  True),
+    ("nucleon.compound",   "compound nucleus",     True,  False),   # hA reads the flag but never uses it (#177)
     ("pion.elastic",       "elastic scattering",   True,  False),
     ("pion.inelastic",     "inelastic scattering", True,  True),
     ("pion.cex",           "charge exchange",      True,  True),
@@ -61,14 +61,17 @@ class Opt:
     unit: str = ""
     advanced: bool = False       # GUI: shown under "Advanced", folded by default
     tab: str = ""                # GUI: shown on this tab of the form ("" = the main one)
+    ge: Optional[float] = None   # allowed values (for a range, of both ends): >= this,
+    gt: Optional[float] = None   # > this,
+    le: Optional[float] = None   # and <= this
 
 
 GENERATE = [
     Opt("model", "str", "--model", "3N", choices=MODELS, label="Generator model",
         help="3N: struck nucleon from an SRC triplet. 2N: from an SRC pair. "
              "MF: single mean-field nucleon from a Fermi gas."),
-    Opt("beam", "float", "--beam", 6.0, label="Beam energy", unit="GeV"),
-    Opt("events", "int", "--events", 10000, label="Events",
+    Opt("beam", "float", "--beam", 6.0, label="Beam energy", unit="GeV", gt=0, le=1e5),
+    Opt("events", "int", "--events", 10000, label="Events", ge=1,
         help="Number of accepted (weight > 0) events in total, over all jobs."),
     Opt("target", "target", None, [12, 6], label="Target (A, Z)"),
     # Kelly: PRC 70, 068202 (2004), doi:10.1103/PhysRevC.70.068202
@@ -80,10 +83,10 @@ GENERATE = [
     # De Forest: Nucl. Phys. A 392, 232 (1983), doi:10.1016/0375-9474(83)90124-0
     Opt("cs", "str", "--cs", "cc1", choices=["cc1", "cc2", "onshell"],
         label="eN cross section", help="De Forest cc1 (default), cc2, or on-shell.", tab="physics"),
-    Opt("sigma_cm", "float", "--sigma-cm", None, models=["3N", "2N"], label="sigma_CM", unit="GeV/c",
+    Opt("sigma_cm", "float", "--sigma-cm", None, models=["3N", "2N"], label="sigma_CM", unit="GeV/c", ge=0, le=1,
         help="CM momentum width of the SRC cluster per component. Default: 0.15 (3N), "
              "the nucleus table value (2N).", tab="physics"),
-    Opt("q2", "range", "--q2", None, label="Q^2 window", unit="GeV^2",
+    Opt("q2", "range", "--q2", None, label="Q^2 window", unit="GeV^2", ge=0,
         help="Generation-time Q^2 window MIN:MAX. Default: open (3N), 1:10 (2N/MF).", advanced=True),
     # 3N
     Opt("wave_function", "str", "--wave-function", "AV18", choices=WAVE_FUNCTIONS_3N,
@@ -91,9 +94,9 @@ GENERATE = [
         help="Nucleon interaction behind the three-body density (AV18, AV18+UIX, AV18+TM, "
              "CDBonn, CDBonn+TM). The 3He Faddeev density is used for the SRC triplet in "
              "every nucleus. The -pD variants keep only the deuteron (pD) channel."),
-    Opt("theta_e", "range", "--theta-e", [5.0, 40.0], models=["3N"],
+    Opt("theta_e", "range", "--theta-e", [5.0, 40.0], models=["3N"], ge=0, le=180,
         label="Electron angle window", unit="deg", advanced=True),
-    Opt("kF", "float", "--kF", None, models=["3N"], label="k_F cutoff", unit="GeV/c",
+    Opt("kF", "float", "--kF", None, models=["3N"], label="k_F cutoff", unit="GeV/c", gt=0, le=0.5,
         help="Internal momenta k > k_F (default 0.25); also sets sigma_CM = "
              "sqrt(3/5) k_F unless sigma_CM is given.", tab="physics"),
     Opt("cm", "bool", "--no-cm", True, models=["3N"], invert=True,
@@ -102,18 +105,18 @@ GENERATE = [
     Opt("nn", "str", "--nn", None, models=["2N"], label="NN interaction",
         choices=NN_INTERACTIONS,
         help="NN interaction behind the pair wave function and contacts (default AV18)."),
-    Opt("estar", "float", "--estar", None, models=["3N", "2N"], label="E*", unit="GeV",
+    Opt("estar", "float", "--estar", None, models=["3N", "2N"], label="E*", unit="GeV", ge=0, le=1,
         help="Excitation energy of the residual nucleus; default 0. Not for a target with no residual.", tab="physics"),
-    Opt("sigma_e", "float", "--sigma-e", None, models=["2N"], label="E* width", unit="GeV",
+    Opt("sigma_e", "float", "--sigma-e", None, models=["2N"], label="E* width", unit="GeV", gt=0, le=1,
         help="Draw E* per event from a Gaussian of this width around E*, keeping E* > 0. "
              "Empty: the same E* for every event.", tab="physics"),
-    Opt("cpp0", "float", "--cpp0", None, models=["2N"], label="C_pp (S=0)", tab="physics",
+    Opt("cpp0", "float", "--cpp0", None, models=["2N"], label="C_pp (S=0)", ge=0, tab="physics",
         help="pp contact, in the units of the nucleus table. A contact only changes the event weights."),
-    Opt("cnn0", "float", "--cnn0", None, models=["2N"], label="C_nn (S=0)", tab="physics",
+    Opt("cnn0", "float", "--cnn0", None, models=["2N"], label="C_nn (S=0)", ge=0, tab="physics",
         help="nn contact, in the units of the nucleus table. A contact only changes the event weights."),
-    Opt("cpn0", "float", "--cpn0", None, models=["2N"], label="C_pn (S=0)", tab="physics",
+    Opt("cpn0", "float", "--cpn0", None, models=["2N"], label="C_pn (S=0)", ge=0, tab="physics",
         help="Spin-singlet pn contact, in the units of the nucleus table. A contact only changes the event weights."),
-    Opt("cpn1", "float", "--cpn1", None, models=["2N"], label="C_pn (S=1)", tab="physics",
+    Opt("cpn1", "float", "--cpn1", None, models=["2N"], label="C_pn (S=1)", ge=0, tab="physics",
         help="Spin-triplet (deuteron-channel) pn contact, in the units of the nucleus table. "
              "A contact only changes the event weights."),
     Opt("randomize", "bool", "--randomize", False, models=["2N"], label="Vary the inputs within their errors",
@@ -122,7 +125,7 @@ GENERATE = [
         tab="physics"),
     Opt("light_cone", "bool", "--light-cone", False, models=["2N"], label="Light-cone cross section",
         help="Instead of the instant-form one. Excludes importance sampling of |p_rel| and the local onset.", tab="physics"),
-    Opt("kcut", "float", "--kcut", None, models=["2N"], label="k_rel cutoff", unit="GeV/c",
+    Opt("kcut", "float", "--kcut", None, models=["2N"], label="k_rel cutoff", unit="GeV/c", gt=0, le=1.05,
         help="Relative-momentum floor of the SRC pair (default 0.25).", tab="physics"),
     Opt("onset", "str", "--onset", "fixed", choices=["fixed", "local"], models=["2N"],
         label="SRC onset", help="fixed: k_rel > cutoff. local: k_rel > k_F(r) at the vertex.", tab="physics"),
@@ -132,7 +135,7 @@ GENERATE = [
     Opt("fermi_gas", "str", "--fermi-gas", "global", choices=["global", "local"],
         models=["MF"], label="Fermi gas",
         help="global: one Fermi momentum for the whole nucleus. local: k_F(r) from the density."),
-    Opt("kF_fg", "float", "--kF-fg", None, models=["MF"], label="Global Fermi momentum",
+    Opt("kF_fg", "float", "--kF-fg", None, models=["MF"], label="Global Fermi momentum", gt=0, le=1,
         unit="GeV/c", help="Default 0.25.", tab="physics"),
     # 2N and MF
     Opt("rad", "bool", "--rad", False, models=["2N", "MF"], label="Radiation (peaking approx.)", tab="physics"),
@@ -154,9 +157,9 @@ FSI = [
     Opt("scale", "scales", None, {}, label="Interaction channel scale factors",
         help="Scale the rate of a fate of the cascade by a factor; the rest is renormalized. "
              "Which ones exist depends on the model: see --list-channels."),
-    Opt("nucleon_mfp_scale", "float", None, None, label="Nucleon mean-free-path scale",
+    Opt("nucleon_mfp_scale", "float", None, None, label="Nucleon mean-free-path scale", gt=0,
         help="Multiplies the nucleon mean free path (> 1: fewer interactions).", advanced=True),
-    Opt("pion_mfp_scale", "float", None, None, label="Pion mean-free-path scale",
+    Opt("pion_mfp_scale", "float", None, None, label="Pion mean-free-path scale", gt=0,
         help="Multiplies the pion mean free path.", advanced=True),
     Opt("transport", "str", None, "shared", choices=["shared", "independent"],
         label="Transport",
@@ -168,6 +171,9 @@ FSI = [
     Opt("target", "target", None, None, label="Target (A, Z) for files without one", advanced=True),
     Opt("keep", "str", "--keep", None, label="Input branches to keep (regex)",
         help="Default: all.", advanced=True),
+    Opt("tree", "str", "--tree", None, label="Input tree", help="Default: events.", advanced=True),
+    Opt("overwrite", "bool", "--overwrite", False, label="Replace earlier FSI in the input",
+        help="Without this, a file that has already been through FSI is refused.", advanced=True),
 ]
 
 RUN = [
@@ -201,5 +207,6 @@ def to_json():
     for name, opts in SECTIONS.items():
         out[name] = [dict(key=o.key, kind=o.kind, default=o.default, help=o.help,
                           label=o.label or o.key, choices=o.choices, models=o.models,
-                          unit=o.unit, advanced=o.advanced, tab=o.tab) for o in opts]
+                          unit=o.unit, advanced=o.advanced, tab=o.tab,
+                          min=o.ge if o.ge is not None else o.gt, max=o.le) for o in opts]
     return out

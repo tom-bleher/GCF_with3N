@@ -70,6 +70,9 @@ void Usage()
     "      --first-event F      start at entry F (for splitting a file into chunks)\n"
     "      --no-copy-objects    don't copy hAttempts etc. (all but one chunk of a split file)\n"
     "      --count              print the number of events in the input and exit\n"
+    "      --check              check the options and that the input can be processed\n"
+    "                           (needed branches, no earlier FSI unless --overwrite),\n"
+    "                           then exit; no --output needed\n"
     "  -h, --help               this message\n";
 }
 
@@ -92,7 +95,8 @@ const vector<Channel> kChannels = {
   {"nucleon.cex",        "nucleon charge exchange",                {}, {"FSI-Nucleon-FracCExScale"}, false},
   {"nucleon.absorption", "nucleon absorption",                     {}, {"FSI-Nucleon-FracAbsScale"}, false},
   {"nucleon.piprod",     "pion production by nucleons",            {}, {"FSI-Nucleon-FracPiProdScale"}, false},
-  {"nucleon.compound",   "compound-nucleus (pre-equilibrium) fate", {"INUKE-DoCompoundNucleus"}, {"INUKE-DoCompoundNucleus"}, true},
+  // hA reads this flag but never uses it (#177), so it is not a channel of hA.
+  {"nucleon.compound",   "compound-nucleus (pre-equilibrium) fate", {"INUKE-DoCompoundNucleus"}, {}, true},
   {"pion.elastic",       "pion elastic scattering",                {"INUKE-NucQEFac"}, {}, false},
   {"pion.inelastic",     "pion inelastic scattering",              {"FSI-Pion-FracInelScale"}, {"FSI-Pion-FracInelScale"}, false},
   {"pion.cex",           "pion charge exchange",                   {"INUKE-NucCEXFac"}, {"FSI-Pion-FracCExScale"}, false},
@@ -235,11 +239,11 @@ int main(int argc, char **argv)
   unsigned long seed = 0;
   long long maxEvents = 0, firstEvent = 0;
   int defaultA = -1, defaultZ = -1;
-  bool independent = false, overwrite = false, copyObjects = true, countOnly = false;
+  bool independent = false, overwrite = false, copyObjects = true, countOnly = false, checkOnly = false;
   vector<pair<string, double>> channels;
 
   enum { kIndependent = 1000, kTarget, kVertexPower, kKeep, kOverwrite, kFirst,
-         kNoCopy, kCount, kChannel, kListChannels };
+         kNoCopy, kCount, kChannel, kListChannels, kCheck };
   static const option longOpts[] = {
     {"input", required_argument, nullptr, 'i'},
     {"output", required_argument, nullptr, 'o'},
@@ -256,6 +260,7 @@ int main(int argc, char **argv)
     {"first-event", required_argument, nullptr, kFirst},
     {"no-copy-objects", no_argument, nullptr, kNoCopy},
     {"count", no_argument, nullptr, kCount},
+    {"check", no_argument, nullptr, kCheck},
     {"channel", required_argument, nullptr, kChannel},
     {"list-channels", no_argument, nullptr, kListChannels},
     {nullptr, 0, nullptr, 0}};
@@ -283,6 +288,7 @@ int main(int argc, char **argv)
       case kFirst: firstEvent = atoll(optarg); break;
       case kNoCopy: copyObjects = false; break;
       case kCount: countOnly = true; break;
+      case kCheck: checkOnly = true; break;
       case kChannel: {
         const char *eq = strchr(optarg, '=');
         char *end = nullptr;
@@ -302,7 +308,7 @@ int main(int argc, char **argv)
   Runner runner;
   bool ok = true;
   auto fail = [&ok](const string &msg) { cerr << "Error: " << msg << "\n"; ok = false; };
-  if (input.empty() || (output.empty() && !countOnly)) fail("--input and --output are required");
+  if (input.empty() || (output.empty() && !countOnly && !checkOnly)) fail("--input and --output are required");
   if (firstEvent < 0 || maxEvents < 0) fail("--first-event and --max-events must be >= 0");
   if (!input.empty() && input == output) fail("--output must differ from --input");
   if (modelName == "hN") runner.model = kHN2018;
@@ -347,7 +353,7 @@ int main(int argc, char **argv)
   // GXMLPATH, so GENIE reads the modified HN/HAIntranuke2018.xml. The
   // project's own override directory stays next so nothing else changes.
   string overrideDir;
-  if (!overrideParams.empty()) {
+  if (!overrideParams.empty() && !checkOnly) {
     overrideDir = output + ".genie_override";
     bool anyOff = false;
     for (const auto &c : channels) if (c.second == 0.) anyOff = true;
@@ -472,6 +478,10 @@ int main(int argc, char **argv)
   add("part_pz", [&r](bool) { return r.pz; });
   add("part_E", [&r](bool) { return r.E; });
   if (clash) return 1;
+  if (checkOnly) {
+    cout << "OK: " << runner.total << " events can be processed; nothing done (--check)\n";
+    return 0;
+  }
 
   vector<string> columns;
   set<string> seen(outputColumns.begin(), outputColumns.end());
