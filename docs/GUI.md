@@ -54,6 +54,8 @@ On an empty page, **Getting started** has a **Fill in a small test run** button.
 Press it, then **Start run**. It takes under a minute. Click the run to see its
 numbers, plots and output files.
 
+![The page on a first visit, with the form on the left and Getting started in the middle](images/first-visit.png)
+
 ## Setting up a run
 
 Choose what to run at the top of the form:
@@ -77,6 +79,8 @@ a config you saved.
 
 ### Physics inputs
 
+![The Physics inputs tab, with each input's table value under its field](images/physics-inputs.png)
+
 This tab holds the settings of the physics model. Each nuclear input shows the value
 from the generator's tables for your target and interaction, with its uncertainty. An
 empty field uses that value, and none of this needs a rebuild.
@@ -98,6 +102,8 @@ rate. The other fates are renormalized.
 
 ### EIC / ePIC
 
+![The EIC / ePIC tab, with beam settings, target and Q² slices](images/eic.png)
+
 This runs the chain in `tools/run_eic_sim.sh` inside `eic-shell`, for each beam setting
 and Q² slice, then draws the figures of PRC 105, 034001. Choose the sample, the beams, the
 target and the Q² slices. **Test statistics** fills in 1% of the production's, which takes
@@ -114,6 +120,8 @@ their files. The form lists each one's known physics issues: read them before us
 its output. Only `genDIS` takes a seed so far, so the others can't be repeated exactly.
 
 ## Reading the results
+
+![A finished run on the right, with its numbers and plots](images/run-results.png)
 
 Click a run to open it.
 
@@ -145,6 +153,8 @@ hA on the same events.
 
 ## Scans
 
+![A finished scan of sigma_CM, with its plot and table](images/scan.png)
+
 The **Scan** tab runs the setup from the other tabs for several values of a parameter,
 or a grid of several parameters. Give the values as `0.10, 0.15, 0.20` or as
 `0.1:0.2:5` (start, stop, count).
@@ -173,7 +183,8 @@ to the same address, or use `./gcf status` in a terminal.
 
 Long runs lose little, because a run is split into jobs of at most a million events.
 Only unfinished jobs run again, with the same seeds, so you get the same events as if
-it had never stopped.
+it had never stopped. If you edit a run's config in between, a job made with other settings
+isn't kept: it runs again.
 
 To start the page by itself after a restart, add this to your `crontab`:
 
@@ -196,7 +207,8 @@ administrator.
   disk space. The limit only counts your page's runs, so look at the load before a large
   run. It turns amber when the machine is busier than it has CPUs.
 - **Don't share your address.** Anyone with it can start runs and read files as you. To
-  replace it: `./gcf gui --new-token`. Don't use `--host` on a network you don't trust,
+  replace it: `./gcf gui --new-token`, which takes effect at once, also on a page that is
+  already running. Don't use `--host` on a network you don't trust,
   because the page has no encryption of its own. The SSH tunnel provides that.
 
 ## When something goes wrong
@@ -210,6 +222,7 @@ administrator.
 | A run is `queued` for a long time | Other runs of yours are using its CPUs. See the line under **Runs**. |
 | A run is `stopped` | **Resume** continues it. Nothing it finished is lost. |
 | A run is `failed` | The details show the error, and usually what to do. Open **Logs**, then **Resume** once it's fixed. |
+| A run `failed` with "not started: others can write" | Someone else could have changed what would run as you. If you trust them, `chmod -R go-w` on its directory, as the message says. |
 | No plots or summary | The Python packages are missing: `tools/gcf/setup_python.sh`. |
 | A file that "has already been through FSI" | Use the `*_pwia.root` file, or tick **Replace earlier FSI in the input** under **Advanced**. |
 | No events, or a red N_eff warning | Check the beam energy against the reaction's threshold and your limits, or generate more events. |
