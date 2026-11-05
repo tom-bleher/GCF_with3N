@@ -3,13 +3,15 @@
   gcf run CONFIG.toml            run the stages a config describes
   gcf generate [options]         PWIA events -> event file   (gcf_generate)
   gcf fsi [options]              event file -> + GENIE FSI   (gcf_fsi)
-  gcf quicklook FILE             a page of control plots
+  gcf quicklook FILE             a page of control plots, with an optional selection
+  gcf summary FILE               the numbers of an event file
   gcf gui                        the web interface
   gcf example [3N|2N|MF|fsi]     print an example config
   gcf env                        print the environment the stages run with
 """
 
 import argparse
+import json
 import shlex
 import sys
 from pathlib import Path
@@ -205,8 +207,20 @@ def cmd_fsi(args):
 
 def cmd_quicklook(args):
     from . import quicklook
-    out = quicklook.make(args.file, args.output)
+    cuts = {k: getattr(args, k) for k in quicklook.CUT_LABELS if getattr(args, k) is not None}
+    stats = {}
+    out = quicklook.make(args.file, args.output, cuts=cuts, stats=stats)
     print(f"Wrote {out}")
+    if cuts:
+        print(f"{stats['description']}: {stats['events']} events, N_eff = {stats['n_eff']:.0f}, "
+              f"{100 * stats['fraction']:.3g}% of sum(w)")
+    return True
+
+
+def cmd_summary(args):
+    from . import results
+    s = results.summarize(args.file)
+    print(json.dumps(s, indent=1) if args.json else results.text(s))
     return True
 
 
@@ -265,7 +279,16 @@ def main(argv=None):
     p = sub.add_parser("quicklook", help="control plots of an event file (PNG)")
     p.add_argument("file")
     p.add_argument("-o", "--output", help="PNG path (default: next to the file)")
+    for flag, key, what in (("--q2", "q2", "Q^2 [GeV^2]"), ("--xb", "xb", "x_B"), ("--theta-e", "theta_e", "electron angle [deg]"),
+                            ("--pmiss", "pmiss", "p_miss before FSI [GeV/c]"),
+                            ("--protons", "protons", "number of protons (after FSI if the file has it)")):
+        p.add_argument(flag, dest=key, metavar="MIN:MAX", type=_range, help=f"select on {what}")
     p.set_defaults(func=cmd_quicklook)
+
+    p = sub.add_parser("summary", help="the numbers of an event file: N_eff, sum(w)/attempts, provenance")
+    p.add_argument("file")
+    p.add_argument("--json", action="store_true")
+    p.set_defaults(func=cmd_summary)
 
     p = sub.add_parser("gui", help="web interface (open it through an SSH tunnel)")
     p.add_argument("--port", type=int, default=8765)

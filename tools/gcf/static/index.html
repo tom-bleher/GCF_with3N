@@ -147,6 +147,14 @@ table { table-layout: auto; } td { min-width: 0; }
 .out .path { grid-column: 1 / -1; }
 img.plot { width: 100%; border: 1px solid var(--line); border-radius: 6px; margin-top: 8px; background: #fff; cursor: zoom-in; }
 .placeholder { color: var(--muted); padding: 24px 0; text-align: center; }
+.numbers { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 1px 12px; font-size: 13px; margin: 6px 0; }
+.numbers dt { color: var(--muted); }
+.numbers dd { margin: 0; overflow-wrap: anywhere; }
+.note { margin: 4px 0; padding: 4px 8px; border-radius: 5px; font-size: 12px; border-left: 3px solid var(--muted); background: var(--code-bg); }
+.note-bad { border-left-color: var(--bad); color: var(--bad); background: var(--bad-soft); }
+.note-warn { border-left-color: var(--warn); }
+.cuts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 6px 10px; margin-top: 6px; }
+.cut label { display: block; font-size: 12px; margin-bottom: 2px; }
 details { margin-top: 6px; }
 summary { cursor: pointer; }
 dialog { border: 1px solid var(--line); border-radius: 10px; background: var(--card); color: var(--text);
@@ -229,6 +237,7 @@ dialog::backdrop { background: rgba(0,0,0,.35); }
 "use strict";
 const TOKEN = new URLSearchParams(location.search).get("token") || "";
 const STORAGE_KEY = "gcf-gui-form";
+const MODULES = ["results"];    // static/<name>.js, each adding to the page
 let SCHEMA = null, CHANNELS = [], TARGETS = {};
 let selected = null, detailsTimer = null;
 let validateTimer = null, lastPlot = {}, rates = {}, autoPlotted = {};
@@ -736,7 +745,7 @@ async function refreshDetails(first) {
       body.append(el("div", { class: "out" },
         el("div", {}, el("b", {}, stage === "generate" ? "PWIA events" : "With FSI"), " ", el("span", { class: "muted" }, o.exists ? fmtBytes(o.size) : "(not written yet)")),
         el("div", {}, plotBtn, " ", copyBtn),
-        el("div", { class: "path" }, o.path)));
+        el("div", { class: "path" }, o.path)), resultsPanel(name, stage, o, d));
       if (!o.plot && o.exists && d.state === "done" && !autoPlotted[name + stage]) {
         autoPlotted[name + stage] = true;
         api(`api/runs/${encodeURIComponent(name)}/quicklook`, { stage }).then(() => { lastPlot[name + stage] = Date.now(); refreshDetails(); })
@@ -746,8 +755,9 @@ async function refreshDetails(first) {
         const file = o.path.split("/").pop().replace(/\.root$/, ".png"), key = name + stage;
         if (!lastPlot[key]) lastPlot[key] = Date.now();
         body.append(el("details", { open: true }, el("summary", {}, `Plots: ${stage === "generate" ? "PWIA" : "with FSI"}`),
-          el("a", { href: tokenUrl(`api/runs/${encodeURIComponent(name)}/${encodeURIComponent(file)}`), target: "_blank", rel: "noopener", title: "Open full size" },
-            el("img", { class: "plot", alt: `Control plots of the ${stage} output`, src: tokenUrl(`api/runs/${encodeURIComponent(name)}/${encodeURIComponent(file)}`) + "&t=" + lastPlot[key] }))));
+          selectedPlot(name, stage) || el("a", { href: tokenUrl(`api/runs/${encodeURIComponent(name)}/${encodeURIComponent(file)}`), target: "_blank", rel: "noopener", title: "Open full size" },
+            el("img", { class: "plot", alt: `Control plots of the ${stage} output`, src: tokenUrl(`api/runs/${encodeURIComponent(name)}/${encodeURIComponent(file)}`) + "&t=" + lastPlot[key] }))),
+          selectionForm(name, stage, o));
       }
     }
   }
@@ -841,6 +851,9 @@ async function init() {
   const setCardTop = () => document.documentElement.style.setProperty("--card-top",
     (document.querySelector("header").offsetHeight + 24) + "px");
   setCardTop(); window.addEventListener("resize", setCardTop);
+  for (const m of MODULES) await new Promise((resolve, reject) => {
+    document.head.append(el("script", { src: tokenUrl(`static/${m}.js`), onload: resolve, onerror: () => reject(new Error(`cannot load ${m}.js`)) }));
+  }).catch(e => { document.getElementById("banner").textContent = e.message; document.getElementById("banner").classList.remove("hidden"); });
   buildForm();
   try { const saved = localStorage.getItem(STORAGE_KEY); if (saved) { applyConfig(JSON.parse(saved)); document.getElementById(fieldId("run", "name")).value = defaultName(); } } catch (e) {}
   document.getElementById("btn-check").onclick = checkConfig;

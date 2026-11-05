@@ -51,7 +51,8 @@ The existing combined programs are unchanged and still work.
 gcf run CONFIG.toml        run the stages a config describes
 gcf generate [options]     PWIA events -> event file           (gcf_generate)
 gcf fsi [options]          event file -> + GENIE FSI           (gcf_fsi)
-gcf quicklook FILE         control plots of an event file
+gcf quicklook FILE         control plots of an event file, with an optional selection
+gcf summary FILE           the numbers of an event file: N_eff, sum(w)/attempts, provenance
 gcf gui                    the web interface
 gcf example [3N|2N|MF|fsi] print an example config
 gcf env                    print the environment the stages run with
@@ -164,8 +165,13 @@ port automatically) and open the printed URL. From the page you can:
   and all) before anything starts;
 - preview or download the config, and start the run;
 - follow the runs: progress with rate and time left, live logs, output files
-  with their paths, quick-look plots drawn when you open a finished run,
-  cancel;
+  with their paths, cancel;
+- read the results of a finished run: Σw/attempts with its error, N_eff, the
+  heaviest event's share of the weight, warnings about a low N_eff, and the
+  provenance of each stage (`gcf summary` prints the same);
+- look at quick-look plots, drawn when you open a finished run, and apply a
+  selection on Q², x_B, θ_e, p_miss and the proton count (`gcf quicklook --q2 ...`
+  does the same);
 - reuse a finished run as a template for a new one, or delete it.
 
 Everything the page does goes through `gcf run`, and each run keeps its

@@ -98,11 +98,14 @@ Click a run to open its details:
   `<runs-dir>/<name>/`, next to `config.toml` and the full logs in `logs/`. The
   page can't download event files, so use **Copy path** and read or `scp` them
   from the machine.
-- **Plots:** control plots are drawn when you open a finished run. Their title
-  gives the number of events, the effective number N_eff, the attempts and
-  Σw / attempts, the [quantity to compare between
-  samples](docs/PIPELINE.md#weights-and-normalization). Check N_eff before
-  trusting a shape: 4,000 3N events gave N_eff = 20 in one test.
+- **Numbers:** each output lists its events, attempts, Σw / attempts (the
+  [quantity to compare between samples](docs/PIPELINE.md#weights-and-normalization)),
+  the effective number of events N_eff and what made it. Read the warnings before
+  trusting a shape: 4,000 3N events gave N_eff = 20 in one test. `./gcf summary
+  FILE` prints the same numbers in a terminal.
+- **Plots:** control plots are drawn when you open a finished run. Under
+  **Selection**, set limits on Q², x_B, θ_e, p_miss or the proton count to redraw
+  them and see what share of the yield passes.
 - **Use as template:** fills the form from that run, with a new seed.
 - **Copy run command:** copies the command that repeats the run from the
   repository root. Add `--force` to overwrite the run, or change `name` in a
