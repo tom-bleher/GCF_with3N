@@ -19,12 +19,13 @@ function resultsPanel(name, stage, o, d) {
   const key = name + "/" + stage;
   const r = (d.results || {})[stage];
   if (!r) {
-    if (o.exists && d.state === "done" && !resultsAsked[key]) {
-      resultsAsked[key] = true;
+    const busy = ["running", "merging", "starting", "queued"].includes(d.state);
+    if (o.exists && !busy && !resultsAsked[key + o.size]) {
+      resultsAsked[key + o.size] = true;
       api(`api/runs/${encodeURIComponent(name)}/results`, { stage }).then(() => refreshDetails())
         .catch(e => { box.replaceChildren(el("p", { class: "setup" }, "No summary: " + e.message)); });
     }
-    if (o.exists) box.append(el("p", { class: "setup" }, "Reading the summary…"));
+    if (o.exists && !busy) box.append(el("p", { class: "setup" }, "Reading the summary…"));
     return box;
   }
   const yieldText = r.yield === null ? "–" : `${fmtNum(r.yield)} ± ${fmtNum(r.yield_err, 2)}`;
