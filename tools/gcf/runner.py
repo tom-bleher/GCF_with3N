@@ -21,9 +21,12 @@ was supposed to leave behind, and progress is counted from the chunks' files.
 """
 
 import fcntl
+import grp
+import hashlib
 import json
 import math
 import os
+import pwd
 import queue
 import re
 import secrets
@@ -346,6 +349,13 @@ def count_entries(path, tree=None):
     raise RunError(f"cannot read {path}: {out.stderr.strip() or out.stdout.strip()}")
 
 
+def job_seed(base, job, stage="generate"):
+    """The seed of one job of a run, from the run's base seed. A hash, not base + job:
+    with that, runs with neighbouring base seeds would share most of their events."""
+    digest = hashlib.sha256(f"{base}:{stage}:{job}".encode()).digest()
+    return 1 + int.from_bytes(digest[:4], "big") % (2**31 - 2)
+
+
 def split(total, jobs):
     """Split `total` into `jobs` near-equal positive parts."""
     jobs = max(1, min(jobs, total))
@@ -362,6 +372,7 @@ class Step:
         self.base = Path(log).with_suffix("")
         self.exit_file = Path(log).with_suffix(".exit")
         self.pid_file = Path(log).with_suffix(".pid")
+        self.cmd_file = Path(log).with_suffix(".cmd")
         self.env = env               # None: environment()
         self.verify = verify         # after exit 0: returns an error message, or None if all is well
         self.poll = poll             # while running: updates self.done / self.total from files
@@ -385,6 +396,14 @@ class Step:
             return pid
         return None
 
+    def same_command(self):
+        """Whether this step's records are of this very command. Seeds, event ranges and
+        all settings are in it, so a result made with others is never reused."""
+        try:
+            return self.cmd_file.read_text() == "\n".join(map(str, self.args))
+        except OSError:
+            return False
+
     def exit_code(self):
         try:
             return int(self.exit_file.read_text().strip())
@@ -398,6 +417,7 @@ class Plan:
         self.name = name
         self.jobs = []               # list of lists of Step
         self.workers = 1             # how many jobs run at a time
+        self.resumed = False         # continues an earlier supervisor's run
         self.merges = []             # (stage, [inputs], output)
         self.outputs = {}            # stage -> final file
         self.cleanup = []            # files to delete after a successful run
@@ -420,8 +440,8 @@ def plan_from_config(cfg, run_dir, final_outputs=None, resume=False):
     write their final files directly; with several, per-job files go to
     <run_dir>/chunks and are merged with hadd.
 
-    With `resume`, the steps that finished in the run's last status.json are
-    kept, and those still running are taken over.
+    With `resume`, steps that finished this very command are kept, and those still
+    running it are taken over: see restore_steps.
     """
     if "eic" in cfg["run"]["stages"]:
         return eic_plan(cfg, run_dir, resume)
@@ -446,7 +466,7 @@ def plan_from_config(cfg, run_dir, final_outputs=None, resume=False):
         outs = {"program": []}
         for i, n in enumerate(parts):
             g = final["program"] if single else chunks / f"gen_{i:03d}.root"
-            plan.jobs.append([Step("program", program_args(prog, n, g, seed + i), g, n, logs / f"program_{i:03d}.log")])
+            plan.jobs.append([Step("program", program_args(prog, n, g, job_seed(seed, i, "program")), g, n, logs / f"program_{i:03d}.log")])
             outs["program"].append(g)
     elif "generate" in stages:
         parts = split(gen["events"], checkpoint_jobs(run, gen["events"]))
@@ -454,12 +474,12 @@ def plan_from_config(cfg, run_dir, final_outputs=None, resume=False):
         outs = {"generate": [], "fsi": []}
         for i, n in enumerate(parts):
             g = final["generate"] if single else chunks / f"pwia_{i:03d}.root"
-            steps = [Step("generate", generate_args(gen, n, g, seed + i, seed), g, n,
+            steps = [Step("generate", generate_args(gen, n, g, job_seed(seed, i), seed), g, n,
                           logs / f"generate_{i:03d}.log")]
             outs["generate"].append(g)
             if "fsi" in stages:
                 f = final["fsi"] if single else chunks / f"fsi_{i:03d}.root"
-                steps.append(Step("fsi", fsi_args(fsi, g, f, seed + 1000003 + i), f, n,
+                steps.append(Step("fsi", fsi_args(fsi, g, f, job_seed(seed, i, "fsi")), f, n,
                                   logs / f"fsi_{i:03d}.log"))
                 outs["fsi"].append(f)
             plan.jobs.append(steps)
@@ -475,7 +495,7 @@ def plan_from_config(cfg, run_dir, final_outputs=None, resume=False):
             f = final["fsi"] if single else chunks / f"fsi_{i:03d}.root"
             # Only the first chunk carries hAttempts etc., so the merge
             # doesn't add them up once per chunk.
-            plan.jobs.append([Step("fsi", fsi_args(fsi, fsi["input"], f, seed + 1000003 + i,
+            plan.jobs.append([Step("fsi", fsi_args(fsi, fsi["input"], f, job_seed(seed, i, "fsi"),
                                                    first, n, copy_objects=(i == 0)),
                                    f, n, logs / f"fsi_{i:03d}.log")])
             outs["fsi"].append(f)
@@ -494,40 +514,75 @@ def plan_from_config(cfg, run_dir, final_outputs=None, resume=False):
 
 def read_status(run_dir):
     try:
-        return json.loads((Path(run_dir) / "status.json").read_text())
+        st = json.loads((Path(run_dir) / "status.json").read_text())
     except (OSError, ValueError):
         return {}
+    return st if isinstance(st, dict) else {}
+
+
+def stop_process(pid, wait=15):
+    """Stop a step's process group, and wait until it has: two can't write one file."""
+    try:
+        os.killpg(pid, signal.SIGTERM)
+    except (ProcessLookupError, PermissionError):
+        return
+    deadline = time.time() + wait
+    while time.time() < deadline and proc_start(pid) is not None:
+        time.sleep(0.1)
+    if proc_start(pid) is not None:
+        try:
+            os.killpg(pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError):
+            pass
+        time.sleep(0.2)
 
 
 def restore_steps(plan):
     """Take up a plan where it stopped. Each step's own records decide, not the
-    supervisor's last status, which can be a moment behind: a step still running is
-    taken over, one that exited with 0 is kept, and any other runs again."""
+    supervisor's last status, which can be a moment behind: a step still running this
+    very command is taken over, one that finished it with exit 0 is kept, and any other
+    runs again. Records of another command, from an edited config or another number of
+    jobs, count for nothing."""
+    plan.resumed = True
     old = read_status(plan.run_dir).get("jobs", [])
     for i, steps in enumerate(plan.jobs):
         for j, step in enumerate(steps):
             has_output = step.output.is_file() and step.output.stat().st_size > 0
             pid = step.live_pid()
-            if pid:
+            if pid and step.same_command():
                 step.pid, step.pid_start = pid, proc_start(pid)
                 prev = old[i][j] if i < len(old) and j < len(old[i]) else {}
                 step.done = prev.get("done", 0)
-            elif step.exit_code() == 0 and has_output:
+            elif pid:
+                stop_process(pid)
+            elif step.exit_code() == 0 and has_output and step.same_command():
                 step.state, step.done = "done", step.total
-            elif not step.exit_file.exists() and not step.pid_file.exists() and has_output:
-                # Finished under an older version, which kept no records of its own.
-                prev = old[i][j] if i < len(old) and j < len(old[i]) else {}
-                if prev.get("state") == "done" and prev.get("stage") == step.stage:
-                    step.state, step.done = "done", step.total
+
+
+def clean_run_dir(run_dir):
+    """Before overwriting a run: stop what is left of it, and remove what it made, so
+    that none of it is taken for this run's."""
+    run_dir = Path(run_dir)
+    if not (run_dir / "status.json").exists():
+        return
+    stop_leftover_steps(run_dir)
+    for name in ("logs", "chunks"):
+        shutil.rmtree(run_dir / name, ignore_errors=True)
+    for pattern in ("*.root", "*.png", "results.json", ".auto_resumes", "status.json"):
+        for path in run_dir.glob(pattern):
+            path.unlink(missing_ok=True)
 
 
 def merge_finished(run_dir):
     """Make final files from the jobs that finished in a run that stopped. Their
     yield is right: each job's file carries its own attempts, and hadd adds them."""
     run_dir = Path(run_dir)
+    lock = RunLock(run_dir)    # held for the whole merge  # noqa: F841
     st = read_status(run_dir)
     if not st.get("jobs"):
         raise RunError("this run has no jobs to merge")
+    if any(Step("", [], run_dir, 0, s["log"]).live_pid() for job in st["jobs"] for s in job):
+        raise RunError("some of its jobs are still running")
     if "simulate" in st.get("stages", {}):
         raise RunError("an ePIC run has no files to merge: resume it, and its finished slices and chunks stay")
     if not {"generate", "program"} & set(st.get("stages", {})):
@@ -553,10 +608,43 @@ def merge_finished(run_dir):
     if not partial:
         raise RunError("no job of this run has finished yet")
     st.update(state="partial", partial=partial, finished=time.time())
-    tmp = run_dir / "status.json.tmp"
-    tmp.write_text(json.dumps(st, indent=1))
-    tmp.replace(run_dir / "status.json")
+    write_status_file(run_dir, st)
     return partial
+
+
+def write_status_file(run_dir, st):
+    """Replace a run's status in one step; each writer has its own temporary file."""
+    tmp = Path(run_dir) / f"status.json.{os.getpid()}.{threading.get_ident()}.tmp"
+    try:
+        tmp.write_text(json.dumps(st, indent=1))
+        tmp.replace(Path(run_dir) / "status.json")
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def others_can_write(path):
+    """Whether anyone but you can write to a path you own. A group of your own, the
+    usual thing with umask 002, is nobody else."""
+    st = os.stat(path)
+    if st.st_mode & 0o002:
+        return True
+    if not st.st_mode & 0o020:
+        return False
+    try:
+        group, me = grp.getgrgid(st.st_gid), pwd.getpwuid(os.getuid())
+        return group.gr_name != me.pw_name or any(m != me.pw_name for m in group.gr_mem)
+    except KeyError:
+        return True
+
+
+def private(path):
+    """Nobody else may write here: what is in a run's directory gets run as you."""
+    try:
+        st = os.stat(path)
+        if st.st_uid == os.getuid() and st.st_mode & 0o022:
+            os.chmod(path, st.st_mode & ~0o022 & 0o7777)
+    except OSError:
+        pass
 
 
 class RunLock:
@@ -565,7 +653,8 @@ class RunLock:
 
     def __init__(self, run_dir):
         Path(run_dir).mkdir(parents=True, exist_ok=True)
-        self.file = open(Path(run_dir) / ".lock", "w")
+        private(run_dir)
+        self.file = open(Path(run_dir) / ".lock", "a")
         try:
             fcntl.flock(self.file, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except OSError:
@@ -575,8 +664,10 @@ class RunLock:
 
 def is_locked(run_dir):
     """True if a supervisor is working on this run."""
+    if not (Path(run_dir) / ".lock").exists():
+        return False
     try:
-        with open(Path(run_dir) / ".lock", "w") as f:
+        with open(Path(run_dir) / ".lock", "a") as f:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             fcntl.flock(f, fcntl.LOCK_UN)
         return False
@@ -721,19 +812,10 @@ def stop_leftover_steps(run_dir):
     """Stop what is still running of an earlier supervisor's steps. A resume of the eic
     stage plans other steps than the ones it continues, so it can't take them over, and
     two copies must not work on one set of chunks."""
-    live = []
     for record in (Path(run_dir) / "logs").glob("*.pid"):
-        step = Step("", [], Path(run_dir), 0, record.with_suffix(".log"))
-        pid = step.live_pid()
+        pid = Step("", [], Path(run_dir), 0, record.with_suffix(".log")).live_pid()
         if pid:
-            live.append(pid)
-            try:
-                os.killpg(pid, signal.SIGTERM)
-            except (ProcessLookupError, PermissionError):
-                pass
-    deadline = time.time() + 20
-    while time.time() < deadline and any(proc_start(p) is not None for p in live):
-        time.sleep(0.2)
+            stop_process(pid)
 
 
 def eic_plan(cfg, run_dir, resume=False):
@@ -750,6 +832,7 @@ def eic_plan(cfg, run_dir, resume=False):
     logs = run_dir / "logs"
     plan = Plan(run_dir, run["name"])
     plan.eic = True
+    plan.resumed = resume
     env = eic_env(eic)
     sample = schema.EIC_SAMPLES[eic["sample"]]
     chunk = eic["chunk_size"]
@@ -912,8 +995,10 @@ class Runner:
         self.finished = None
         self.status_path = plan.run_dir / "status.json"
         self.queue = queue.SimpleQueue()
-        previous = read_status(plan.run_dir) if any(s.state == "done" or s.pid for j in plan.jobs for s in j) else {}
+        previous = read_status(plan.run_dir) if plan.resumed else {}
         self.started = previous.get("started") or self.started
+        self.partial = previous.get("partial")   # output files of an earlier merge of finished jobs
+        self.status_failed = False
 
     # -- status ------------------------------------------------------------
     def status(self):
@@ -933,7 +1018,7 @@ class Runner:
                 "started": self.started, "finished": self.finished,
                 "stages": stages,
                 "outputs": {k: str(v) for k, v in self.plan.outputs.items()},
-                "workers": self.plan.workers,
+                "workers": self.plan.workers, "partial": self.partial,
                 "jobs": [[{"stage": s.stage, "state": s.state, "done": s.done, "total": s.total,
                            "log": str(s.log), "output": str(s.output), "pid": s.pid, "pid_start": s.pid_start}
                           for s in steps] for steps in self.plan.jobs],
@@ -941,9 +1026,13 @@ class Runner:
 
     def write_status(self):
         st = self.status()
-        tmp = self.status_path.with_suffix(".json.tmp")
-        tmp.write_text(json.dumps(st, indent=1))
-        tmp.replace(self.status_path)
+        try:
+            write_status_file(self.plan.run_dir, st)
+            self.status_failed = False
+        except OSError as e:           # a full disk, say: the jobs are worth more than the status
+            if not self.status_failed:
+                print(f"gcf: cannot write the run's status: {e}", file=sys.stderr, flush=True)
+            self.status_failed = True
         return st
 
     def print_progress(self, st, final=False):
@@ -987,20 +1076,19 @@ class Runner:
         step.log.parent.mkdir(parents=True, exist_ok=True)
         step.output.parent.mkdir(parents=True, exist_ok=True)
         proc = None
+        if step.pid is None:
+            leftover = step.live_pid()
+            if leftover:             # of a run being overwritten: two can't write one file
+                stop_process(leftover)
         with self.lock:
             if self.cancelled:
                 step.state = "cancelled"
                 return False
             step.state = "running"
             if step.pid is None:     # otherwise a previous supervisor started it
-                leftover = step.live_pid()
-                if leftover:         # of a run being overwritten: two can't write one file
-                    try:
-                        os.killpg(leftover, signal.SIGTERM)
-                    except (ProcessLookupError, PermissionError):
-                        pass
                 step.exit_file.unlink(missing_ok=True)
                 step.pid_file.unlink(missing_ok=True)
+                step.cmd_file.write_text("\n".join(map(str, step.args)))
                 with open(step.log, "w") as log:
                     log.write("+ " + " ".join(step.args) + "\n")
                     log.flush()
@@ -1048,7 +1136,15 @@ class Runner:
 
     def run_job(self, steps):
         for step in steps:
-            if not self.run_step(step):
+            try:
+                ok = self.run_step(step)
+            except Exception as e:  # noqa: BLE001 - a job that can't start must not look finished
+                with self.lock:
+                    step.state = "failed"
+                    if self.error is None:
+                        self.error = f"{step.stage} job could not run: {e}"
+                ok = False
+            if not ok:
                 return
 
     def worker(self):
@@ -1119,14 +1215,14 @@ class Runner:
             self.cancel()
             for t in threads:
                 t.join()
-        failed = [s for steps in self.plan.jobs for s in steps if s.state == "failed"]
+        finished = sum(all(s.state == "done" for s in steps) for steps in self.plan.jobs)
+        unfinished = len(self.plan.jobs) - finished
         if self.cancelled:
             if self.state != "cancelled":
                 self.state = "failed"
-        elif failed:
+        elif unfinished:           # whatever the reason: only complete runs are merged
             self.state = "failed"
-            finished = sum(all(s.state == "done" for s in steps) for steps in self.plan.jobs)
-            self.error = (f"{len(failed)} of {len(self.plan.jobs)} jobs failed; {finished} finished and are kept, "
+            self.error = (f"{unfinished} of {len(self.plan.jobs)} jobs failed; {finished} finished and are kept, "
                           f"so a resume reruns only the rest. The first failure:\n{self.error}")
         else:
             try:
@@ -1136,6 +1232,7 @@ class Runner:
                 for f in self.plan.cleanup:
                     Path(f).unlink(missing_ok=True)
                 self.state = "done"
+                self.partial = None
             except RunError as e:
                 self.state, self.error = "failed", str(e)
         self.finished = time.time()

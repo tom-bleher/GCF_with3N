@@ -53,7 +53,6 @@ async function mergeFinished(name) {
   document.getElementById("d-body").prepend(el("p", { class: "muted" }, "Merging…"));
   try { await api(`api/runs/${encodeURIComponent(name)}/merge`, {}); }
   catch (e) { alert(e.message); }
-  delete resultsAsked[name + "/generate"]; delete resultsAsked[name + "/fsi"];
   await refreshDetails();
 }
 

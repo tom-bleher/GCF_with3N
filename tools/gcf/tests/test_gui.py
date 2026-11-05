@@ -1284,6 +1284,29 @@ class TestBrowser(GuiCase):
         self.assertIn("a few events dominate", text)
         self.assertIn("placeholder (#73)", text)
 
+    def test_numbers_of_a_partial_merge_are_shown(self):
+        """A run with some jobs missing has valid numbers too, and they were not shown."""
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        cfg = small_run("mergedpart", events=3000, jobs=1, fsi=None, seed=8)
+        cfg["run"]["chunks"] = 3
+        cfg["run"]["output_dir"] = str(self.gui.runs_dir)
+        blocked = self.gui.runs_dir / "mergedpart/chunks/pwia_002.root"
+        blocked.mkdir(parents=True)
+        (blocked / "in_the_way").write_text("")
+        path = Path(self.gui.tmp) / "mergedpart.toml"
+        from gcf import config
+        path.write_text(config.dumps(config.validate(cfg)))
+        out = subprocess.run([sys.executable, str(REPO / "gcf"), "run", str(path), "-q"], capture_output=True, text=True, timeout=120)
+        self.assertNotEqual(out.returncode, 0)
+        shutil.rmtree(blocked)
+        self.gui.api("api/runs/mergedpart/merge", {})
+        self.assertEqual(self.gui.api("api/runs/mergedpart")["state"], "partial")
+        self.open()
+        self.driver.execute_script("showDetails('mergedpart')")
+        WebDriverWait(self.driver, 60).until(lambda d: d.find_elements(By.CSS_SELECTOR, "#d-body .numbers"))
+        self.assertIn("Σw / attempts", self.driver.find_element(By.ID, "d-body").text)
+
     def test_compare_dialog(self):
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import WebDriverWait
@@ -1500,6 +1523,9 @@ class TestBrowser(GuiCase):
         WebDriverWait(self.driver, 15).until(lambda d: d.find_elements(By.CSS_SELECTOR, "#doc h1"))
         self.assertIn("web interface", self.driver.find_element(By.CSS_SELECTOR, "#doc h1").text.lower())
         self.assertIn("Your first run", self.driver.find_element(By.ID, "doc").text)
+        # The guide's screenshots are all there and load.
+        WebDriverWait(self.driver, 15).until(lambda d: d.execute_script(
+            "return document.images.length >= 5 && [...document.images].every(i => i.complete && i.naturalWidth > 0)"))
         self.assertEqual(self.driver.execute_script("return [...document.images].filter(i => i.complete && !i.naturalWidth).length"), 0)
 
     def test_eic_in_the_form(self):

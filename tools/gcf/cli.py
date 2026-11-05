@@ -204,7 +204,7 @@ def section_from_args(ns, opts):
 def add_run_args(parser):
     parser.add_argument("-j", "--jobs", type=int, default=1, help="parallel jobs (default 1)")
     parser.add_argument("-S", "--seed", type=int, default=0,
-                        help="base seed; job i uses seed + i (default: drawn and printed)")
+                        help="base seed, from which each job's is derived (default: drawn and printed)")
     parser.add_argument("--keep-chunks", action="store_true", help="keep the per-job files")
 
 
@@ -216,16 +216,20 @@ def work_dir_for(output):
 def run_plan(cfg, run_dir, final_outputs=None, quiet=False, resume=False):
     cfg = runner.resolve_seed(cfg)
     lock = runner.RunLock(run_dir)     # held until this process ends  # noqa: F841
+    if not resume:
+        runner.clean_run_dir(run_dir)
     if "chunks" not in cfg["run"] or cfg["run"]["chunks"] is None:
         # Part of what makes the run reproducible, so the saved config records it.
         stages = cfg["run"]["stages"]
-        total = cfg["generate"]["events"] if "generate" in stages else cfg["program"]["events"] if "program" in stages else None
-        if total is not None:
+        if "eic" not in stages:
+            total = cfg["generate"]["events"] if "generate" in stages else cfg["program"]["events"] \
+                if "program" in stages else runner.count_entries(cfg["fsi"]["input"], cfg["fsi"].get("tree"))
             cfg["run"]["chunks"] = runner.checkpoint_jobs(cfg["run"], total)
     plan = runner.plan_from_config(cfg, run_dir, final_outputs, resume=resume)
     Path(run_dir).mkdir(parents=True, exist_ok=True)
-    (Path(run_dir) / "config.toml").write_text(
-        config.dumps(cfg, comment="Resolved configuration of this run (re-run with: gcf run config.toml)"))
+    saved = Path(run_dir) / "config.toml"
+    saved.write_text(config.dumps(cfg, comment="Resolved configuration of this run (re-run with: gcf run config.toml)"))
+    runner.private(saved)
     if not quiet:
         print(f"Run '{cfg['run']['name']}': {', '.join(cfg['run']['stages'])}, "
               f"{len(plan.jobs)} job(s), base seed {cfg['run']['seed']}, logs in {run_dir}/logs")
@@ -262,7 +266,7 @@ def cmd_run(args):
         if not args.force:
             raise config.ConfigError(f"{run_dir} already holds a run; pick another [run] name, pass --resume "
                                      f"with its config.toml to finish it, or --force to overwrite it")
-    if eic:
+    if eic and not args.resume:   # a resume needs far less than the check asks for the whole run
         problems = runner.check_setup(cfg)
         if problems:
             raise config.ConfigError("\n".join(problems))
@@ -293,6 +297,18 @@ def cmd_scan(args):
     run = raw.setdefault("run", {})
     if args.name:
         run["name"] = args.name
+    group = run.get("name", "")
+    # Run again, a scan keeps its seed, so that its points are the same runs.
+    probe = Path(config.validate({"run": {"output_dir": run.get("output_dir", "runs")}}, base_dir=base)["run"]["output_dir"])
+    record = probe / gui.SCANS_DIR / f"{group}.json"
+    previous = {}
+    if record.is_file():
+        try:
+            previous = json.loads(record.read_text())
+        except ValueError:
+            pass
+    if previous.get("seed") and not run.get("seed"):
+        run["seed"] = previous["seed"]
     try:
         points = scan.expand(raw, axes)
         parsed = [(name, values, config.validate(point, base_dir=base)) for name, values, point in points]
@@ -300,10 +316,21 @@ def cmd_scan(args):
         raise config.ConfigError(str(e)) from None
     runs_dir = Path(parsed[0][2]["run"]["output_dir"])
     runs_dir.mkdir(parents=True, exist_ok=True)
-    group = raw["run"]["name"]
-    record = runs_dir / gui.SCANS_DIR / f"{group}.json"
+    # A point that exists must be this very setup, or it isn't a point of this scan.
+    known = {}
+    for name, _, cfg in parsed:
+        saved = runs_dir / name / "config.toml"
+        if saved.is_file():
+            old = tomllib.loads(saved.read_text())
+            new = tomllib.loads(config.dumps(cfg))
+            old["run"].pop("chunks", None)
+            new["run"].pop("chunks", None)
+            if old != new:
+                raise config.ConfigError(f"{runs_dir / name} holds a run with other settings; "
+                                         f"choose another scan name with --name")
+            known[name] = runner.read_status(runs_dir / name).get("state")
     record.parent.mkdir(exist_ok=True)
-    record.write_text(json.dumps({"name": group, "created": time.time(),
+    record.write_text(json.dumps({"name": group, "created": time.time(), "seed": parsed[0][2]["run"]["seed"],
                                   "axes": [{"path": a["path"], "label": scan.axis_label(a["path"])} for a in axes],
                                   "points": [{"name": n, "values": v} for n, v, _ in parsed]}, indent=1))
     if args.detach:
@@ -313,13 +340,17 @@ def cmd_scan(args):
         detach({"args": again, "log": runs_dir / gui.SCANS_DIR / f"{group}.log"})
         print(f"Started scan {group} with {len(parsed)} runs, on its own.\nFollow it with: ./gcf status --runs-dir {runs_dir}")
         return True
-    ok = True
+    failed = []
     for name, _, cfg in parsed:
-        if (runs_dir / name / "status.json").exists():
-            print(f"{name}: already there, skipping")
+        state = known.get(name)
+        if state == "done":
+            print(f"{name}: already done")
             continue
-        ok = run_plan(cfg, runs_dir / name, quiet=args.quiet) and ok
-    return ok
+        if not run_plan(cfg, runs_dir / name, quiet=args.quiet, resume=state is not None):
+            failed.append(name)
+    if failed:
+        print(f"{len(failed)} of {len(parsed)} points did not finish: {', '.join(failed)}", file=sys.stderr)
+    return not failed
 
 
 def cmd_status(args):
@@ -394,6 +425,10 @@ def cmd_gui(args):
     from . import gui
     token = gui.stable_token(args.new_token)
     servers = gui.my_servers(args.port)
+    if args.new_token and servers and not (args.status or args.stop):
+        for rec in servers:     # a running server follows the token file
+            print(f"New address; the old one no longer works:\n    http://localhost:{rec['port']}/?token={token}")
+        return True
     if args.status or args.stop:
         if not servers:
             print("No gcf gui of yours is running" + (f" on port {args.port}." if args.port else "."))

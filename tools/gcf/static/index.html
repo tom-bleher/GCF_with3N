@@ -210,6 +210,7 @@ img.plot { width: 100%; border: 1px solid var(--line); border-radius: 6px; margi
 dialog.wide-dialog { width: min(980px, 94vw); }
 table.compact { margin-top: 8px; font-size: 13px; }
 table.compact td, table.compact th { padding: 3px 8px 3px 0; }
+table.compact th, table.compact td { overflow-wrap: normal; }
 tr.flagged td { color: var(--warn); font-weight: 600; }
 details { margin-top: 6px; }
 summary { cursor: pointer; }
@@ -336,6 +337,7 @@ async function api(path, body) {
   const opts = { headers: { "X-GCF-Token": TOKEN } };
   if (body !== undefined) {
     opts.method = "POST"; opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body);
+    if (RUNS_DIR) opts.headers["X-GCF-Runs-Dir"] = encodeURIComponent(RUNS_DIR);
   }
   const r = await fetch(path, opts);
   let data = {};
@@ -858,10 +860,11 @@ async function refreshRuns() {
     // A stopped server or a broken tunnel changes nothing for the runs, and this page
     // picks up again by itself once it can reach the server.
     banner.textContent = /forbidden/i.test(e.message) ? "This address no longer works: open the URL printed by gcf gui --status." :
-      "Cannot reach gcf gui: it was stopped or the SSH tunnel is down. Your runs carry on. This page reconnects by itself; to restart the interface, run ./gcf gui --background.";
+      /NetworkError|Failed to fetch|Load failed/.test(e.message) ? "Cannot reach gcf gui: it was stopped or the SSH tunnel is down. Your runs carry on. This page reconnects by itself; to restart the interface, run ./gcf gui --background." :
+      "The list of runs can't be read: " + e.message;
     banner.classList.remove("hidden"); document.title = "GCF_with3N · disconnected"; return;
   }
-  if (banner.textContent.startsWith("Cannot reach") || banner.textContent.startsWith("This address")) banner.classList.add("hidden");
+  if (/^(Cannot reach|This address|The list of runs)/.test(banner.textContent)) banner.classList.add("hidden");
   runsCache = data.runs;
   renderMachine(data.machine);
   if (data.machine) showRunsDir(data.machine.runs_dir);
@@ -945,10 +948,11 @@ async function refreshDetails(first) {
         el("div", {}, el("b", {}, stage === "generate" ? "PWIA events" : stage === "program" ? "Events (genT tree)" : "With FSI"), " ", el("span", { class: "muted" }, o.exists ? fmtBytes(o.size) : "(not written yet)")),
         el("div", { class: "output-buttons" }, plotBtn, copyBtn, ...outputButtons(name, stage, o, d)),
         el("div", { class: "path" }, o.path)), resultsPanel(name, stage, o, d));
-      if (!o.plot && o.exists && d.state === "done" && !autoPlotted[name + stage] && stage !== "program") {
-        autoPlotted[name + stage] = true;
+      // Keyed by the file's size too: a merged or resumed run has a new file to plot.
+      if (!o.plot && o.exists && !running && !autoPlotted[name + stage + o.size] && stage !== "program") {
+        autoPlotted[name + stage + o.size] = true;
         api(`api/runs/${encodeURIComponent(name)}/quicklook`, { stage }).then(() => { lastPlot[name + stage] = Date.now(); refreshDetails(); })
-          .catch(e => { delete autoPlotted[name + stage]; toast("Plots: " + e.message); });
+          .catch(e => { toast("Plots: " + e.message); });
       }
       if (o.plot) {
         const file = o.path.split("/").pop().replace(/\.root$/, ".png"), key = name + stage;
@@ -973,7 +977,8 @@ async function refreshDetails(first) {
   old.querySelectorAll("details").forEach(x => { wasOpen[x.querySelector("summary").textContent.replace(/\(\d+\)|· live/g, "")] = x.open; });
   old.replaceChildren(...body.childNodes);
   if (!first) old.querySelectorAll("details").forEach(x => { const k = x.querySelector("summary").textContent.replace(/\(\d+\)|· live/g, ""); if (k in wasOpen) x.open = wasOpen[k]; });
-  if (!running && !first) { clearInterval(detailsTimer); detailsTimer = null; }
+  // A stopped run may be picked up by the server in a moment, so keep looking at it.
+  if (!running && d.state !== "stopped" && !first) { clearInterval(detailsTimer); detailsTimer = null; }
 }
 
 function renderEic(body, d, name) {

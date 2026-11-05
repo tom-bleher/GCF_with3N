@@ -165,7 +165,9 @@ is an ordinary run named `<name>_<option>-<value>`, one after the other. All poi
 share a base seed, so for an option that only changes the weights, such as a
 contact, they hold the same events, and differences between them are smaller than
 their statistical errors. With `randomize = true`, a scan of `run.seed` makes
-replicas of the nuclear inputs. The web interface's **Scan** tab does the same
+replicas of the nuclear inputs. Run again, a scan keeps its seed and the points that are
+done and continues the others; it refuses if a point under that name holds other settings.
+The web interface's **Scan** tab does the same
 through its queue.
 
 ### The suite's other generators
@@ -285,10 +287,16 @@ config, so a run set up in the browser can be repeated or scaled up from a
 terminal. The server listens on localhost only and every request needs the
 token from the URL, because other users of a shared machine can reach localhost
 ports. The token is kept in `~/.config/gcf/gui-token`, readable only by you, so the
-URL survives restarts; `--new-token` replaces it. `--host` changes the interface it
+URL survives restarts; `--new-token` replaces it, also for a server already running. It
+is never kept in a cookie, since browsers send a localhost cookie to every port there, and
+changes are accepted only as JSON from the page's own address. `--host` changes the interface it
 listens on, over plain HTTP, so anyone on that network can read the token. Stopping
 the page does not stop runs already started. When started again it continues runs
-that were interrupted, such as by a machine restart, up to 3 times per run.
+that were interrupted, such as by a machine restart, up to 3 times per run. It keeps
+a job's result only if that job finished the very command the run now asks for, so
+an edited config or another number of jobs runs again rather than mixing results.
+Since a run's directory decides what gets run as you, the page won't start one that others
+can write to; a group with you as its only member doesn't count.
 
 ## Event-file format
 
@@ -379,8 +387,9 @@ shown by `quicklook`). FSI does not change weights.
 ## Seeds and provenance
 
 Each stage takes `--seed`; 0 (the default) draws a seed and prints it. `gcf`
-gives job i of a run the seed `seed + i` for generation and `seed + 1000003 + i`
-for FSI, so a run with a fixed `[run] seed` is reproducible. Each output file
+derives each job's seeds from the run's base seed with a hash, not as `seed + i`,
+so that runs with neighbouring base seeds don't share events. Generation and FSI have
+separate streams, and a run with a fixed `[run] seed` is reproducible. Each output file
 has a TNamed per stage recording the command line, seed, date and code version:
 `git describe` of the tree when the stage was built, with `-dirty` if the code
 under `src/` (the vendored GENIE aside) differed from that commit.
@@ -415,11 +424,17 @@ and exits non-zero on disagreement.
 
 An unweighted test can't see a change that only moves weights, such as another
 contact, because the events are the same. `--weighted` decides on a weighted
-test instead, as the web interface does: the χ² of the normalized weighted
-histograms, with a p-value from randomly reassigning events between the samples.
-The weights are too heavy-tailed for that statistic to follow a χ² distribution
-(on identical settings, 3N gave p < 0.001 in 5-8% of the tests with the
-χ² distribution, and in none of 224 with the permutations). It also covers the
+test instead, as the web interface does: Pearson's χ² of the normalized weighted
+histograms, with a p-value from a centred bootstrap of each sample with its own
+weights. The weights are too heavy-tailed for that statistic to follow a χ² distribution
+(on identical settings, 3N gave p < 0.001 in 5-8% of the tests with the χ²
+distribution), and reassigning events between samples is wrong when their weights
+spread differently. On identical settings the bootstrap gave p ≤ 0.001 in none of 364
+tests (20 pairs of 30k events each for 2N and 3N, 12 pairs of 300k for 3N), and p < 0.05
+in 2-4%. σ_CM of 0.15 against 0.10 GeV/c, in the residual nucleus's momentum, gives
+p ≤ 0.001 in 4 of 4 pairs at 2N (100k events, N_eff about 2000) and 3 of 4 at 3N (300k
+events, N_eff 100-800). Less sensitive observables and low N_eff can miss a real
+change, so "no difference" means none the statistics can show. It also covers the
 observables that respond to the nuclear inputs: p_miss, the partner's momentum,
 the angle between them and the residual's momentum. `--max-events` limits the
 events used for the shapes; Σw/attempts always uses the whole file.

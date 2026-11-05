@@ -55,6 +55,20 @@ def tail_lines(path, count, keep=None):
     return lines[-count:]
 
 
+def safe_to_run(d):
+    """What is in a run's directory gets run as you, including paths in its config. So
+    only if the directory and its configs are yours, and nobody else can write to them."""
+    try:
+        for path in (d, d / "config.toml", d / "submitted.toml"):
+            if not path.exists():
+                continue
+            if path.stat().st_uid != os.getuid() or runner.others_can_write(path):
+                return False
+        return True
+    except OSError:
+        return False
+
+
 def config_dir():
     return Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "gcf"
 
@@ -62,7 +76,7 @@ def config_dir():
 def stable_token(new=False):
     """The page's token, kept in a file only you can read, so that a bookmark goes on
     working after a restart. A random one for this start if that file can't be written."""
-    path = config_dir() / "gui-token"
+    path = token_path()
     if not new:
         try:
             token = path.read_text().strip()
@@ -80,6 +94,14 @@ def stable_token(new=False):
     except OSError:
         pass
     return token
+
+
+def token_path():
+    return config_dir() / "gui-token"
+
+
+def known_dirs_path():
+    return config_dir() / "gui-known-dirs.json"
 
 
 def server_record(port):
@@ -133,10 +155,12 @@ def valid_name(name):
 class App:
     def __init__(self, runs_dir, serve=True, token=None, max_cpus=None):
         self.runs_dir = Path(runs_dir).expanduser().resolve()
+        self.known_dirs = [self.runs_dir]   # the scheduler looks after all of these
         if serve:
             self.runs_dir.mkdir(parents=True, exist_ok=True)
-        self.known_dirs = [self.runs_dir]   # the scheduler looks after all of these
-        self.token = token or secrets.token_urlsafe(18)
+            self.known_dirs += [p for p in self.saved_dirs() if p != self.runs_dir]
+        self.fixed_token = token or secrets.token_urlsafe(18)
+        self.follows_token_file = False     # set by serve(), if it uses the one in the file
         self.max_cpus = max_cpus or os.cpu_count() or 1
         self.lock = threading.Lock()
         self.schedule_lock = threading.Lock()
@@ -144,6 +168,32 @@ class App:
         self.plot_lock = threading.Lock()   # matplotlib is not thread-safe
         self.results_lock = threading.Lock()
         self.nuclear_cache = {}             # (model, A, Z, nn) -> the generator's table values
+
+    @property
+    def token(self):
+        """The token in force: a running server follows gcf gui --new-token."""
+        if self.follows_token_file:
+            try:
+                current = token_path().read_text().strip()
+                if current and token_path().stat().st_mode & 0o077 == 0:
+                    return current
+            except OSError:
+                pass
+        return self.fixed_token
+
+    @staticmethod
+    def saved_dirs():
+        try:
+            return [Path(p) for p in json.loads(known_dirs_path().read_text()) if Path(p).is_dir()]
+        except (OSError, ValueError, TypeError):
+            return []
+
+    def save_dirs(self):
+        try:
+            known_dirs_path().parent.mkdir(parents=True, exist_ok=True)
+            known_dirs_path().write_text(json.dumps([str(p) for p in self.known_dirs]))
+        except OSError:
+            pass
 
     # -- runs ----------------------------------------------------------------
     def run_dir(self, name):
@@ -158,13 +208,7 @@ class App:
                 if s.get("pid") and runner.proc_is(s["pid"], s.get("pid_start"))]
 
     def run_summary(self, d):
-        st = {}
-        status = d / "status.json"
-        if status.is_file():
-            try:
-                st = json.loads(status.read_text())
-            except (OSError, json.JSONDecodeError):
-                st = {}
+        st = runner.read_status(d)
         state = st.get("state", "starting" if (d / "submitted.toml").exists() else "unknown")
         with self.lock:
             child = self.children.get(str(d))
@@ -192,9 +236,11 @@ class App:
         outputs = {}
         for stage, path in st.get("outputs", {}).items():
             p = Path(path)
+            png = p.with_suffix(".png")
             outputs[stage] = {"path": path, "exists": p.is_file(),
                               "size": p.stat().st_size if p.is_file() else 0,
-                              "plot": p.with_suffix(".png").is_file()}
+                              # A plot older than its file shows another sample.
+                              "plot": png.is_file() and p.is_file() and png.stat().st_mtime >= p.stat().st_mtime}
         jobs = st.get("jobs", [])
         finished = sum(all(step.get("state") == "done" for step in job) for job in jobs)
         stopped = state in ("stopped", "failed", "cancelled", "partial")
@@ -218,7 +264,7 @@ class App:
         for name in ("config.toml", "submitted.toml"):
             try:
                 return tomllib.loads((d / name).read_text())
-            except (OSError, tomllib.TOMLDecodeError):
+            except (OSError, ValueError):   # unreadable, not UTF-8, or not TOML
                 continue
         return {}
 
@@ -229,7 +275,7 @@ class App:
             cfg = d / "submitted.toml"
         try:
             c = tomllib.loads(cfg.read_text())
-        except (OSError, tomllib.TOMLDecodeError):
+        except (OSError, ValueError):
             return ""
         parts = []
         g, f, e, r, program = c.get("generate"), c.get("fsi"), c.get("eic"), c.get("run", {}), c.get("program")
@@ -299,21 +345,33 @@ class App:
                     runs.append(self.run_summary(d))
             except OSError:
                 continue           # vanished between listing and reading
+            except Exception as e:  # noqa: BLE001 - one damaged run must not hide the others
+                runs.append(self.broken_run(d, e))
         return sorted(runs, key=lambda r: r["mtime"], reverse=True)
+
+    @staticmethod
+    def broken_run(d, problem):
+        return {"name": d.name, "state": "unknown", "error": f"this run's files can't be read: {problem}", "hint": None,
+                "started": None, "finished": None, "stages": {}, "outputs": {}, "orphans": 0, "jobs_total": 0,
+                "jobs_finished": 0, "workers": None, "partial": None, "resumable": False, "mergeable": False,
+                "note": None, "scan": None, "setup": "", "mtime": 0}
 
     def run_details(self, name):
         d = self.run_dir(name)
         if not d.is_dir():
             raise FileNotFoundError(name)
-        out = self.run_summary(d)
         try:
-            out["jobs"] = json.loads((d / "status.json").read_text()).get("jobs", [])
-        except (OSError, json.JSONDecodeError):
-            out["jobs"] = []
+            out = self.run_summary(d)
+        except OSError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            out = self.broken_run(d, e)
+        jobs = runner.read_status(d).get("jobs")
+        out["jobs"] = jobs if isinstance(jobs, list) else []
         cfg = d / "config.toml"
         if not cfg.exists():
             cfg = d / "submitted.toml"
-        out["config"] = cfg.read_text() if cfg.exists() else None
+        out["config"] = cfg.read_text(errors="replace") if cfg.exists() else None
         out["config_data"] = None
         if cfg.exists():
             try:
@@ -472,8 +530,11 @@ class App:
 
     @staticmethod
     def submit(d, cfg):
-        d.mkdir(parents=True)
-        (d / "submitted.toml").write_text(config.dumps(cfg, comment="Submitted from gcf gui"))
+        d.mkdir(parents=True, mode=0o755)
+        runner.private(d)
+        saved = d / "submitted.toml"
+        saved.write_text(config.dumps(cfg, comment="Submitted from gcf gui"))
+        runner.private(saved)
         (d / "queued").write_text("new")
 
     # -- scans ---------------------------------------------------------------
@@ -516,7 +577,7 @@ class App:
             raise ValueError("; ".join(problems[:4]) + (f"; and {len(problems) - 4} more" if len(problems) > 4 else ""))
         path.parent.mkdir(exist_ok=True)
         path.write_text(json.dumps({
-            "name": group, "created": time.time(),
+            "name": group, "created": time.time(), "seed": points[0][2]["run"]["seed"],
             "axes": [{"path": a["path"], "label": scan.axis_label(a["path"])} for a in axes],
             "points": [{"name": name, "values": values} for name, values, _ in points]}, indent=1))
         for name, _, cfg in points:
@@ -546,7 +607,10 @@ class App:
             states = {}
             for p in s["points"]:
                 d = self.runs_dir / p["name"]
-                state = self.run_summary(d)["state"] if self.is_run(d) else "deleted"
+                try:
+                    state = self.run_summary(d)["state"] if self.is_run(d) else "deleted"
+                except Exception:  # noqa: BLE001 - one damaged run must not hide the rest
+                    state = "unknown"
                 states[state] = states.get(state, 0) + 1
             out.append({"name": s["name"], "points": len(s["points"]), "states": states,
                         "axes": [a["label"] for a in s["axes"]]})
@@ -612,17 +676,44 @@ class App:
             os.rename(marker, claimed)
         except OSError:
             return False
-        resume = claimed.read_text().strip() == "resume"
-        if resume:
-            # What the page shows until the new supervisor has written its own status.
+        try:
+            resume = claimed.read_text().strip() == "resume"
+            if not safe_to_run(d):
+                raise ValueError(f"not started: others can write to this run's directory or config, and what is in "
+                                 f"them would run as you. If you trust them: chmod -R go-w {d}")
+            if resume:
+                # What the page shows until the new supervisor has written its own status.
+                st = runner.read_status(d)
+                st.update(state="starting", error=None)
+                runner.write_status_file(d, st)
+            self.spawn(d, resume)
+        except (OSError, ValueError) as e:
             st = runner.read_status(d)
-            st.update(state="starting", error=None, partial=None)
-            tmp = d / "status.json.tmp"
-            tmp.write_text(json.dumps(st, indent=1))
-            tmp.replace(d / "status.json")
-        self.spawn(d, resume)
+            st.update(state="failed", name=d.name, error=str(e))
+            try:
+                runner.write_status_file(d, st)
+            except OSError:
+                pass
+            claimed.unlink(missing_ok=True)
+            return False
         claimed.unlink(missing_ok=True)
         return True
+
+    def recover_claims(self):
+        """A server that died between claiming a queued run and starting it left a marker;
+        back in the queue with it."""
+        for base in self.known_dirs:
+            try:
+                entries = list(base.iterdir())
+            except OSError:
+                continue
+            for d in entries:
+                claimed = d / ".starting"
+                try:
+                    if time.time() - claimed.stat().st_mtime > 60 and not runner.is_locked(d):
+                        os.rename(claimed, d / "queued")
+                except OSError:
+                    continue
 
     def spawn(self, d, resume):
         command = [sys.executable, str(runner.REPO / "gcf"), "run", "-q"]
@@ -686,11 +777,14 @@ class App:
         with self.schedule_lock:
             free = self.max_cpus - self.cpus_in_use()
             for d in self.queued_runs():
-                need = self.run_cpus(d)
-                if need > free:
-                    break          # strictly in order, so a large run isn't overtaken forever
-                if self.launch(d):
-                    free -= need
+                try:
+                    need = self.run_cpus(d)
+                    if need > free:
+                        break      # strictly in order, so a large run isn't overtaken forever
+                    if self.launch(d):
+                        free -= need
+                except Exception as e:  # noqa: BLE001 - a problem with one run must not stop the queue
+                    print(f"gcf gui: run {d.name}: {e!r}", file=sys.stderr, flush=True)
 
     def reattach(self):
         """Continue the runs that were interrupted rather than stopped: their status
@@ -703,28 +797,36 @@ class App:
             except OSError:
                 continue
             for d in entries:
-                st = runner.read_status(d)
-                if st.get("state") not in ("running", "merging") or runner.proc_is(st.get("pid"), st.get("pid_start")):
-                    continue
-                if not (d / "config.toml").exists() or runner.is_locked(d) or (d / "queued").exists():
-                    continue
-                count_file = d / ".auto_resumes"
-                try:
-                    count = int(count_file.read_text())
-                except (OSError, ValueError):
-                    count = 0
-                if count >= MAX_AUTO_RESUMES:
-                    continue       # it shows as stopped, and a person decides
-                count_file.write_text(str(count + 1))
-                print(f"gcf gui: run {d.name} was interrupted; resuming it", file=sys.stderr, flush=True)
-                if self.live_steps(st):
-                    self.spawn(d, True)
-                else:
-                    (d / "queued").write_text("resume")
+                try:             # a problem with one run must not stop the others
+                    self.reattach_run(d)
+                except Exception as e:  # noqa: BLE001
+                    print(f"gcf gui: run {d.name}: {e!r}", file=sys.stderr, flush=True)
+
+    def reattach_run(self, d):
+        st = runner.read_status(d)
+        if st.get("state") not in ("running", "merging") or runner.proc_is(st.get("pid"), st.get("pid_start")):
+            return
+        if not (d / "config.toml").exists() or runner.is_locked(d) or (d / "queued").exists() \
+                or not safe_to_run(d):
+            return
+        count_file = d / ".auto_resumes"
+        try:
+            count = int(count_file.read_text())
+        except (OSError, ValueError):
+            count = 0
+        if count >= MAX_AUTO_RESUMES:
+            return             # it shows as stopped, and a person decides
+        count_file.write_text(str(count + 1))
+        print(f"gcf gui: run {d.name} was interrupted; resuming it", file=sys.stderr, flush=True)
+        if self.live_steps(st):
+            self.spawn(d, True)
+        else:
+            (d / "queued").write_text("resume")
 
     def scheduler(self):
         while True:
             try:
+                self.recover_claims()
                 self.reattach()
                 self.schedule()
             except Exception as e:  # noqa: BLE001 - the page must outlive any one problem
@@ -760,9 +862,9 @@ class App:
         if not self.is_run(d):
             raise FileNotFoundError(name)
         st = self.run_summary(d)
-        if st["state"] in RUNNING_STATES or st["orphans"] or runner.is_locked(d):
+        if st["state"] in RUNNING_STATES or st["orphans"]:
             raise ValueError("the run is still running")
-        return runner.merge_finished(d)
+        return runner.merge_finished(d)     # takes the run's lock itself
 
     def cancel_run(self, name):
         d = self.run_dir(name)
@@ -771,7 +873,7 @@ class App:
             marker.unlink(missing_ok=True)
             st = runner.read_status(d)
             st.update(state="cancelled", name=name)
-            (d / "status.json").write_text(json.dumps(st, indent=1))
+            runner.write_status_file(d, st)
             return
         try:
             st = json.loads((d / "status.json").read_text())
@@ -916,6 +1018,7 @@ class App:
             self.runs_dir = p
             if p not in self.known_dirs:
                 self.known_dirs.append(p)
+        self.save_dirs()
         return str(p)
 
     def preview(self, raw):
@@ -976,12 +1079,6 @@ def make_handler(app):
         # -- helpers ---------------------------------------------------------
         def authorized(self, query):
             token = self.headers.get("X-GCF-Token") or query.get("token", [""])[0]
-            if not token:
-                cookie = self.headers.get("Cookie", "")
-                for part in cookie.split(";"):
-                    k, _, v = part.strip().partition("=")
-                    if k == f"gcf_token_{self.server.server_address[1]}":
-                        token = v
             if not token.isascii():
                 return False
             return secrets.compare_digest(token, app.token)
@@ -1003,7 +1100,7 @@ def make_handler(app):
         def send_error_json(self, msg, status=HTTPStatus.BAD_REQUEST):
             self.send_json({"error": msg}, status)
 
-        def send_file(self, path, download=False, cookie=None):
+        def send_file(self, path, download=False):
             """Send a file of any size, a piece at a time, honouring a simple Range
             request so that an interrupted download of an event file can continue."""
             path = Path(path)
@@ -1029,8 +1126,6 @@ def make_handler(app):
                 self.send_header("Content-Range", f"bytes {start}-{end}/{size}")
             if download:
                 self.send_header("Content-Disposition", f'attachment; filename="{path.name}"')
-            if cookie:
-                self.send_header("Set-Cookie", cookie)
             self.end_headers()
             with open(path, "rb") as f:
                 f.seek(start)
@@ -1068,11 +1163,9 @@ def make_handler(app):
             parts = [urllib.parse.unquote(p) for p in url.path.strip("/").split("/") if p]
             try:
                 if not parts:
-                    # The page keeps using the token from its URL; the cookie
-                    # lets a bookmark without the token keep working.
-                    return self.send_file(STATIC / "index.html",
-                                          cookie=f"gcf_token_{self.server.server_address[1]}={app.token}; "
-                                                 "HttpOnly; SameSite=Strict; Path=/")
+                    # No cookie: browsers send a localhost cookie to every port, so the
+                    # token stays in the address and in the page's own requests.
+                    return self.send_file(STATIC / "index.html")
                 if len(parts) == 2 and parts[0] == "static" and MODULE_RE.fullmatch(parts[1]):
                     return self.send_file(STATIC / parts[1])
                 if len(parts) == 3 and parts[:2] == ["api", "compare"] and COMPARE_FILE_RE.fullmatch(parts[2]):
@@ -1138,7 +1231,18 @@ def make_handler(app):
             query = urllib.parse.parse_qs(url.query)
             if not self.authorized(query):
                 return self.send_error_json("forbidden", HTTPStatus.FORBIDDEN)
+            # Only the page's own requests: no other site, and JSON, which a plain form can't send.
+            origin = self.headers.get("Origin")
+            if origin and urllib.parse.urlparse(origin).netloc != self.headers.get("Host"):
+                return self.send_error_json("forbidden: request from another site", HTTPStatus.FORBIDDEN)
+            if self.headers.get("Content-Type", "").split(";")[0].strip() != "application/json":
+                return self.send_error_json("expected JSON", HTTPStatus.UNSUPPORTED_MEDIA_TYPE)
             parts = [urllib.parse.unquote(p) for p in url.path.strip("/").split("/") if p]
+            # A tab still showing another runs folder must not act on a same-named run here.
+            claimed = self.headers.get("X-GCF-Runs-Dir")
+            if claimed and parts != ["api", "runs-dir"] and urllib.parse.unquote(claimed) != str(app.runs_dir):
+                return self.send_error_json("the runs folder was changed in another tab; try again once this "
+                                            "page has caught up", HTTPStatus.CONFLICT)
             try:
                 body = self.read_json()
                 if parts == ["api", "compare"]:
@@ -1208,6 +1312,10 @@ def banner(app, host, port):
 
 def serve(host, port, runs_dir, token=None, max_cpus=None, quiet=False):
     app = App(runs_dir, token=token, max_cpus=max_cpus)
+    try:
+        app.follows_token_file = token_path().read_text().strip() == token
+    except OSError:
+        pass
     try:
         server = ThreadingHTTPServer((host, port), make_handler(app))
     except OSError as e:
