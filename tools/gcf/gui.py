@@ -16,6 +16,7 @@ import os
 import re
 import shlex
 import shutil
+import stat
 import tomllib
 import secrets
 import signal
@@ -131,13 +132,34 @@ class UnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer)
         return conn, ("tunnel", 0)     # what the handlers expect of a client address
 
 
+def socket_dir():
+    """Where the page's socket goes: the config directory, closed to others; or, if
+    that path is too long for a socket (about 100 characters), /tmp/gcf-<uid>, if it
+    is yours and closed to others. None if neither will do."""
+    for d, create in ((config_dir(), True), (Path(f"/tmp/gcf-{os.getuid()}"), True)):
+        if len(str(d / "gui-65535.sock")) > 100:
+            continue
+        try:
+            if create:
+                d.mkdir(mode=0o700, parents=True, exist_ok=True)
+            st = d.lstat()
+            if not stat.S_ISDIR(st.st_mode) or st.st_uid != os.getuid():
+                continue                # someone else's: not for your page
+            if st.st_mode & 0o077:
+                os.chmod(d, 0o700)      # the socket's protection: nobody else may enter
+            return d
+        except OSError:
+            continue
+    return None
+
+
 def open_socket(app, port):
     """The page's socket server: gui.sock, or gui-<port>.sock when another page of
     yours has that. None if it can't be made; the TCP port still works."""
     try:
-        d = config_dir()
-        d.mkdir(parents=True, exist_ok=True)
-        os.chmod(d, 0o700)              # the socket's protection: nobody else may enter
+        d = socket_dir()
+        if d is None:
+            return None
         for path in (d / "gui.sock", d / f"gui-{port}.sock"):
             if path.exists():
                 with socket.socket(socket.AF_UNIX) as probe:

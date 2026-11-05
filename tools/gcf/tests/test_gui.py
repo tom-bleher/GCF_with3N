@@ -1754,6 +1754,18 @@ class TestOpening(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertEqual(Path(self.record()["socket"]).name, "gui.sock")
 
+    def test_a_config_path_too_long_for_a_socket_uses_a_private_one_in_tmp(self):
+        long_config = self.tmp / ("x" * 90)
+        out = self.gui(SSH_CONNECTION="10.0.0.1 5000 10.0.0.2 22", XDG_CONFIG_HOME=str(long_config))
+        self.assertEqual(out.returncode, 0, out.stderr)
+        rec = json.loads(next((long_config / "gcf").glob("gui-*.json")).read_text())
+        sock = Path(rec["socket"])
+        self.assertEqual(sock.parent, Path(f"/tmp/gcf-{os.getuid()}"))
+        self.assertEqual(sock.parent.stat().st_mode & 0o777, 0o700)
+        self.assertIn(f"LocalForward 8765 {sock}", out.stdout)
+        subprocess.run([sys.executable, str(REPO / "gcf"), "gui", "--stop"], capture_output=True, timeout=30,
+                       env={**self.env, "XDG_CONFIG_HOME": str(long_config)})
+
     def test_a_second_page_gets_its_own_socket_and_laptop_port(self):
         self.assertEqual(self.gui().returncode, 0)
         other = harness.free_port()
