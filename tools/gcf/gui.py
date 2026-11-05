@@ -26,6 +26,7 @@ import threading
 import time
 import urllib.parse
 from http import HTTPStatus
+import socketserver
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
@@ -109,6 +110,90 @@ def server_record(port):
     return config_dir() / f"gui-{port}.json"
 
 
+# Over SSH the page is reached through a socket file only you can open, which an SSH
+# LocalForward maps to this port on the laptop: unlike the TCP port, it is the same at
+# every start, so one line in the laptop's ~/.ssh/config does for good, and no other
+# user of the machine can reach the page through it.
+LAPTOP_PORT = 8765
+
+
+def tunnel_used_path():
+    """Exists once a request has come through the socket: the laptop has the tunnel."""
+    return config_dir() / "gui-tunnel-used"
+
+
+class UnixHTTPServer(socketserver.ThreadingMixIn, socketserver.UnixStreamServer):
+    daemon_threads = True
+    is_tunnel = True
+
+    def get_request(self):
+        conn, _ = self.socket.accept()
+        return conn, ("tunnel", 0)     # what the handlers expect of a client address
+
+
+def open_socket(app, port):
+    """The page's socket server: gui.sock, or gui-<port>.sock when another page of
+    yours has that. None if it can't be made; the TCP port still works."""
+    try:
+        d = config_dir()
+        d.mkdir(parents=True, exist_ok=True)
+        os.chmod(d, 0o700)              # the socket's protection: nobody else may enter
+        for path in (d / "gui.sock", d / f"gui-{port}.sock"):
+            if path.exists():
+                with socket.socket(socket.AF_UNIX) as probe:
+                    try:
+                        probe.connect(str(path))
+                        continue        # another page of yours
+                    except OSError:
+                        path.unlink()   # left by a page that was killed
+            server = UnixHTTPServer(str(path), make_handler(app))
+            os.chmod(path, 0o600)
+            return server
+    except OSError:
+        pass
+    return None
+
+
+def laptop_port(sock, port):
+    return LAPTOP_PORT if Path(sock).name == "gui.sock" else port
+
+
+def over_ssh():
+    """Reached over plain SSH: the browser is on another machine, and nothing here opens it."""
+    return bool(os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY")) and not os.environ.get("BROWSER")
+
+
+def how_to_open(port, token, sock=None):
+    """What to do to see the page, for whoever runs gcf gui, as lines of text."""
+    user = os.environ.get("USER", "you")
+    machine = os.uname().nodename
+    if sock and over_ssh():
+        lp = laptop_port(sock, port)
+        lines = ["Cmd-click (Ctrl-click on Linux) to open it in your laptop's browser:",
+                 f"    http://localhost:{lp}/?token={token}"]
+        if not tunnel_used_path().exists():
+            address = (os.environ.get("SSH_CONNECTION") or "").split()
+            lines += ["", "That link needs a tunnel, which you set up once. Add this to ~/.ssh/config on your laptop",
+                      "(or only its LocalForward line, if you have a Host block for this machine there),",
+                      "then log in to this machine again:", "",
+                      f"    Host {machine}"]
+            if len(address) >= 3:
+                lines.append(f"        HostName {address[2]}")
+            lines += [f"        User {user}", f"        LocalForward {lp} {sock}", "",
+                      "This message goes away once the link has worked. For this time only, on your laptop:",
+                      f"    ssh -N -L {lp}:{sock} {user}@{address[2] if len(address) >= 3 else machine}"]
+        return lines
+    home = Path.home()
+    repo = runner.REPO.relative_to(home) if runner.REPO.is_relative_to(home) else runner.REPO
+    return ["On your laptop, open an SSH tunnel to this machine:",
+            f"    ssh -N -L {port}:localhost:{port} {user}@{machine}",
+            "(VS Code Remote-SSH forwards the port for you), then browse to",
+            f"    http://localhost:{port}/?token={token}", "",
+            "Or, on your laptop, one command that starts the page if needed, opens the tunnel and your browser:",
+            f"    ssh {user}@{machine} cat {shlex.quote(str(repo / 'tools/gcf/gcf-open'))} | sh -s {user}@{machine}"
+            + ("" if str(repo) == "src/GCF_with3N" else f" {shlex.quote(str(repo))}")]
+
+
 def free_port(first=FIRST_PORT, count=50):
     """The first port from `first` that nothing listens on: others may run this too."""
     for port in range(first, first + count):
@@ -162,6 +247,7 @@ class App:
             self.known_dirs += [p for p in self.saved_dirs() if p != self.runs_dir]
         self.fixed_token = token or secrets.token_urlsafe(18)
         self.follows_token_file = False     # set by serve(), if it uses the one in the file
+        self.tunnel_used = False
         self.max_cpus = max_cpus or os.cpu_count() or 1
         self.lock = threading.Lock()
         self.schedule_lock = threading.Lock()
@@ -1082,7 +1168,14 @@ def make_handler(app):
             token = self.headers.get("X-GCF-Token") or query.get("token", [""])[0]
             if not token.isascii():
                 return False
-            return secrets.compare_digest(token, app.token)
+            ok = secrets.compare_digest(token, app.token)
+            if ok and getattr(self.server, "is_tunnel", False) and not app.tunnel_used:
+                app.tunnel_used = True  # the laptop has the tunnel: stop explaining it
+                try:
+                    tunnel_used_path().touch()
+                except OSError:
+                    pass
+            return ok
 
         def end_headers(self):
             self.send_header("Referrer-Policy", "no-referrer")
@@ -1295,20 +1388,8 @@ def make_handler(app):
     return Handler
 
 
-def banner(app, host, port):
-    user = os.environ.get("USER", "you")
-    machine = os.uname().nodename
-    url = f"http://localhost:{port}/?token={app.token}"
-    home = Path.home()
-    repo = runner.REPO.relative_to(home) if runner.REPO.is_relative_to(home) else runner.REPO
-    lines = [f"gcf gui: runs are written to {app.runs_dir}", "",
-             "On your laptop, open an SSH tunnel to this machine:",
-             f"    ssh -N -L {port}:localhost:{port} {user}@{machine}",
-             "(VS Code Remote-SSH forwards the port for you), then browse to",
-             f"    {url}", "",
-             "Or, on your laptop, one command that starts the page if needed, opens the tunnel and your browser:",
-             f"    ssh {user}@{machine} cat {shlex.quote(str(repo / 'tools/gcf/gcf-open'))} | sh -s {user}@{machine}"
-             + ("" if str(repo) == "src/GCF_with3N" else f" {shlex.quote(str(repo))}"), "",
+def banner(app, host, port, sock=None):
+    lines = [f"gcf gui: runs are written to {app.runs_dir}", "", *how_to_open(port, app.token, sock), "",
              "The token is the password: don't share this URL, and don't redirect this output to a file others can read."]
     if host not in ("127.0.0.1", "localhost", "::1"):
         lines += ["", f"WARNING: listening on {host}, over plain HTTP: others on the network can read the token. "
@@ -1326,16 +1407,20 @@ def serve(host, port, runs_dir, token=None, max_cpus=None, quiet=False):
         server = ThreadingHTTPServer((host, port), make_handler(app))
     except OSError as e:
         raise runner.RunError(f"cannot listen on {host}:{port} ({e}); try --port") from None
+    tunnel = open_socket(app, port)
+    sock = tunnel.server_address if tunnel else None
+    if tunnel:
+        threading.Thread(target=tunnel.serve_forever, daemon=True).start()
     threading.Thread(target=app.scheduler, daemon=True).start()
     record = server_record(port)
     try:
         record.parent.mkdir(parents=True, exist_ok=True)
         record.write_text(json.dumps({"pid": os.getpid(), "pid_start": runner.proc_start(os.getpid()), "port": port,
-                                      "host": host, "runs_dir": str(app.runs_dir)}))
+                                      "host": host, "runs_dir": str(app.runs_dir), "socket": sock}))
     except OSError:
         pass
     if not quiet:
-        print(banner(app, host, port) + "\n\nCtrl-C or closing this terminal stops the interface; runs already started "
+        print(banner(app, host, port, sock) + "\n\nCtrl-C or closing this terminal stops the interface; runs already started "
               "keep going. To keep it up after you log out, use: gcf gui --background", flush=True)
         problems = [c for c in doctor.checks(app.runs_dir) if not c["ok"]]
         if problems:
@@ -1347,3 +1432,6 @@ def serve(host, port, runs_dir, token=None, max_cpus=None, quiet=False):
     finally:
         server.server_close()
         record.unlink(missing_ok=True)
+        if tunnel:
+            tunnel.server_close()
+            Path(sock).unlink(missing_ok=True)

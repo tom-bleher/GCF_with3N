@@ -31,19 +31,19 @@ opens it too. In short:
 ```
 ./install.sh                 # once: builds the programs and sets up the Python packages
 ./gcf doctor                 # checks that everything is ready, and says how to fix what isn't
-./gcf gui --background       # starts the page; prints an SSH command and an address
+./gcf gui --background       # starts the page; over SSH, prints a link to Cmd-click
 ```
 
-Or skip that last line, and on your laptop run one command that starts the page, opens
-the SSH tunnel and opens your browser:
+The first time, it also prints a few lines for `~/.ssh/config` on your laptop, which keep
+the link working from then on. Or, on your laptop, one command starts the page, opens a
+tunnel and opens your browser:
 
 ```
 ssh you@machine cat src/GCF_with3N/tools/gcf/gcf-open | sh -s you@machine
 ```
 
-Otherwise, on your laptop, run the `ssh -N -L ...` command `gcf gui` printed, then open
-the address in a browser, including the `?token=...` part. In a VS Code remote terminal
-the page opens by itself. The token is the password, so don't share the address.
+In a VS Code remote terminal the page opens by itself. The token in the address is the
+password, so don't share it.
 `./gcf gui --status` shows it again, and `./gcf gui --stop` stops the page.
 
 Then:

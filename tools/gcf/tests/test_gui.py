@@ -1696,7 +1696,74 @@ class TestOpening(unittest.TestCase):
         out = self.gui(SSH_CONNECTION="10.0.0.1 5000 10.0.0.2 22", DISPLAY="localhost:10.0")
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertNotIn("Sent it to your browser", out.stdout)
-        self.assertIn("tools/gcf/gcf-open | sh -s", out.stdout)
+        self.assertIn("Cmd-click", out.stdout)
+        self.assertIn("LocalForward 8765 ", out.stdout)
+
+    def socket_get(self, sock, path, token):
+        """A request through the page's socket, as an SSH LocalForward makes it."""
+        import http.client
+
+        class Connection(http.client.HTTPConnection):
+            def connect(self):
+                self.sock = socket.socket(socket.AF_UNIX)
+                self.sock.settimeout(20)
+                self.sock.connect(sock)
+        conn = Connection("localhost")
+        conn.request("GET", path, headers={"X-GCF-Token": token})
+        r = conn.getresponse()
+        r.read()
+        return r.status
+
+    def record(self):
+        recs = [json.loads(p.read_text()) for p in (self.tmp / "config/gcf").glob("gui-*.json")]
+        self.assertEqual(len(recs), 1)
+        return recs[0]
+
+    def test_over_ssh_one_line_in_the_laptops_ssh_config_does_for_good(self):
+        """The link goes to the laptop's port 8765, which LocalForward maps to a socket
+        only this user can open: the same at every start, whatever TCP port the page got."""
+        ssh = {"SSH_CONNECTION": "10.0.0.1 5000 132.66.129.78 22"}
+        out = self.gui(**ssh)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        rec = self.record()
+        sock = rec["socket"]
+        self.assertEqual(Path(sock).name, "gui.sock")
+        self.assertEqual(os.stat(sock).st_mode & 0o777, 0o600)
+        self.assertEqual(os.stat(Path(sock).parent).st_mode & 0o777, 0o700)
+        token = re.search(r"http://localhost:8765/\?token=(\S+)", out.stdout).group(1)
+        self.assertIn("HostName 132.66.129.78", out.stdout)
+        self.assertIn(f"LocalForward 8765 {sock}", out.stdout)
+        self.assertNotIn(f"localhost:{rec['port']}/?token", out.stdout.replace("localhost:8765/", ""))
+
+        self.assertEqual(self.socket_get(sock, "/api/schema", "wrong"), 403)
+        self.assertEqual(self.socket_get(sock, "/api/schema", token), 200)
+        # Once the link has worked, only the link.
+        for args in (["--status"], []):
+            again = subprocess.run([sys.executable, str(REPO / "gcf"), "gui", *args, "--runs-dir", str(self.tmp / "runs")],
+                                   env={**self.env, **ssh}, capture_output=True, text=True, timeout=60)
+            self.assertIn(f"http://localhost:8765/?token={token}", again.stdout)
+            self.assertNotIn("LocalForward", again.stdout)
+
+    def test_a_socket_left_by_a_killed_page_is_replaced(self):
+        d = self.tmp / "config/gcf"
+        d.mkdir(parents=True)
+        stale = socket.socket(socket.AF_UNIX)
+        stale.bind(str(d / "gui.sock"))
+        stale.close()                     # the file stays, with nothing listening
+        out = self.gui(SSH_CONNECTION="10.0.0.1 5000 10.0.0.2 22")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual(Path(self.record()["socket"]).name, "gui.sock")
+
+    def test_a_second_page_gets_its_own_socket_and_laptop_port(self):
+        self.assertEqual(self.gui().returncode, 0)
+        other = harness.free_port()
+        out = subprocess.run([sys.executable, str(REPO / "gcf"), "gui", "--background", "--port", str(other),
+                              "--runs-dir", str(self.tmp / "runs2")],
+                             env={**self.env, "SSH_CONNECTION": "10.0.0.1 5000 10.0.0.2 22"},
+                             capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn(f"http://localhost:{other}/?token=", out.stdout)
+        self.assertIn(f"LocalForward {other} {self.tmp / 'config/gcf'}/gui-{other}.sock", out.stdout)
 
     def test_no_browser_wins(self):
         out = self.gui("--no-browser", BROWSER=self.browser)
