@@ -31,6 +31,9 @@ from . import cli, config, results, runner, schema
 
 STATIC = Path(__file__).resolve().parent / "static"
 MODULE_RE = re.compile(r"[a-z_]+\.js\Z")
+COMPARE_DIR = ".compare"       # hidden: not a run
+COMPARE_FILE_RE = re.compile(r"[A-Za-z0-9_.+-]+\.png\Z")
+COMPARE_SCRIPT = runner.REPO / "tools/validation/compare_samples.py"
 NAME_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.+-]{0,99}\Z")
 PLACEHOLDER_STATE = "failed"
 
@@ -298,6 +301,52 @@ class App:
         with self.results_lock:
             return results.cached(path, cache, stage) or results.store(path, cache, stage, results.summarize(path))
 
+    def run_config(self, name):
+        try:
+            return tomllib.loads((self.run_dir(name) / "config.toml").read_text())
+        except (OSError, tomllib.TOMLDecodeError):
+            return {}
+
+    def compare(self, a, b, max_events=300000):
+        """tools/validation/compare_samples.py on two runs' outputs; `a` and `b` are
+        {run, stage}. Its results stay in <runs>/.compare until an output changes."""
+        if not isinstance(a, dict) or not isinstance(b, dict):
+            raise ValueError("expected samples a and b, each with a run and a stage")
+        if not isinstance(max_events, int) or isinstance(max_events, bool) or max_events < 1000:
+            raise ValueError("max_events must be at least 1000")
+        _, path_a = self.output_path(a.get("run"), a.get("stage"))
+        _, path_b = self.output_path(b.get("run"), b.get("stage"))
+        if path_a == path_b:
+            raise ValueError("choose two different samples")
+        out_dir = self.runs_dir / COMPARE_DIR
+        out_dir.mkdir(exist_ok=True)
+        stem = f"{a['run']}.{a['stage']}--{b['run']}.{b['stage']}--{max_events}"
+        js, png = out_dir / f"{stem}.json", out_dir / f"{stem}.png"
+        newest = max(Path(path_a).stat().st_mtime, Path(path_b).stat().st_mtime)
+        if not (js.is_file() and png.is_file() and js.stat().st_mtime > newest):
+            proc = subprocess.run([sys.executable, str(COMPARE_SCRIPT), path_a, path_b, "--weighted",
+                                   "--max-events", str(max_events), "--json", str(js), "-o", str(png)],
+                                  capture_output=True, text=True, timeout=3600, cwd=str(self.runs_dir))
+            if proc.returncode not in (0, 1) or not js.is_file():
+                missing = re.search(r"No module named '(\w+)'", proc.stderr)
+                raise RuntimeError(f"comparing needs the Python package {missing.group(1)}" if missing
+                                   else f"the comparison failed: {proc.stderr.strip()[-600:]}")
+        out = json.loads(js.read_text())
+        out["plot"] = png.name
+        out["a"]["name"] = f"{a['run']} ({'PWIA' if a['stage'] == 'generate' else 'with FSI'})"
+        out["b"]["name"] = f"{b['run']} ({'PWIA' if b['stage'] == 'generate' else 'with FSI'})"
+        ca, cb = self.run_config(a["run"]), self.run_config(b["run"])
+        ma, mb = ca.get("generate", {}).get("model"), cb.get("generate", {}).get("model")
+        notes = []
+        if ma and mb and ma != mb:
+            notes.append(f"These samples are from different models ({ma}, {mb}), whose Σw/attempts are not on a "
+                         "common scale (docs/PHYSICS.md), so ignore the pull.")
+        if ca.get("run", {}).get("seed") and ca["run"]["seed"] == cb.get("run", {}).get("seed") and a["run"] != b["run"]:
+            notes.append("These runs used the same seed, so they may share events. The test assumes independent "
+                         "samples and is conservative for shared ones.")
+        out["notes"] = notes
+        return out
+
     def preview(self, raw):
         raw = self.with_runs_dir(raw, self.runs_dir)
         cfg = config.validate(raw, base_dir=self.runs_dir)
@@ -411,6 +460,8 @@ def make_handler(app):
                                           cookie=f"gcf_token={app.token}; HttpOnly; SameSite=Strict; Path=/")
                 if len(parts) == 2 and parts[0] == "static" and MODULE_RE.fullmatch(parts[1]):
                     return self.send_file(STATIC / parts[1])
+                if len(parts) == 3 and parts[:2] == ["api", "compare"] and COMPARE_FILE_RE.fullmatch(parts[2]):
+                    return self.send_file(app.runs_dir / COMPARE_DIR / parts[2])
                 if parts == ["api", "schema"]:
                     return self.send_json({"schema": schema.to_json(), "examples": cli.EXAMPLES,
                                            "runs_dir": str(app.runs_dir), "cpus": os.cpu_count() or 1,
@@ -453,6 +504,8 @@ def make_handler(app):
             parts = [urllib.parse.unquote(p) for p in url.path.strip("/").split("/") if p]
             try:
                 body = self.read_json()
+                if parts == ["api", "compare"]:
+                    return self.send_json(app.compare(body.get("a"), body.get("b"), body.get("max_events", 300000)))
                 if parts == ["api", "preview"]:
                     return self.send_json({"toml": app.preview(body)})
                 if parts == ["api", "check"]:
