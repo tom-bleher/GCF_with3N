@@ -32,9 +32,12 @@ def stale_binaries():
     binary = runner.BIN_DIR / "gcf_generate"
     if not version or version == "unknown" or not binary.exists():
         return None
-    out = subprocess.run(["git", "-C", str(runner.REPO), "diff", "--name-only", version.removesuffix("-dirty"), "--", "src",
-                          ":(exclude)src/programs/genQE_FSI/Generator-R-3_06_02"],
-                         capture_output=True, text=True)
+    try:
+        out = subprocess.run(["git", "-C", str(runner.REPO), "diff", "--name-only", version.removesuffix("-dirty"), "--", "src",
+                              ":(exclude)src/programs/genQE_FSI/Generator-R-3_06_02"],
+                             capture_output=True, text=True)
+    except OSError:              # no git: nothing to compare with
+        return None
     if out.returncode != 0:
         return None
     built = binary.stat().st_mtime
@@ -86,8 +89,8 @@ def checks(runs_dir=None):
             runner.program_binary(name)
         except runner.RunError:
             missing_programs.append(name)
-    out.append(check("other generators", not missing_programs, "not built: " + ", ".join(missing_programs) if missing_programs else "",
-                     "./install.sh" if missing_programs else "", required=False))
+    # Worth a line here, not a banner: only someone who uses them needs them.
+    out.append(check("other generators", True, "not built: " + ", ".join(missing_programs) + "; ./install.sh builds them" if missing_programs else ""))
     hadd = shutil.which("hadd", path=env.get("PATH"))
     out.append(check("hadd (ROOT)", hadd, "" if hadd else "not found", "" if hadd else "./install.sh; it needs ROOT"))
     missing = [m for m in ("uproot", "awkward", "numpy", "matplotlib") if not has_module(m)]
@@ -103,6 +106,10 @@ def checks(runs_dir=None):
     writable = os.access(base, os.W_OK)
     out.append(check(f"runs directory {runs_dir}", writable, "" if writable else "not writable",
                      "" if writable else "choose another with --runs-dir"))
+    others_write = base.stat().st_uid == os.getuid() and runner.others_can_write(base)
+    out.append(check("nobody else can write to the runs directory", not others_write,
+                     f"others can write to {base}" if others_write else "",
+                     f"chmod go-w {base}" if others_write else "", required=False))
     free = shutil.disk_usage(base).free
     out.append(check("disk space", free >= LOW_DISK_BYTES, f"{free / 1e9:.0f} GB free in {base}",
                      "" if free >= LOW_DISK_BYTES else "choose another --runs-dir, or free some space", required=False))

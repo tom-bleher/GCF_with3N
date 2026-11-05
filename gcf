@@ -10,8 +10,10 @@ repo = os.path.dirname(os.path.realpath(__file__))
 
 # The Python packages install.sh sets up, if there are any: tools/gcf/setup_python.sh.
 venv = os.path.join(repo, ".venv")
-if os.path.exists(os.path.join(venv, "bin", "python3")) and os.path.realpath(sys.prefix) != os.path.realpath(venv) \
-        and "VIRTUAL_ENV" not in os.environ:
+if os.path.exists(os.path.join(venv, "pyvenv.cfg")) and os.path.exists(os.path.join(venv, "bin", "python3")) \
+        and os.path.realpath(sys.prefix) != os.path.realpath(venv) and "VIRTUAL_ENV" not in os.environ \
+        and "GCF_IN_VENV" not in os.environ:
+    os.environ["GCF_IN_VENV"] = "1"    # once only, whatever that interpreter turns out to be
     os.execv(os.path.join(venv, "bin", "python3"), [os.path.join(venv, "bin", "python3"), os.path.realpath(__file__)] + sys.argv[1:])
 
 sys.path.insert(0, os.path.join(repo, "tools"))
