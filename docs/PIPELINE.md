@@ -65,7 +65,9 @@ merged with `hadd`.
 
 A config has up to three tables. Unset options take the defaults shown by
 `gcf <command> --help`; options that don't apply to the chosen model are an
-error rather than silently ignored.
+error rather than silently ignored, both here and in `gcf_generate` itself
+(`src/programs/gcf_stages/test_model_options.py`, part of the `install.sh`
+smoke test, checks that the two agree).
 
 ```toml
 [run]
