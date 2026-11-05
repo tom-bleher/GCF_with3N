@@ -164,7 +164,7 @@ port automatically) and open the printed URL. From the page you can:
   and all) before anything starts;
 - preview or download the config, and start the run;
 - follow the runs: progress with rate and time left, live logs, output files
-  with their paths, quick-look plots drawn automatically when a run finishes,
+  with their paths, quick-look plots drawn when you open a finished run,
   cancel;
 - reuse a finished run as a template for a new one, or delete it.
 
@@ -265,8 +265,9 @@ shown by `quicklook`). FSI does not change weights.
 Each stage takes `--seed`; 0 (the default) draws a seed and prints it. `gcf`
 gives job i of a run the seed `seed + i` for generation and `seed + 1000003 + i`
 for FSI, so a run with a fixed `[run] seed` is reproducible. Each output file
-has a TNamed per stage recording the command line, seed, date and code version
-(`git describe`).
+has a TNamed per stage recording the command line, seed, date and code version:
+`git describe` of the tree when the stage was built, with `-dirty` if the code
+under `src/` (the vendored GENIE aside) differed from that commit.
 
 ## Differences from the combined programs
 

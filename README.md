@@ -12,13 +12,120 @@ stages, from config files, the command line or a web interface:
 ./install.sh                      # builds GENIE, the generators and the stages
 ./gcf example 3N > my_run.toml    # then edit it
 ./gcf run my_run.toml
-./gcf gui                         # web interface (open it through an SSH tunnel)
+./gcf gui                         # web interface, see "Using the web interface" below
 ```
 
 The FSI stage also accepts events from other generators, and lets you switch
 individual cascade channels (absorption, charge exchange, ...) off. What the
 generators compute, assumptions and expressions: [docs/PHYSICS.md](docs/PHYSICS.md). Event format, options
 and validation: [docs/PIPELINE.md](docs/PIPELINE.md).
+
+## Using the web interface
+
+`./gcf gui` starts a web page for setting up quasi-elastic runs, starting them
+and looking at the results. It runs everything through `./gcf run` and saves each
+run's config, so anything you start in the browser can be repeated from a
+terminal.
+
+The page covers the `gcf_generate` and `gcf_fsi` stages only. Run the other
+generators (`genDIS`, `genPhoto`, ...) and the EIC chain
+(`tools/run_eic_sim.sh`) from the terminal.
+
+### Start it
+
+You need the programs built with `./install.sh` and Python 3.11 or newer.
+
+The plots also need `uproot`, `awkward`, `numpy` and `matplotlib`, which
+`install.sh` does not install. The rest of the page works without them. A
+virtual environment is the simplest way to add them; activate it in the shell
+where you start the page:
+
+```
+python3 -m venv ~/gcf-venv        # on Ubuntu this needs the python3-venv package
+source ~/gcf-venv/bin/activate
+pip install uproot awkward numpy matplotlib
+```
+
+If you use `uv`, `uv venv ~/gcf-venv` and `uv pip install` do the same job.
+
+Then start the page on the machine that will run the jobs:
+
+```
+./gcf gui                                # runs are written to <repo>/runs
+./gcf gui --runs-dir /path/with/space    # choose where runs are written
+./gcf gui --port 8800                    # if the default port 8765 is taken
+```
+
+It prints an SSH tunnel command and a URL:
+
+1. On your laptop, run the `ssh -N -L ...` command it printed and leave it
+   running. VS Code Remote-SSH forwards the port for you, and you don't need a
+   tunnel if the browser runs on the same machine.
+2. Open the URL in your browser, including the `?token=...` part. The token is
+   the password, and it changes every time the page is started.
+
+Ctrl-C or closing the terminal stops the page but not the runs. Start it again
+with the same `--runs-dir` to see them, using the new URL. To keep the page up
+after you log out, start it inside `tmux`.
+
+### Set up a run
+
+1. Choose what to run at the top of the form: **Generate + FSI**, **Generate
+   only**, or **FSI on a file**.
+2. Fill in the form. The fields change with the generator model (3N, 2N or MF),
+   and the **?** next to a field explains it. **Events** is the number of
+   accepted events over all jobs. Less common settings, such as the eN cross
+   section, `sigma_CM`, the Q² window and E\*, are under **Advanced**.
+3. For FSI, choose the cascade model (hN or hA). Untick an interaction channel
+   to switch it off.
+4. Fix anything marked in red; the form checks your values as you type.
+   **Check & show config** also asks the generator to validate the settings and
+   shows the resulting config. **Download config** saves it as a TOML file.
+5. Press **Start run**. The run appears under **Runs**.
+
+For **FSI on a file**, use **Browse…** to pick an event file that has not been
+through FSI yet: a `*_pwia.root` file, or another generator's file in the
+[event-file format](docs/PIPELINE.md#event-file-format). A `*_fsi.root` file
+fails as soon as the run starts.
+
+### Follow a run and use the results
+
+Click a run to open its details:
+
+- **Progress and logs:** while it runs you see the rate, the time left and the
+  last 40 lines of each job's log. **Cancel run** stops it.
+- **Output files:** these are `<name>_pwia.root` and `<name>_fsi.root` in
+  `<runs-dir>/<name>/`, next to `config.toml` and the full logs in `logs/`. The
+  page can't download event files, so use **Copy path** and read or `scp` them
+  from the machine.
+- **Plots:** control plots are drawn when you open a finished run. Their title
+  gives the number of events, the effective number N_eff, the attempts and
+  Σw / attempts, the [quantity to compare between
+  samples](docs/PIPELINE.md#weights-and-normalization). Check N_eff before
+  trusting a shape: 4,000 3N events gave N_eff = 20 in one test.
+- **Use as template:** fills the form from that run, with a new seed.
+- **Copy run command:** copies the command that repeats the run from the
+  repository root. Add `--force` to overwrite the run, or change `name` in a
+  copy of its `config.toml` to keep both. With the saved seed and the same
+  number of jobs, you get the same events.
+- **Delete:** removes the run's whole directory, including its event files.
+
+The **docs** link at the top of the page opens the pipeline and physics
+documentation.
+
+### Things to watch for
+
+- **A passed check doesn't guarantee a good run.** It checks the options and
+  that the generator can produce events, not everything about the input. For
+  example, FSI on a `*_fsi.root` file passes and then fails when the run starts.
+- **Switching off the compound-nucleus channel does nothing in hA** (issue #177).
+- **Cancelled runs can't be resumed.** Finished job files stay in the run's
+  `chunks/` directory, unmerged. Start a new run instead.
+- **Runs don't share a CPU limit.** **Parallel jobs** is only checked against
+  the machine's CPU count for each run, so check what is already running before
+  you start another large one.
+
+More detail: [docs/PIPELINE.md](docs/PIPELINE.md#the-web-interface).
 
 ## Compile
 
