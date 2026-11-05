@@ -1,0 +1,111 @@
+#!/bin/sh
+# Open the GCF web interface from your laptop, in one command: it starts the
+# page on the remote machine if it isn't running, tunnels its port and opens
+# your browser. Run it again whenever you like: it reuses the page and a
+# tunnel that still works.
+#
+#   sh gcf-open [user@]HOST [PATH/TO/GCF_with3N] [gcf gui options]
+#
+# PATH is on HOST, relative to your home there (default: src/GCF_with3N).
+# You don't need a copy of this script; this fetches the current one:
+#
+#   ssh HOST cat src/GCF_with3N/tools/gcf/gcf-open | sh -s HOST
+#
+# Needs ssh and a POSIX shell (macOS, Linux, WSL or Git Bash). With SSH keys
+# you aren't asked for a password. $BROWSER, if set, opens the page.
+set -eu
+
+host=${1:-}
+if [ -z "$host" ] || [ "$host" = "-h" ] || [ "$host" = "--help" ]; then
+    sed -n '2,17s/^# \{0,1\}//p' "$0" 2>/dev/null || echo "usage: gcf-open [user@]HOST [PATH/TO/GCF_with3N] [gcf gui options]"
+    exit 2
+fi
+shift
+repo=src/GCF_with3N
+if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
+    repo=$1
+    shift
+fi
+repo=${repo#\~/}
+
+quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
+remote="cd $(quote "$repo") && ./gcf gui --background --no-browser"
+for arg in "$@"; do
+    remote="$remote $(quote "$arg")"
+done
+
+echo "Starting the page on $host (or finding it running)..."
+if ! out=$(ssh "$host" "$remote" 2>&1); then
+    printf '%s\n' "$out" >&2
+    echo "gcf-open: that failed on $host; is $repo the GCF_with3N checkout there?" >&2
+    exit 1
+fi
+url=$(printf '%s\n' "$out" | grep -o 'http://localhost:[0-9]*/?token=[A-Za-z0-9_-]*' | head -n 1 || true)
+if [ -z "$url" ]; then
+    printf '%s\n' "$out" >&2
+    echo "gcf-open: no address in what $host printed" >&2
+    exit 1
+fi
+port=${url#http://localhost:}
+port=${port%%/*}
+token=${url#*token=}
+
+# Whether localhost:$1 already reaches this very page, through a tunnel from earlier.
+works() {
+    command -v curl >/dev/null 2>&1 &&
+        curl -fs -o /dev/null -m 5 -H "X-GCF-Token: $token" "http://localhost:$1/api/schema"
+}
+
+# A tunnel from earlier first; else a new one, on the first port free here.
+local_port=
+lp=$port
+while [ "$lp" -lt $((port + 20)) ]; do
+    if works "$lp"; then
+        local_port=$lp
+        break
+    fi
+    lp=$((lp + 1))
+done
+lp=$port
+while [ -z "$local_port" ] && [ "$lp" -lt $((port + 20)) ]; do
+    # A port taken here, by another program or an old tunnel, means: try the next one.
+    if ssh -f -N -o ExitOnForwardFailure=yes -L "$lp:localhost:$port" "$host" 2>/dev/null; then
+        tries=0
+        while [ $tries -lt 50 ] && ! works "$lp"; do
+            sleep 0.2
+            tries=$((tries + 1))
+        done
+        local_port=$lp
+        break
+    fi
+    lp=$((lp + 1))
+done
+if [ -z "$local_port" ]; then
+    echo "gcf-open: could not open a tunnel to port $port on $host" >&2
+    exit 1
+fi
+
+url="http://localhost:$local_port/?token=$token"
+opened=yes
+if [ -n "${BROWSER:-}" ]; then
+    $BROWSER "$url" >/dev/null 2>&1 &
+elif [ "$(uname -s)" = Darwin ]; then
+    open "$url"
+elif command -v wslview >/dev/null 2>&1; then
+    wslview "$url"
+elif grep -qi microsoft /proc/version 2>/dev/null; then
+    cmd.exe /c start "" "$url" >/dev/null 2>&1
+elif command -v xdg-open >/dev/null 2>&1; then
+    xdg-open "$url" >/dev/null 2>&1 &
+elif command -v start >/dev/null 2>&1; then
+    start "$url"
+else
+    opened=
+fi
+if [ -n "$opened" ]; then
+    echo "Opened $url"
+else
+    echo "Open this address in your browser: $url"
+fi
+echo "The tunnel stays open in the background; run this again any time to get back to the page."
+echo "The token is the password: don't share the address."

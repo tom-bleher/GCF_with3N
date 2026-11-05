@@ -14,6 +14,7 @@ import json
 import mimetypes
 import os
 import re
+import shlex
 import shutil
 import tomllib
 import secrets
@@ -1298,11 +1299,16 @@ def banner(app, host, port):
     user = os.environ.get("USER", "you")
     machine = os.uname().nodename
     url = f"http://localhost:{port}/?token={app.token}"
+    home = Path.home()
+    repo = runner.REPO.relative_to(home) if runner.REPO.is_relative_to(home) else runner.REPO
     lines = [f"gcf gui: runs are written to {app.runs_dir}", "",
              "On your laptop, open an SSH tunnel to this machine:",
              f"    ssh -N -L {port}:localhost:{port} {user}@{machine}",
              "(VS Code Remote-SSH forwards the port for you), then browse to",
              f"    {url}", "",
+             "Or, on your laptop, one command that starts the page if needed, opens the tunnel and your browser:",
+             f"    ssh {user}@{machine} cat {shlex.quote(str(repo / 'tools/gcf/gcf-open'))} | sh -s {user}@{machine}"
+             + ("" if str(repo) == "src/GCF_with3N" else f" {shlex.quote(str(repo))}"), "",
              "The token is the password: don't share this URL, and don't redirect this output to a file others can read."]
     if host not in ("127.0.0.1", "localhost", "::1"):
         lines += ["", f"WARNING: listening on {host}, over plain HTTP: others on the network can read the token. "

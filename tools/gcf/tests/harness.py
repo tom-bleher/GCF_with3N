@@ -61,7 +61,7 @@ class Gui:
         self.env = dict(os.environ, XDG_CONFIG_HOME=str(Path(self.tmp) / "config"))
         self.proc = subprocess.Popen(
             [sys.executable, str(REPO / "gcf"), "gui", "--port", str(self.port),
-             "--runs-dir", str(self.runs_dir), *args],
+             "--runs-dir", str(self.runs_dir), "--no-browser", *args],
             stdout=out, stderr=subprocess.STDOUT, start_new_session=True, env=self.env)
         out.close()
         deadline = time.time() + 20
