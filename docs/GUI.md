@@ -26,8 +26,24 @@ Do this once, on the machine that will run the jobs:
 ./gcf doctor         # checks that everything is ready, and says how to fix what isn't
 ```
 
-Then, **on your laptop**, one command starts the page (if it isn't running), opens an
-SSH tunnel to it and opens your browser:
+Then start the page:
+
+```bash
+./gcf gui --background
+```
+
+Logged in over SSH, it prints a link: **Cmd-click it** (Ctrl-click on Linux) and the page
+opens in your laptop's browser. The first time, it also prints a few lines to add to
+`~/.ssh/config` on your laptop, which open the tunnel each time you log in; once the link
+has worked, it prints only the link. The tunnel goes to a socket file of yours that only
+you can open, so the link's port is the same at every start and nobody else on the machine
+can reach your page through it. `./gcf gui --status` prints the link again.
+
+In a VS Code remote terminal, or on a desktop you're sitting at, the page opens by itself
+(`--no-browser` stops that).
+
+Without changing your SSH config, **on your laptop** one command starts the page (if it
+isn't running), opens a tunnel to it and opens your browser:
 
 ```bash
 ssh you@machine cat src/GCF_with3N/tools/gcf/gcf-open | sh -s you@machine
@@ -38,22 +54,8 @@ and `gcf gui` options after that. Run it again whenever you like: it reuses the 
 a tunnel that still works. It needs a POSIX shell (macOS, Linux, WSL or Git Bash), and
 with SSH keys it doesn't ask for your password.
 
-Or, on the machine:
-
-```bash
-./gcf gui --background
-```
-
-In a VS Code remote terminal, or on a desktop you're sitting at, this opens the page in
-your browser by itself (`--no-browser` stops that). Otherwise it prints an SSH command
-and an address:
-
-1. On your laptop, run the `ssh -N -L ...` command it printed and leave it running.
-   VS Code Remote-SSH forwards the port for you, and you don't need a tunnel if the
-   browser runs on the same machine.
-2. Open the address in your browser, including the `?token=...` part. The token is
-   the password, so don't share the address. It stays the same when the page
-   restarts, so you can bookmark it.
+The address includes a `?token=...` part. The token is the password, so don't share the
+address. It stays the same when the page restarts, so you can bookmark it.
 
 `./gcf gui --status` shows the address again, and `./gcf gui --stop` stops the page.
 Stopping the page doesn't stop your runs.

@@ -439,17 +439,16 @@ def cmd_gui(args):
                 os.kill(rec["pid"], signal.SIGTERM)
                 print(f"Stopped the gcf gui on port {rec['port']}. Runs already started keep going.")
             else:
-                print(f"gcf gui is running, with runs in {rec['runs_dir']}:\n"
-                      f"    http://localhost:{rec['port']}/?token={token}\n"
-                      f"It is on {os.uname().nodename}; from your laptop, first: "
-                      f"ssh -N -L {rec['port']}:localhost:{rec['port']} {os.environ.get('USER', 'you')}@{os.uname().nodename}")
+                print(f"gcf gui is running on {os.uname().nodename}, with runs in {rec['runs_dir']}.\n")
+                print("\n".join(gui.how_to_open(rec["port"], token, rec.get("socket"))))
         return True
     runs_dir = Path(args.runs_dir).expanduser().resolve() if args.runs_dir else runner.default_runs_dir().resolve()
     same = [rec for rec in servers if Path(rec["runs_dir"]) == runs_dir]
     if same:
         rec = same[0]
         url = f"http://localhost:{rec['port']}/?token={token}"
-        print(f"Already running, with runs in {rec['runs_dir']}:\n    {url}")
+        print(f"Already running, with runs in {rec['runs_dir']}.\n")
+        print("\n".join(gui.how_to_open(rec["port"], token, rec.get("socket"))))
         if open_browser(url, args.browser):
             print("Sent it to your browser; if no window opens, use the address above.")
         return True
@@ -468,7 +467,7 @@ def cmd_gui(args):
             time.sleep(0.1)
         if not gui.read_server(port):
             raise runner.RunError(f"the interface did not start; see {log}")
-        print(gui.banner(gui.App(runs_dir, serve=False, token=token), args.host, port))
+        print(gui.banner(gui.App(runs_dir, serve=False, token=token), args.host, port, gui.read_server(port).get("socket")))
         print(f"\nRunning on its own: log out whenever you like. Stop it with: ./gcf gui --stop\n"
               f"Find this URL again with: ./gcf gui --status")
         if open_browser(f"http://localhost:{port}/?token={token}", args.browser):

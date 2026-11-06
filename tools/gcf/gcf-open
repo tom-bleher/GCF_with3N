@@ -29,7 +29,9 @@ fi
 repo=${repo#\~/}
 
 quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
-remote="cd $(quote "$repo") && ./gcf gui --background --no-browser"
+# This script makes its own tunnel, to the page's TCP port: so the address gcf gui gives
+# must be that one, not the one for the tunnel of an SSH login (see gcf gui over SSH).
+remote="cd $(quote "$repo") && SSH_CONNECTION= SSH_TTY= ./gcf gui --background --no-browser"
 for arg in "$@"; do
     remote="$remote $(quote "$arg")"
 done

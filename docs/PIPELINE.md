@@ -258,7 +258,10 @@ laptop, does all of that in one command (`ssh you@machine cat
 src/GCF_with3N/tools/gcf/gcf-open | sh -s you@machine`), and `gcf gui` opens the
 browser itself when the browser is yours: with `$BROWSER` set, as in a VS Code
 remote terminal, or on a desktop not reached over SSH (`--browser`, `--no-browser`
-decide instead). From the page you can:
+decide instead). Over SSH it also listens on `~/.config/gcf/gui.sock` (mode 0600), and
+prints a link to the laptop's port 8765 with the `LocalForward 8765 <socket>` line that
+makes it work for good; it prints that line until a request has come through the socket.
+From the page you can:
 
 - choose the stages (generate + FSI, generate only, FSI on an existing file), or
   the ePIC detector chain (see [The EIC / ePIC chain](#the-eic--epic-chain));
