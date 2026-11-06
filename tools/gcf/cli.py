@@ -451,7 +451,7 @@ def cmd_gui(args):
         url = f"http://localhost:{rec['port']}/?token={token}"
         print(f"Already running, with runs in {rec['runs_dir']}:\n    {url}")
         if open_browser(url, args.browser):
-            print("Opened it in your browser.")
+            print("Sent it to your browser; if no window opens, use the address above.")
         return True
     if args.port and servers:
         raise runner.RunError(f"a gcf gui of yours is already running on port {args.port}; see gcf gui --status, "
@@ -472,7 +472,7 @@ def cmd_gui(args):
         print(f"\nRunning on its own: log out whenever you like. Stop it with: ./gcf gui --stop\n"
               f"Find this URL again with: ./gcf gui --status")
         if open_browser(f"http://localhost:{port}/?token={token}", args.browser):
-            print("Opened it in your browser.")
+            print("Sent it to your browser; if no window opens, use the address above.")
         return True
     if not args.quiet and browser_here(args.browser):
         def open_when_listening():

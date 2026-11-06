@@ -1686,7 +1686,7 @@ class TestOpening(unittest.TestCase):
         self.assertEqual(out.returncode, 0, out.stderr)
         url = re.search(r"http://localhost:\d+/\?token=\S+", out.stdout).group(0)
         self.assertEqual(self.opened_urls(5), [url])
-        self.assertIn("Opened it in your browser", out.stdout)
+        self.assertIn("Sent it to your browser", out.stdout)
         # Asking again opens it again, without a second server.
         again = self.gui(BROWSER=self.browser)
         self.assertIn("Already running", again.stdout)
@@ -1695,7 +1695,7 @@ class TestOpening(unittest.TestCase):
     def test_over_ssh_it_opens_nothing_here_and_says_how_from_the_laptop(self):
         out = self.gui(SSH_CONNECTION="10.0.0.1 5000 10.0.0.2 22", DISPLAY="localhost:10.0")
         self.assertEqual(out.returncode, 0, out.stderr)
-        self.assertNotIn("Opened", out.stdout)
+        self.assertNotIn("Sent it to your browser", out.stdout)
         self.assertIn("tools/gcf/gcf-open | sh -s", out.stdout)
 
     def test_no_browser_wins(self):
