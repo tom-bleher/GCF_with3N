@@ -248,19 +248,17 @@ A chunk that fails stops the run with a message naming its log; "Resume" (or
 [GUI.md](GUI.md) is the guide to using it. In brief:
 
 ```bash
-./gcf gui --background       # prints an ssh -L command and a URL with a token
+./gcf gui        # over SSH: starts in the background, prints a line to run on the laptop
 ```
 
-The interface runs on the analysis machine. Open an SSH tunnel from your laptop
-(`ssh -N -L 8765:localhost:8765 you@machine`; VS Code Remote-SSH forwards the
-port automatically) and open the printed URL. `tools/gcf/gcf-open`, run on the
-laptop, does all of that in one command (`ssh you@machine cat
-src/GCF_with3N/tools/gcf/gcf-open | sh -s you@machine`), and `gcf gui` opens the
-browser itself when the browser is yours: with `$BROWSER` set, as in a VS Code
-remote terminal, or on a desktop not reached over SSH (`--browser`, `--no-browser`
-decide instead). Over SSH it also listens on `~/.config/gcf/gui.sock` (mode 0600), and
-prints a link to the laptop's port 8765 with the `LocalForward 8765 <socket>` line that
-makes it work for good; it prints that line until a request has come through the socket.
+The interface runs on the analysis machine. Over SSH, `gcf gui` prints one line to run
+on the laptop, `ssh you@machine cat src/GCF_with3N/tools/gcf/gcf-open | sh -s
+you@machine`: `tools/gcf/gcf-open` starts the page if needed, opens a tunnel to it over a
+connection it keeps in the background, opens the browser, and offers to add the alias
+`gcf-gui` that runs it again. In a VS Code remote terminal (`$BROWSER` set) or on a
+desktop not reached over SSH, `gcf gui` opens the browser itself (`--browser`,
+`--no-browser` decide instead). It also listens on `~/.config/gcf/gui.sock` (mode 0600),
+for a `LocalForward 8765 <socket>` kept in the laptop's SSH config.
 From the page you can:
 
 - choose the stages (generate + FSI, generate only, FSI on an existing file), or

@@ -723,7 +723,9 @@ class TestCommands(unittest.TestCase):
     def setUp(self):
         self.home = tempfile.mkdtemp(prefix="gcf-cli-")
         self.addCleanup(shutil.rmtree, self.home, ignore_errors=True)
-        self.env = dict(os.environ, XDG_CONFIG_HOME=self.home)
+        # What gcf gui prints over SSH is TestOpening's; here, whoever runs the tests.
+        self.env = {k: v for k, v in os.environ.items() if k not in ("SSH_CONNECTION", "SSH_TTY", "BROWSER")}
+        self.env["XDG_CONFIG_HOME"] = self.home
 
     def gcf(self, *args):
         return subprocess.run([sys.executable, str(REPO / "gcf"), *map(str, args)], capture_output=True,
@@ -1588,6 +1590,7 @@ class TestCommandLine(unittest.TestCase):
 FORWARDER = r"""
 import os, socket, sys, threading
 local, _, remote = sys.argv[1].partition(":localhost:")
+local = local.rsplit(":", 1)[-1]       # 127.0.0.1:PORT, or PORT
 listener = socket.socket()
 try:
     listener.bind(("127.0.0.1", int(local)))
@@ -1623,17 +1626,25 @@ while True:
 
 FAKE_SSH = """#!/bin/sh
 # Stands in for ssh: runs the command on this machine, and forwards ports for real.
+# A connection kept open, for -O check and -O forward, exists when $FAKE_MASTER is set.
 echo "$*" >> "$FAKE_SSH_LOG"
 forward=
+op=
 while [ $# -gt 0 ]; do
     case $1 in
         -L) forward=$2; shift 2 ;;
+        -O) op=$2; shift 2 ;;
         -o) shift 2 ;;
         -*) shift ;;
         *) break ;;
     esac
 done
 shift
+if [ "$op" = check ] || { [ "$op" = forward ] && [ -z "${FAKE_MASTER:-}" ]; }; then
+    [ -n "${FAKE_MASTER:-}" ] && exit 0
+    echo "Control socket connect: No such file or directory" >&2
+    exit 255
+fi
 if [ -n "$forward" ]; then
     exec python3 "$FAKE_FORWARDER" "$forward" "$FAKE_FORWARDS"
 fi
@@ -1695,11 +1706,48 @@ class TestOpening(unittest.TestCase):
         self.assertEqual(self.opened_urls(5, count=2), [url, url])
 
     def test_over_ssh_it_opens_nothing_here_and_says_how_from_the_laptop(self):
-        out = self.gui(SSH_CONNECTION="10.0.0.1 5000 10.0.0.2 22", DISPLAY="localhost:10.0")
+        """A link can't work by itself over SSH: the line to run on the laptop instead,
+        with this login's user and the address the laptop reached, and no link."""
+        out = self.gui(SSH_CONNECTION="10.0.0.1 5000 10.0.0.2 22", DISPLAY="localhost:10.0", USER="me")
         self.assertEqual(out.returncode, 0, out.stderr)
         self.assertNotIn("Sent it to your browser", out.stdout)
-        self.assertIn("Cmd-click", out.stdout)
-        self.assertIn("LocalForward 8765 ", out.stdout)
+        script = str(REPO / "tools/gcf/gcf-open")
+        home = Path.home()
+        if REPO.is_relative_to(home):
+            script = str(REPO.relative_to(home) / "tools/gcf/gcf-open")
+        self.assertIn(f"    ssh me@10.0.0.2 cat {script} | sh -s me@10.0.0.2", out.stdout)
+        self.assertIn("gcf-gui", out.stdout)
+        self.assertNotIn("token=", out.stdout)
+        self.assertNotIn("LocalForward", out.stdout)
+
+    def test_over_ssh_on_another_port_the_line_says_which(self):
+        out = self.gui(SSH_CONNECTION="10.0.0.1 5000 10.0.0.2 2222", USER="me")
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertIn("ssh ssh://me@10.0.0.2:2222 cat ", out.stdout)
+        self.assertIn("| sh -s ssh://me@10.0.0.2:2222", out.stdout)
+
+    def test_over_ssh_it_goes_to_the_background_by_itself(self):
+        """Opened from the laptop, the page must outlive the login that started it: at a
+        terminal, over SSH, gcf gui goes to the background. (A script decides itself.)"""
+        import pty
+        command = [sys.executable, str(REPO / "gcf"), "gui", "--port", str(self.port), "--runs-dir", str(self.tmp / "runs")]
+        env = {**self.env, "SSH_CONNECTION": "10.0.0.1 5000 10.0.0.2 22"}
+        main, child = pty.openpty()
+        proc = subprocess.Popen(command, env=env, stdin=subprocess.DEVNULL, stdout=child, stderr=child)
+        os.close(child)
+        self.addCleanup(os.close, main)
+        self.assertEqual(proc.wait(60), 0)
+        out = b""
+        while True:
+            try:
+                data = os.read(main, 65536)
+            except OSError:
+                break
+            if not data:
+                break
+            out += data
+        self.assertIn(b"Running on its own", out)
+        self.assertEqual(self.record()["port"], self.port)
 
     def socket_get(self, sock, path, token):
         """A request through the page's socket, as an SSH LocalForward makes it."""
@@ -1721,9 +1769,9 @@ class TestOpening(unittest.TestCase):
         self.assertEqual(len(recs), 1)
         return recs[0]
 
-    def test_over_ssh_one_line_in_the_laptops_ssh_config_does_for_good(self):
-        """The link goes to the laptop's port 8765, which LocalForward maps to a socket
-        only this user can open: the same at every start, whatever TCP port the page got."""
+    def test_over_ssh_a_socket_for_a_localforward_of_your_own(self):
+        """For those who keep a LocalForward 8765 to it: a socket only this user can open,
+        the same at every start. Its link is shown once a request has come through it."""
         ssh = {"SSH_CONNECTION": "10.0.0.1 5000 132.66.129.78 22"}
         out = self.gui(**ssh)
         self.assertEqual(out.returncode, 0, out.stderr)
@@ -1732,19 +1780,16 @@ class TestOpening(unittest.TestCase):
         self.assertEqual(Path(sock).name, "gui.sock")
         self.assertEqual(os.stat(sock).st_mode & 0o777, 0o600)
         self.assertEqual(os.stat(Path(sock).parent).st_mode & 0o777, 0o700)
-        token = re.search(r"http://localhost:8765/\?token=(\S+)", out.stdout).group(1)
-        self.assertIn("HostName 132.66.129.78", out.stdout)
-        self.assertIn(f"LocalForward 8765 {sock}", out.stdout)
-        self.assertNotIn(f"localhost:{rec['port']}/?token", out.stdout.replace("localhost:8765/", ""))
+        self.assertNotIn("token=", out.stdout)
+        token = (self.tmp / "config/gcf/gui-token").read_text().strip()
 
         self.assertEqual(self.socket_get(sock, "/api/schema", "wrong"), 403)
         self.assertEqual(self.socket_get(sock, "/api/schema", token), 200)
-        # Once the link has worked, only the link.
         for args in (["--status"], []):
             again = subprocess.run([sys.executable, str(REPO / "gcf"), "gui", *args, "--runs-dir", str(self.tmp / "runs")],
                                    env={**self.env, **ssh}, capture_output=True, text=True, timeout=60)
             self.assertIn(f"http://localhost:8765/?token={token}", again.stdout)
-            self.assertNotIn("LocalForward", again.stdout)
+            self.assertIn("| sh -s ", again.stdout)
 
     def test_a_socket_left_by_a_killed_page_is_replaced(self):
         d = self.tmp / "config/gcf"
@@ -1764,7 +1809,6 @@ class TestOpening(unittest.TestCase):
         sock = Path(rec["socket"])
         self.assertEqual(sock.parent, Path(f"/tmp/gcf-{os.getuid()}"))
         self.assertEqual(sock.parent.stat().st_mode & 0o777, 0o700)
-        self.assertIn(f"LocalForward 8765 {sock}", out.stdout)
         subprocess.run([sys.executable, str(REPO / "gcf"), "gui", "--stop"], capture_output=True, timeout=30,
                        env={**self.env, "XDG_CONFIG_HOME": str(long_config)})
 
@@ -1776,8 +1820,18 @@ class TestOpening(unittest.TestCase):
                              env={**self.env, "SSH_CONNECTION": "10.0.0.1 5000 10.0.0.2 22"},
                              capture_output=True, text=True, timeout=60)
         self.assertEqual(out.returncode, 0, out.stderr)
-        self.assertIn(f"http://localhost:{other}/?token=", out.stdout)
-        self.assertIn(f"LocalForward {other} {self.tmp / 'config/gcf'}/gui-{other}.sock", out.stdout)
+        recs = [json.loads(p.read_text()) for p in (self.tmp / "config/gcf").glob(f"gui-{other}.json")]
+        self.assertEqual(recs[0]["socket"], f"{self.tmp / 'config/gcf'}/gui-{other}.sock")
+
+    def test_without_a_folder_it_finds_the_page_you_have(self):
+        """gcf-gui asks for no runs folder: it must find a page started with one, not start
+        another; asking for another folder still starts another."""
+        self.assertEqual(self.gui().returncode, 0)
+        again = subprocess.run([sys.executable, str(REPO / "gcf"), "gui", "--background", "--no-browser"],
+                               env=self.env, capture_output=True, text=True, timeout=60)
+        self.assertEqual(again.returncode, 0, again.stderr)
+        self.assertIn(f"Already running, with runs in {self.tmp / 'runs'}", again.stdout)
+        self.assertEqual(len(list((self.tmp / "config/gcf").glob("gui-*.json"))), 1)
 
     def test_no_browser_wins(self):
         out = self.gui("--no-browser", BROWSER=self.browser)
@@ -1797,14 +1851,8 @@ class TestOpening(unittest.TestCase):
                 f"http://localhost:{self.port}/api/schema", headers={"X-GCF-Token": token}), timeout=20) as r:
             self.assertEqual(r.status, 200)
 
-    def test_one_command_on_the_laptop_starts_tunnels_and_opens(self):
-        """gcf-open, with an ssh that runs here. The "remote" page listens on 127.0.0.2,
-        and another program holds its port on this "laptop", so the tunnel takes the next."""
-        if not shutil.which("curl"):
-            self.skipTest("curl is not installed")
-        taken = socket.socket()
-        taken.bind(("127.0.0.1", self.port))
-        self.addCleanup(taken.close)
+    def laptop(self):
+        """A "laptop" for gcf-open: a home, an ssh that runs here, and its environment."""
         home = self.tmp / "home"
         (home / "src").mkdir(parents=True)
         (home / "src/GCF_with3N").symlink_to(REPO)
@@ -1813,29 +1861,96 @@ class TestOpening(unittest.TestCase):
         (bin_dir / "ssh").write_text(FAKE_SSH)
         (bin_dir / "ssh").chmod(0o755)
         (self.tmp / "forwarder.py").write_text(FORWARDER)
-        log = self.tmp / "ssh.log"
-        env = {**self.env, "HOME": str(home), "PATH": f"{bin_dir}:{os.environ['PATH']}", "BROWSER": self.browser,
-               "FAKE_SSH_LOG": str(log), "FAKE_FORWARDER": str(self.tmp / "forwarder.py"),
-               "FAKE_FORWARDS": str(self.tmp / "forwards"), "FAKE_REMOTE_HOST": "127.0.0.2"}
+        return home, {**self.env, "HOME": str(home), "PATH": f"{bin_dir}:{os.environ['PATH']}",
+                      "BROWSER": self.browser, "FAKE_SSH_LOG": str(self.tmp / "ssh.log"),
+                      "FAKE_FORWARDER": str(self.tmp / "forwarder.py"), "FAKE_FORWARDS": str(self.tmp / "forwards"),
+                      "FAKE_REMOTE_HOST": "127.0.0.2"}
+
+    def test_one_command_on_the_laptop_starts_tunnels_and_opens(self):
+        """gcf-open, with an ssh that runs here. The "remote" page listens on 127.0.0.2,
+        and another program holds its port on this "laptop", so the tunnel takes the next."""
+        self.one_command_on_the_laptop(master=False)
+
+    def test_the_tunnel_goes_through_the_connection_kept_open(self):
+        """With its own connection kept open, the tunnel is added to it (one password)."""
+        self.one_command_on_the_laptop(master=True)
+
+    def one_command_on_the_laptop(self, master):
+        if not shutil.which("curl"):
+            self.skipTest("curl is not installed")
+        taken = socket.socket()
+        taken.bind(("127.0.0.1", self.port))
+        self.addCleanup(taken.close)
+        home, env = self.laptop()
+        if master:
+            env["FAKE_MASTER"] = "1"
+        log = Path(env["FAKE_SSH_LOG"])
         command = ["sh", str(REPO / "tools/gcf/gcf-open"), "me@far", "--port", str(self.port),
                    "--host", "127.0.0.2", "--runs-dir", str(self.tmp / "runs")]
         out = subprocess.run(command, env=env, capture_output=True, text=True, timeout=120)
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         urls = self.opened_urls(5)
         self.assertEqual(len(urls), 1, out.stdout)
-        local = int(re.search(r"localhost:(\d+)/", urls[0]).group(1))
+        local = int(re.search(r"http://127\.0\.0\.1:(\d+)/", urls[0]).group(1))
         self.assertEqual(local, self.port + 1)
         token = urls[0].split("token=")[1]
         with urllib.request.urlopen(urllib.request.Request(
-                f"http://localhost:{local}/api/schema", headers={"X-GCF-Token": token}), timeout=20) as r:
+                f"http://127.0.0.1:{local}/api/schema", headers={"X-GCF-Token": token}), timeout=20) as r:
             self.assertEqual(r.status, 200)
-        tunnels = log.read_text().count(" -L ")
+        calls = log.read_text()
+        self.assertEqual(calls.count("-O forward"), 2 if master else 0, calls)
+        self.assertEqual(calls.count("-f -N"), 0 if master else 2, calls)
+        self.assertIn(f"-L 127.0.0.1:{local}:localhost:{self.port}", calls)
+        self.assertIn(f"ControlPath={home}/.ssh/gcf-%C", calls)
+        self.assertEqual((home / ".ssh").stat().st_mode & 0o777, 0o700)
+        self.assertFalse((home / ".zshrc").exists() or (home / ".bashrc").exists())   # nobody to ask
+        tunnels = calls.count(" -L ")
 
         # Again: the same page through the same tunnel, and no new one.
         out = subprocess.run(command, env=env, capture_output=True, text=True, timeout=120)
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         self.assertEqual(self.opened_urls(5, count=2), [urls[0], urls[0]])
         self.assertEqual(log.read_text().count(" -L "), tunnels)
+
+    def test_the_shortcut_is_offered_and_works(self):
+        """GCF_OPEN_SHORTCUT=yes answers for the person: an alias in ~/.zshrc, once, that
+        opens the same page again."""
+        if not shutil.which("curl"):
+            self.skipTest("curl is not installed")
+        home, env = self.laptop()
+        env.update(FAKE_MASTER="1", SHELL="/bin/zsh", GCF_OPEN_SHORTCUT="yes")
+        command = ["sh", str(REPO / "tools/gcf/gcf-open"), "me@far", "--port", str(self.port),
+                   "--host", "127.0.0.2", "--runs-dir", str(self.tmp / "runs")]
+        for _ in range(2):
+            out = subprocess.run(command, env=env, capture_output=True, text=True, timeout=120)
+            self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        rc = (home / ".zshrc").read_text()
+        self.assertEqual(rc.count("alias gcf-gui="), 1, rc)
+        alias = re.search(r"^alias gcf-gui='([^']*)'$", rc, re.M).group(1)
+        self.assertIn(f"-o ControlPath={home}/.ssh/gcf-%C", alias)
+        self.assertTrue(alias.endswith(" me@far cat src/GCF_with3N/tools/gcf/gcf-open | sh -s me@far"), alias)
+        # The alias itself, which takes the script's options after it: the page is running,
+        # so it finds it and opens it again.
+        del env["GCF_OPEN_SHORTCUT"]
+        out = subprocess.run(["sh", "-c", f"{alias} --port {self.port} --host 127.0.0.2 --runs-dir {self.tmp / 'runs'}"],
+                             env=env, capture_output=True, text=True, timeout=120)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        urls = self.opened_urls(5, count=3)
+        self.assertEqual(len(set(urls)), 1, urls)
+        self.assertEqual(len(urls), 3)
+
+    def test_no_shortcut_is_remembered(self):
+        if not shutil.which("curl"):
+            self.skipTest("curl is not installed")
+        home, env = self.laptop()
+        env.update(SHELL="/bin/zsh", GCF_OPEN_SHORTCUT="no")
+        out = subprocess.run(["sh", str(REPO / "tools/gcf/gcf-open"), "me@far", "--port", str(self.port),
+                              "--host", "127.0.0.2", "--runs-dir", str(self.tmp / "runs")],
+                             env=env, capture_output=True, text=True, timeout=120)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("won't be asked again", out.stdout)
+        self.assertFalse((home / ".zshrc").exists())
+        self.assertTrue((self.tmp / "config/gcf/no-gcf-gui-shortcut").exists())
 
     def test_a_wrong_checkout_is_a_clear_error(self):
         home = self.tmp / "home"

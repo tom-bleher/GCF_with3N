@@ -441,9 +441,15 @@ def cmd_gui(args):
             else:
                 print(f"gcf gui is running on {os.uname().nodename}, with runs in {rec['runs_dir']}.\n")
                 print("\n".join(gui.how_to_open(rec["port"], token, rec.get("socket"))))
+                if rec.get("socket"):
+                    print(f"\nIts socket, for a LocalForward of your own (docs/GUI.md): {rec['socket']}")
         return True
+    if gui.over_ssh() and sys.stdout.isatty() and not (args.background or args.foreground or args.quiet):
+        args.background = True      # opened from the laptop, it must outlive this login (a script decides itself)
     runs_dir = Path(args.runs_dir).expanduser().resolve() if args.runs_dir else runner.default_runs_dir().resolve()
     same = [rec for rec in servers if Path(rec["runs_dir"]) == runs_dir]
+    if not same and not args.runs_dir and servers:
+        same = servers      # no folder asked for: the page you have, whatever its folder (so gcf-gui finds it)
     if same:
         rec = same[0]
         url = f"http://localhost:{rec['port']}/?token={token}"
@@ -469,7 +475,7 @@ def cmd_gui(args):
             raise runner.RunError(f"the interface did not start; see {log}")
         print(gui.banner(gui.App(runs_dir, serve=False, token=token), args.host, port, gui.read_server(port).get("socket")))
         print(f"\nRunning on its own: log out whenever you like. Stop it with: ./gcf gui --stop\n"
-              f"Find this URL again with: ./gcf gui --status")
+              f"Find this again with: ./gcf gui --status")
         if open_browser(f"http://localhost:{port}/?token={token}", args.browser):
             print("Sent it to your browser; if no window opens, use the address above.")
         return True
@@ -605,7 +611,10 @@ def main(argv=None):
     p.add_argument("--runs-dir", help="where GUI runs are written (default: $GCF_RUNS_DIR, else <repo>/runs "
                                       "if you can write there, else ~/gcf_runs)")
     p.add_argument("--background", action="store_true",
-                   help="run on its own, so that it stays up after you log out; prints its URL")
+                   help="run on its own, so that it stays up after you log out; prints its URL "
+                        "(the default at a terminal over SSH)")
+    p.add_argument("--foreground", action="store_true",
+                   help="stay in this terminal, and stop with it (the default, except at a terminal over SSH)")
     p.add_argument("--status", action="store_true", help="say whether it is running, and its URL")
     p.add_argument("--stop", action="store_true", help="stop one started with --background; runs keep going")
     p.add_argument("--max-cpus", type=int, help="CPUs its runs may use together; more runs wait in a queue "

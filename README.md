@@ -31,12 +31,12 @@ opens it too. In short:
 ```
 ./install.sh                 # once: builds the programs and sets up the Python packages
 ./gcf doctor                 # checks that everything is ready, and says how to fix what isn't
-./gcf gui --background       # starts the page; over SSH, prints a link to Cmd-click
+./gcf gui                    # starts the page; over SSH, prints a line to run on your laptop
 ```
 
-The first time, it also prints a few lines for `~/.ssh/config` on your laptop, which keep
-the link working from then on. Or, on your laptop, one command starts the page, opens a
-tunnel and opens your browser:
+Over SSH, paste that line in a terminal **on your laptop** (Cmd-T on a Mac). It starts
+the page if needed, opens a tunnel and your browser, and offers to add the shortcut
+`gcf-gui`, so that next time you only type that:
 
 ```
 ssh you@machine cat src/GCF_with3N/tools/gcf/gcf-open | sh -s you@machine
