@@ -831,6 +831,20 @@ class TestCommands(unittest.TestCase):
 class TestValidation(unittest.TestCase):
     """What the config refuses as you type, and that the binary agrees."""
 
+    def test_a_rejected_setup_is_explained_by_the_generator(self):
+        """It was explained with the end of GENIE's banner ('Tel: +44...'), on the model field."""
+        from gcf import config, runner
+        harness.need_binaries()
+        for model in ("2N", "MF"):
+            cfg = config.validate({"run": {"name": "x", "stages": ["generate"]},
+                                   "generate": {"model": model, "beam": 0.4, "events": 100, "target": [12, 6]}})
+            problems = runner.check_setup(cfg)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith("[generate] beam: "), problems[0])
+            self.assertIn("phase space looks empty", problems[0])
+            self.assertNotIn("Tel:", problems[0])
+            self.assertNotIn("Messenger", problems[0])
+
     def problem(self, generate=None, fsi=None, stages=("generate", "fsi")):
         from gcf import config
         raw = {"run": {"stages": list(stages)}}

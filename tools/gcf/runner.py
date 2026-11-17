@@ -255,6 +255,19 @@ def program_args(prog, events, output, seed):
     return args
 
 
+def program_message(out, count):
+    """What a stage program said went wrong, as one line: its error if it names one,
+    else its last lines. Without GENIE's start-up banner and messenger chatter, which
+    come last on stdout and used to be shown instead of the error."""
+    lines = [l.strip() for l in (out.stderr + "\n" + out.stdout).splitlines()
+             if l.strip() and not l.lstrip().startswith("*") and "NOTICE Messenger" not in l
+             and not l.startswith(("eNCrossSection", "You are using", "Working on", "Random seed"))]
+    errors = [l for l in lines if l.startswith("Error:")]
+    if errors:
+        return errors[-1].removeprefix("Error:").strip()
+    return " ".join(lines[-count:]) or f"exit {out.returncode}"
+
+
 def check_setup(cfg):
     """Run the stages' own setup checks on a validated config, without
     generating anything: gcf_generate --check (nucleus tables, option
@@ -275,21 +288,19 @@ def check_setup(cfg):
             except subprocess.TimeoutExpired:
                 return ["[program] program: a test of 200 attempts took more than 2 minutes"]
         if out.returncode != 0:
-            text = [l for l in (out.stderr + out.stdout).splitlines() if l.strip() and not l.startswith(("eNCrossSection", "You are using", "Working on", "Random seed"))]
-            problems.append("[program] target: the generator can't run this setup: " + (" ".join(text[-2:]) or f"exit {out.returncode}"))
+            problems.append("[program] target: the generator can't run this setup: " + program_message(out, 2))
         return problems
     if "generate" in run["stages"]:
         args = generate_args(gen, 1, "/dev/null", 1)
         args = [a for a in args if a not in ("--output", "/dev/null")] + ["--check"]
         out = subprocess.run(args, capture_output=True, text=True, env=env, timeout=120)
         if out.returncode != 0:
-            msg = [l for l in (out.stderr + out.stdout).splitlines()
-                   if l.strip() and not l.startswith(("eNCrossSection", "You are using"))]
-            text = " ".join(msg[-3:]) or f"exit {out.returncode}"
+            text = program_message(out, 3)
             text = re.sub(r"\s*Add it to constants/nuclearMasses\.hh.*$", "", text)
             text = re.sub(r"^\w+::\w+: ", "", text)
             # Point at the field that causes it.
             key = "nn" if "does not have contacts" in text else \
+                  "beam" if "phase space looks empty" in text else \
                   "target" if re.search(r"nucleus|nuclei|residual|mass", text) else "model"
             problems.append(f"[generate] {key}: the generator can't run this setup: " + text)
     else:
