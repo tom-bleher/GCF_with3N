@@ -63,7 +63,12 @@ done
 echo "Starting the page on $host (or finding it running)..."
 if ! out=$(rssh "$host" "$remote" 2>&1); then
     printf '%s\n' "$out" >&2
-    echo "gcf-open: that failed on $host; is $repo the GCF_with3N checkout there?" >&2
+    # The checkout hint only when the checkout is what's missing, not for gcf's own errors.
+    case "$out" in
+        *"No such file"*|*"not found"*|*"can't cd"*|*"cannot open"*)
+            echo "gcf-open: that failed on $host; is $repo the GCF_with3N checkout there?" >&2 ;;
+        *) echo "gcf-open: gcf gui failed on $host (above)." >&2 ;;
+    esac
     exit 1
 fi
 url=$(printf '%s\n' "$out" | grep -o 'http://localhost:[0-9]*/?token=[A-Za-z0-9_-]*' | head -n 1 || true)

@@ -1972,6 +1972,16 @@ class TestOpening(unittest.TestCase):
         self.assertFalse((home / ".zshrc").exists())
         self.assertTrue((self.tmp / "config/gcf/no-gcf-gui-shortcut").exists())
 
+    def test_gcfs_own_error_gets_no_checkout_hint(self):
+        home, env = self.laptop()
+        self.assertEqual(self.gui().returncode, 0)          # a page of yours on self.port
+        out = subprocess.run(["sh", str(REPO / "tools/gcf/gcf-open"), "me@far", "--port", str(self.port),
+                              "--runs-dir", str(self.tmp / "other")], env=env, stdin=subprocess.DEVNULL,
+                             capture_output=True, text=True, timeout=60)
+        self.assertEqual(out.returncode, 1)
+        self.assertIn("already running on port", out.stderr)
+        self.assertNotIn("checkout", out.stderr)
+
     def test_a_wrong_checkout_is_a_clear_error(self):
         home = self.tmp / "home"
         home.mkdir()
