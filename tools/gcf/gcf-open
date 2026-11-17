@@ -1,8 +1,8 @@
 #!/bin/sh
 # Open the GCF web interface from your laptop, in one command: it starts the
 # page on the remote machine if it isn't running, tunnels its port and opens
-# your browser. Run it again whenever you like: it reuses the page and a
-# tunnel that still works.
+# your browser. The first time, it offers to add the shortcut gcf-gui to your
+# shell, so that afterwards you only type that.
 #
 #   sh gcf-open [user@]HOST [PATH/TO/GCF_with3N] [gcf gui options]
 #
@@ -12,7 +12,8 @@
 #   ssh HOST cat src/GCF_with3N/tools/gcf/gcf-open | sh -s HOST
 #
 # Needs ssh and a POSIX shell (macOS, Linux, WSL or Git Bash). With SSH keys
-# you aren't asked for a password. $BROWSER, if set, opens the page.
+# you aren't asked for a password; without, once per connection. $BROWSER, if
+# set, opens the page. GCF_OPEN_SHORTCUT=yes or no answers the shortcut question.
 set -eu
 
 host=${1:-}
@@ -28,18 +29,46 @@ if [ $# -gt 0 ] && [ "${1#-}" = "$1" ]; then
 fi
 repo=${repo#\~/}
 
+# One connection to $host, kept open in the background, carries everything: the command
+# that starts the page, and the tunnel to it. So without SSH keys you give your password
+# once, and the tunnel lasts as long as the connection. The keepalives end a connection
+# that died, in sleep or on another network, within half a minute; the next run makes a
+# new one. It is this script's own (gcf-<hash> in ~/.ssh), whatever your ssh config says
+# about sharing connections. A socket's path has a length limit: if ~/.ssh is too deep,
+# every ssh here is a separate connection.
+ctl=
+ssh_dir=$HOME/.ssh
+if [ $(( ${#ssh_dir} + 45 )) -lt 100 ] && { [ -d "$ssh_dir" ] || mkdir -m 700 "$ssh_dir" 2>/dev/null; }; then
+    ctl=$ssh_dir/gcf-%C
+fi
+# -n: never read stdin. Piped into `sh -s`, this script *is* stdin, and a shell that reads
+# it a line at a time (bash, macOS's /bin/sh) would lose the rest of it to ssh.
+rssh() {
+    if [ -n "$ctl" ]; then
+        ssh -n -o ServerAliveInterval=10 -o ServerAliveCountMax=3 \
+            -o ControlMaster=auto -o "ControlPath=$ctl" -o ControlPersist=yes "$@"
+    else
+        ssh -n -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$@"
+    fi
+}
+
 quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 # This script makes its own tunnel, to the page's TCP port: so the address gcf gui gives
-# must be that one, not the one for the tunnel of an SSH login (see gcf gui over SSH).
+# must be that one, not what it says over an SSH login (a line to run on the laptop).
 remote="cd $(quote "$repo") && SSH_CONNECTION= SSH_TTY= ./gcf gui --background --no-browser"
 for arg in "$@"; do
     remote="$remote $(quote "$arg")"
 done
 
 echo "Starting the page on $host (or finding it running)..."
-if ! out=$(ssh "$host" "$remote" 2>&1); then
+if ! out=$(rssh "$host" "$remote" 2>&1); then
     printf '%s\n' "$out" >&2
-    echo "gcf-open: that failed on $host; is $repo the GCF_with3N checkout there?" >&2
+    # The checkout hint only when the checkout is what's missing, not for gcf's own errors.
+    case "$out" in
+        *"No such file"*|*"not found"*|*"can't cd"*|*"cannot open"*)
+            echo "gcf-open: that failed on $host; is $repo the GCF_with3N checkout there?" >&2 ;;
+        *) echo "gcf-open: gcf gui failed on $host (above)." >&2 ;;
+    esac
     exit 1
 fi
 url=$(printf '%s\n' "$out" | grep -o 'http://localhost:[0-9]*/?token=[A-Za-z0-9_-]*' | head -n 1 || true)
@@ -52,13 +81,25 @@ port=${url#http://localhost:}
 port=${port%%/*}
 token=${url#*token=}
 
-# Whether localhost:$1 already reaches this very page, through a tunnel from earlier.
+# Whether port $1 here already reaches this very page, through a tunnel from earlier.
 works() {
     command -v curl >/dev/null 2>&1 &&
-        curl -fs -o /dev/null -m 5 -H "X-GCF-Token: $token" "http://localhost:$1/api/schema"
+        curl -fs -o /dev/null -m 5 -H "X-GCF-Token: $token" "http://127.0.0.1:$1/api/schema"
 }
 
-# A tunnel from earlier first; else a new one, on the first port free here.
+# A tunnel on port $1 here to the page: added to the connection above when there is one,
+# else a connection of its own. Only on 127.0.0.1, so that a port taken here is an error.
+tunnel() {
+    if [ -n "$ctl" ] && rssh -O check "$host" >/dev/null 2>&1; then
+        rssh -O forward -L "127.0.0.1:$1:localhost:$port" "$host" 2>/dev/null
+    else
+        ssh -f -N -o ExitOnForwardFailure=yes -o ServerAliveInterval=10 -o ServerAliveCountMax=3 \
+            -L "127.0.0.1:$1:localhost:$port" "$host" 2>/dev/null
+    fi
+}
+
+# A tunnel from earlier first; else a new one, on the page's own port if it is free here,
+# so that a bookmark keeps working, or on the next free one.
 local_port=
 lp=$port
 while [ "$lp" -lt $((port + 20)) ]; do
@@ -71,7 +112,7 @@ done
 lp=$port
 while [ -z "$local_port" ] && [ "$lp" -lt $((port + 20)) ]; do
     # A port taken here, by another program or an old tunnel, means: try the next one.
-    if ssh -f -N -o ExitOnForwardFailure=yes -L "$lp:localhost:$port" "$host" 2>/dev/null; then
+    if tunnel "$lp"; then
         tries=0
         while [ $tries -lt 50 ] && ! works "$lp"; do
             sleep 0.2
@@ -87,20 +128,20 @@ if [ -z "$local_port" ]; then
     exit 1
 fi
 
-url="http://localhost:$local_port/?token=$token"
+url="http://127.0.0.1:$local_port/?token=$token"
 opened=yes
 if [ -n "${BROWSER:-}" ]; then
-    $BROWSER "$url" >/dev/null 2>&1 &
+    $BROWSER "$url" </dev/null >/dev/null 2>&1 &
 elif [ "$(uname -s)" = Darwin ]; then
-    open "$url"
+    open "$url" </dev/null
 elif command -v wslview >/dev/null 2>&1; then
-    wslview "$url"
+    wslview "$url" </dev/null
 elif grep -qi microsoft /proc/version 2>/dev/null; then
-    cmd.exe /c start "" "$url" >/dev/null 2>&1
+    cmd.exe /c start "" "$url" </dev/null >/dev/null 2>&1
 elif command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$url" >/dev/null 2>&1 &
+    xdg-open "$url" </dev/null >/dev/null 2>&1 &
 elif command -v start >/dev/null 2>&1; then
-    start "$url"
+    start "$url" </dev/null
 else
     opened=
 fi
@@ -109,5 +150,64 @@ if [ -n "$opened" ]; then
 else
     echo "Open this address in your browser: $url"
 fi
-echo "The tunnel stays open in the background; run this again any time to get back to the page."
 echo "The token is the password: don't share the address."
+
+# The shortcut: an alias in your shell's startup file that runs this again, through the
+# same kind of connection (so a password, if any, is asked once). Offered once: a "no"
+# is remembered. GCF_OPEN_SHORTCUT=yes or no answers without asking.
+shortcut_line() {
+    line="ssh -n"
+    if [ -n "$ctl" ]; then
+        line="$line -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=auto"
+        line="$line -o ControlPath=$ctl -o ControlPersist=yes"
+    fi
+    line="$line $host cat $repo/tools/gcf/gcf-open | sh -s $host"
+    [ "$repo" = src/GCF_with3N ] || line="$line $repo"
+    printf "alias gcf-gui='%s'" "$line"
+}
+offer_shortcut() {
+    case "${SHELL:-}" in
+        */zsh) rc=$HOME/.zshrc ;;
+        */bash) if [ "$(uname -s)" = Darwin ]; then rc=$HOME/.bash_profile; else rc=$HOME/.bashrc; fi ;;
+        *) rc= ;;
+    esac
+    declined=${XDG_CONFIG_HOME:-$HOME/.config}/gcf/no-gcf-gui-shortcut
+    answer=${GCF_OPEN_SHORTCUT:-}
+    if [ -n "$rc" ] && grep -q '^alias gcf-gui=' "$rc" 2>/dev/null; then
+        return 0
+    fi
+    if [ -z "$answer" ] && [ -e "$declined" ]; then
+        return 0
+    fi
+    case "$host$repo$ctl" in
+        *[!A-Za-z0-9@._:/+~%-]*) return 0 ;;    # nothing an alias would have to quote
+    esac
+    if [ -z "$rc" ]; then
+        [ "$answer" = no ] && return 0
+        echo ""
+        echo "To open the page next time with just gcf-gui, add this to your shell's startup file:"
+        echo "    $(shortcut_line)"
+        return 0
+    fi
+    if [ -z "$answer" ]; then
+        # Only a person at a terminal is asked; the script itself comes in on stdin.
+        if [ -t 1 ] && { : </dev/tty; } 2>/dev/null; then
+            printf '\nAdd the shortcut gcf-gui to %s, so that next time you only type that? [Y/n] ' "$rc"
+            read -r answer </dev/tty || answer=no
+        else
+            return 0
+        fi
+    fi
+    case "$answer" in
+        [Nn]*)
+            mkdir -p "${declined%/*}" 2>/dev/null && : > "$declined" 2>/dev/null || true
+            echo "No shortcut, and you won't be asked again. Run this same line to open the page."
+            ;;
+        *)
+            printf '\n# gcf-gui: opens the GCF web interface on %s (added by gcf-open)\n%s\n' \
+                "$host" "$(shortcut_line)" >> "$rc"
+            echo "Added. Next time, type gcf-gui in a new terminal tab (in this one, first: source $rc)."
+            ;;
+    esac
+}
+offer_shortcut

@@ -111,10 +111,10 @@ def server_record(port):
     return config_dir() / f"gui-{port}.json"
 
 
-# Over SSH the page is reached through a socket file only you can open, which an SSH
-# LocalForward maps to this port on the laptop: unlike the TCP port, it is the same at
-# every start, so one line in the laptop's ~/.ssh/config does for good, and no other
-# user of the machine can reach the page through it.
+# Over SSH the page is also reached through a socket file only you can open, for those
+# who keep a LocalForward to it in the laptop's ~/.ssh/config (see docs/GUI.md): unlike
+# the TCP port, it is the same at every start, and no other user of the machine can
+# reach the page through it.
 LAPTOP_PORT = 8765
 
 
@@ -185,35 +185,44 @@ def over_ssh():
     return bool(os.environ.get("SSH_CONNECTION") or os.environ.get("SSH_TTY")) and not os.environ.get("BROWSER")
 
 
-def how_to_open(port, token, sock=None):
-    """What to do to see the page, for whoever runs gcf gui, as lines of text."""
+def laptop_command():
+    """The line that opens the page from the laptop (tools/gcf/gcf-open): with this
+    login's user, the address the laptop reached this machine at, and this checkout."""
     user = os.environ.get("USER", "you")
-    machine = os.uname().nodename
-    if sock and over_ssh():
-        lp = laptop_port(sock, port)
-        lines = ["Cmd-click (Ctrl-click on Linux) to open it in your laptop's browser:",
-                 f"    http://localhost:{lp}/?token={token}"]
-        if not tunnel_used_path().exists():
-            address = (os.environ.get("SSH_CONNECTION") or "").split()
-            lines += ["", "That link needs a tunnel, which you set up once. Add this to ~/.ssh/config on your laptop",
-                      "(or only its LocalForward line, if you have a Host block for this machine there),",
-                      "then log in to this machine again:", "",
-                      f"    Host {machine}"]
-            if len(address) >= 3:
-                lines.append(f"        HostName {address[2]}")
-            lines += [f"        User {user}", f"        LocalForward {lp} {sock}", "",
-                      "This message goes away once the link has worked. For this time only, on your laptop:",
-                      f"    ssh -N -L {lp}:{sock} {user}@{address[2] if len(address) >= 3 else machine}"]
-        return lines
+    address = (os.environ.get("SSH_CONNECTION") or "").split()
+    host, sshd_port = (address[2], address[3]) if len(address) >= 4 else (os.uname().nodename, "22")
+    if sshd_port == "22":
+        dest = f"{user}@{host}"
+    else:
+        dest = f"ssh://{user}@{f'[{host}]' if ':' in host else host}:{sshd_port}"
     home = Path.home()
     repo = runner.REPO.relative_to(home) if runner.REPO.is_relative_to(home) else runner.REPO
+    tail = "" if str(repo) == "src/GCF_with3N" else " " + shlex.quote(str(repo))
+    return (f"ssh {shlex.quote(dest)} cat {shlex.quote(str(repo / 'tools/gcf/gcf-open'))} "
+            f"| sh -s {shlex.quote(dest)}{tail}")
+
+
+def how_to_open(port, token, sock=None):
+    """What to do to see the page, for whoever runs gcf gui, as lines of text."""
+    if over_ssh():
+        # A link printed here can't work by itself: only the laptop's ssh can open the
+        # tunnel to it. So the laptop runs one line, which does that and opens its browser.
+        lines = ["To open it, press Cmd-T for a new tab on your Mac, and paste this there:", "",
+                 f"    {laptop_command()}", "",
+                 "Done that before? Then just type  gcf-gui  in any terminal on your Mac.",
+                 "(On a Linux laptop, WSL or Git Bash, the same line works.)"]
+        if sock and tunnel_used_path().exists():
+            lines += ["", f"Or through your own SSH tunnel to {sock}:",
+                      f"    http://localhost:{laptop_port(sock, port)}/?token={token}"]
+        return lines
+    user = os.environ.get("USER", "you")
+    machine = os.uname().nodename
     return ["On your laptop, open an SSH tunnel to this machine:",
             f"    ssh -N -L {port}:localhost:{port} {user}@{machine}",
             "(VS Code Remote-SSH forwards the port for you), then browse to",
             f"    http://localhost:{port}/?token={token}", "",
             "Or, on your laptop, one command that starts the page if needed, opens the tunnel and your browser:",
-            f"    ssh {user}@{machine} cat {shlex.quote(str(repo / 'tools/gcf/gcf-open'))} | sh -s {user}@{machine}"
-            + ("" if str(repo) == "src/GCF_with3N" else f" {shlex.quote(str(repo))}")]
+            f"    {laptop_command()}"]
 
 
 def free_port(first=FIRST_PORT, count=50):
@@ -1411,8 +1420,11 @@ def make_handler(app):
 
 
 def banner(app, host, port, sock=None):
-    lines = [f"gcf gui: runs are written to {app.runs_dir}", "", *how_to_open(port, app.token, sock), "",
-             "The token is the password: don't share this URL, and don't redirect this output to a file others can read."]
+    opening = how_to_open(port, app.token, sock)
+    lines = [f"gcf gui: runs are written to {app.runs_dir}", "", *opening]
+    if any("token=" in line for line in opening):
+        lines += ["", "The token is the password: don't share this URL, and don't redirect this output to a file "
+                      "others can read."]
     if host not in ("127.0.0.1", "localhost", "::1"):
         lines += ["", f"WARNING: listening on {host}, over plain HTTP: others on the network can read the token. "
                       "Use the SSH tunnel instead unless this network is private."]

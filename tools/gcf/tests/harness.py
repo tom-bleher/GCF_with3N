@@ -57,8 +57,10 @@ class Gui:
 
     def start(self, args=()):
         out = open(self.log, "w")
-        # The token and the record of the server stay out of the user's own settings.
-        self.env = dict(os.environ, XDG_CONFIG_HOME=str(Path(self.tmp) / "config"))
+        # The token and the record of the server stay out of the user's own settings; and
+        # what it prints doesn't depend on how the person running the tests logged in.
+        self.env = {k: v for k, v in os.environ.items() if k not in ("SSH_CONNECTION", "SSH_TTY", "BROWSER")}
+        self.env["XDG_CONFIG_HOME"] = str(Path(self.tmp) / "config")
         self.proc = subprocess.Popen(
             [sys.executable, str(REPO / "gcf"), "gui", "--port", str(self.port),
              "--runs-dir", str(self.runs_dir), "--no-browser", *args],

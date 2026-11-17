@@ -29,35 +29,54 @@ Do this once, on the machine that will run the jobs:
 Then start the page:
 
 ```bash
-./gcf gui --background
+./gcf gui
 ```
 
-Logged in over SSH, it prints a link: **Cmd-click it** (Ctrl-click on Linux) and the page
-opens in your laptop's browser. The first time, it also prints a few lines to add to
-`~/.ssh/config` on your laptop, which open the tunnel each time you log in; once the link
-has worked, it prints only the link. The tunnel goes to a socket file of yours that only
-you can open, so the link's port is the same at every start and nobody else on the machine
-can reach your page through it. `./gcf gui --status` prints the link again.
-
-In a VS Code remote terminal, or on a desktop you're sitting at, the page opens by itself
-(`--no-browser` stops that).
-
-Without changing your SSH config, **on your laptop** one command starts the page (if it
-isn't running), opens a tunnel to it and opens your browser:
+**Logged in over SSH** (Terminal or iTerm2 on a Mac, say), the page starts in the
+background, so it keeps running after you log out, and `gcf gui` prints one line to run
+**on your laptop**:
 
 ```bash
 ssh you@machine cat src/GCF_with3N/tools/gcf/gcf-open | sh -s you@machine
 ```
 
-Put your checkout's path after the second `you@machine` if it isn't `~/src/GCF_with3N`,
-and `gcf gui` options after that. Run it again whenever you like: it reuses the page and
-a tunnel that still works. It needs a POSIX shell (macOS, Linux, WSL or Git Bash), and
-with SSH keys it doesn't ask for your password.
+Press Cmd-T for a new tab on your Mac and paste it there. It starts the page if it isn't
+running, opens a tunnel to it, and opens your browser on it. The first time, it asks
+whether to add the shortcut **`gcf-gui`** to your shell (`~/.zshrc`). Say yes, and from
+then on you only type `gcf-gui` in any terminal on your Mac: no logging in first, nothing
+to set up.
+
+Why not a link to click in the SSH terminal? Only the laptop's `ssh` can open a tunnel to
+the page, and nothing this machine prints can make it do that. So the laptop runs that
+line, which does.
+
+- It needs `ssh` and a POSIX shell: macOS, Linux, WSL or Git Bash.
+- With SSH keys it never asks for your password. Without them it asks once each time it
+  connects: the connection it opens stays in the background and carries the tunnel, and
+  `gcf-gui` reuses it while it lasts.
+- When the laptop sleeps or changes network, the connection drops within about half a
+  minute. Run `gcf-gui` again: it reconnects, on the same address as before.
+- Put your checkout's path after the second `you@machine` if it isn't
+  `~/src/GCF_with3N` (`gcf gui` prints it for you), and `gcf gui` options after that;
+  options also go after `gcf-gui`.
+- `GCF_OPEN_SHORTCUT=yes` or `no` answers the shortcut question without asking; a "no"
+  is remembered. To remove the shortcut, delete its two lines from `~/.zshrc`.
+
+**In a VS Code or Cursor remote terminal**, or on a desktop you're sitting at, `gcf gui`
+opens the page by itself (`--no-browser` stops that): VS Code forwards the port for you.
+
+**If you'd rather keep a tunnel in your SSH config**, the page also listens on a socket
+file that only you can open, usually `~/.config/gcf/gui.sock` (`gcf gui --status` prints it).
+Add `LocalForward 8765 <that path>` under the machine's `Host` in `~/.ssh/config` on your
+laptop and log in again; `http://localhost:8765/?token=...` then works while you're
+logged in, and `gcf gui` shows that link once it has. If your laptop shares one
+connection among your SSH sessions (`ControlMaster`), a forward added to the config only
+takes effect on a new connection.
 
 The address includes a `?token=...` part. The token is the password, so don't share the
 address. It stays the same when the page restarts, so you can bookmark it.
 
-`./gcf gui --status` shows the address again, and `./gcf gui --stop` stops the page.
+`./gcf gui --status` shows how to open it again, and `./gcf gui --stop` stops the page.
 Stopping the page doesn't stop your runs.
 
 Runs go to `<repository>/runs`, or `~/gcf_runs` if you can't write to the checkout.
