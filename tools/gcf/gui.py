@@ -1074,7 +1074,13 @@ class App:
         stem = f"{a['run']}.{a['stage']}--{b['run']}.{b['stage']}--{max_events}"
         js, png = out_dir / f"{stem}.json", out_dir / f"{stem}.png"
         newest = max(Path(path_a).stat().st_mtime, Path(path_b).stat().st_mtime)
-        if not (js.is_file() and png.is_file() and js.stat().st_mtime > newest):
+        kept = js.is_file() and png.is_file() and js.stat().st_mtime > newest
+        if kept:
+            try:
+                kept = all("mean_a_weighted" in o for o in json.loads(js.read_text()).get("observables", []))
+            except ValueError:
+                kept = False
+        if not kept:
             proc = subprocess.run([sys.executable, str(COMPARE_SCRIPT), path_a, path_b, "--weighted",
                                    "--max-events", str(max_events), "--json", str(js), "-o", str(png)],
                                   capture_output=True, text=True, timeout=3600, cwd=str(self.runs_dir))
