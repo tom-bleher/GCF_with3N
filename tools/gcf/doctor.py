@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 
 from . import config, runner, schema
@@ -64,6 +65,30 @@ def logout_kills_processes():
     return "Linger=yes" not in linger.stdout
 
 
+_container_probes = {}     # launcher -> (when, result): the page asks at every load
+
+
+def eic_shell_check(shell):
+    """A launcher is not a working container: its image may be missing or unreadable.
+    Only the EIC / ePIC stage needs it, so this never counts as a failure."""
+    name = "eic-shell, for the ePIC chain"
+    if not Path(shell).exists():
+        return check(name, True, f"not found at {shell}; only the EIC / ePIC stage needs it")
+    if os.environ.get("APPTAINER_CONTAINER") or os.environ.get("SINGULARITY_CONTAINER"):
+        return check(name, True, "not tried from inside the container")
+    when, problem = _container_probes.get(shell, (0, None))
+    if time.time() - when > (600 if problem == "" else 30):
+        problem = runner.container_problem(shell)
+        _container_probes[shell] = (time.time(), problem)
+    if problem is None:
+        return check(name, True, "could not tell: the container took over 20 s to answer")
+    if problem:
+        return check(name, False, f"{shell} can't start its container, so the EIC / ePIC stage won't run: "
+                           f"{runner.container_summary(problem)}",
+                     runner.container_fix(problem, shell), required=False)
+    return check(name, True)
+
+
 def has_module(name):
     return importlib.util.find_spec(name) is not None
 
@@ -100,8 +125,7 @@ def checks(runs_dir=None):
     scipy = has_module("scipy")
     out.append(check("Python package for comparing runs", scipy, "" if scipy else "missing: scipy",
                      "" if scipy else "pip install -r tools/gcf/requirements.txt", required=False))
-    shell = config.eic_software_defaults()["eic_shell"]
-    out.append(check("eic-shell, for the ePIC chain", True, "" if Path(shell).exists() else f"not found at {shell}; only the EIC / ePIC stage needs it"))
+    out.append(eic_shell_check(config.eic_software_defaults()["eic_shell"]))
     base = runs_dir if runs_dir.exists() else next((p for p in runs_dir.parents if p.exists()), Path("/"))
     writable = os.access(base, os.W_OK)
     out.append(check(f"runs directory {runs_dir}", writable, "" if writable else "not writable",
