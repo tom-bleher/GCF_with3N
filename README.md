@@ -26,27 +26,50 @@ and validation: [docs/PIPELINE.md](docs/PIPELINE.md).
 
 `./gcf gui` is a web page for setting up event generation, running it and reading the
 results. **[docs/GUI.md](docs/GUI.md) is the full guide**, and the page's **docs** link
-opens it too. In short:
+opens it too.
+
+Once, on the analysis machine:
 
 ```
-./install.sh                 # once: builds the programs and sets up the Python packages
+./install.sh                 # builds the programs and sets up the Python packages
 ./gcf doctor                 # checks that everything is ready, and says how to fix what isn't
-./gcf gui                    # starts the page; over SSH, prints a line to run on your laptop
 ```
 
-Over SSH, paste that line in a terminal **on your laptop** (Cmd-T on a Mac). It starts
-the page if needed, opens a tunnel and your browser, and offers to add the shortcut
-`gcf-gui`, so that next time you only type that:
+### From a Mac over SSH (Terminal or iTerm2)
 
-```
-ssh you@machine cat src/GCF_with3N/tools/gcf/gcf-open | sh -s you@machine
-```
+1. Logged in to the analysis machine, in this checkout, run `./gcf gui`. It starts the
+   page in the background (it keeps running after you log out) and prints one line,
+   with your user name, the machine's address and this checkout filled in, like:
 
-In a VS Code remote terminal the page opens by itself. The token in the address is the
-password, so don't share it.
-`./gcf gui --status` shows it again, and `./gcf gui --stop` stops the page.
+   ```
+   ssh you@machine cat src/GCF_with3N/tools/gcf/gcf-open | sh -s you@machine
+   ```
 
-Then:
+2. Press **Cmd-T** for a new tab on your Mac, paste that line there and press Enter.
+   It starts the page if it isn't running, opens a tunnel to it and opens your browser
+   on it.
+3. It asks `Add the shortcut gcf-gui to ~/.zshrc ...? [Y/n]`. Press Enter.
+4. From then on, type **`gcf-gui`** in any terminal on your Mac and the page opens.
+   No need to log in first. After the Mac has slept or changed network, just run it
+   again: it reconnects, at the same address, so a bookmark keeps working.
+
+With SSH keys you're never asked for a password; without them, once per connection.
+The same works from a Linux laptop, WSL or Git Bash. A link printed on the remote
+machine can't open the page by itself: only your laptop's `ssh` can open the tunnel,
+which is what that line does.
+
+### Elsewhere
+
+In a VS Code or Cursor remote terminal, or on a desktop you're sitting at, `./gcf gui`
+opens the page by itself.
+
+The token in the address (`?token=...`) is the password, so don't share it.
+`./gcf gui --status` shows how to open the page again, and `./gcf gui --stop` stops it
+(runs already started keep going).
+
+### Your first run
+
+Once the page is open:
 
 1. On a new page, press **Fill in a small test run**, then **Start run**. It takes under
    a minute.
