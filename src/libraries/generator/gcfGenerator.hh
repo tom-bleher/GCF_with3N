@@ -49,6 +49,7 @@ class gcfGenerator
   double get_QSqmax() const { return QSqmax; }
   double get_xBmin() const { return xBmin; }
   double get_xBmax() const { return xBmax; }
+  bool in_xB_nu_window(double QSq, double nu) const;
 
   void randomize_cutoff();
 

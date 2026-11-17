@@ -398,6 +398,8 @@ bool QEGeneratorFSI::solve_lepton_kinematics(double &weight, int lead_type,
   vk_int_target.SetVect(vk_int);
   vk_int_target.SetT(Ek_int);
 
+  if (!in_xB_nu_window(QSq, Ebeam_int - Ek_int)) { weight=0.; return false; }
+
   q_target = vbeam_int_target - vk_int_target;
 
   vLead_target = v1_target + vbeam_int_target - vk_int_target;
@@ -707,6 +709,7 @@ void QEGeneratorFSI::generate_event_lightcone(double &weight, int &lead_type, in
   else { omega = (myRand->Rndm()>0.5)? omega1 : omega2; weight *= 2.; }
 
   double Ek_int = Ebeam_int - omega;
+  if (!in_xB_nu_window(QSq, omega)) { weight=0.; return; }
   double cosThetak = 1. - QSq/(2.*Ebeam_int*Ek_int);
 
   if (fabs(cosThetak) > 1.) { weight=0.; return; }

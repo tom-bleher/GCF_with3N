@@ -504,6 +504,24 @@ double gcfGenerator::radiationFactor(double Ebeam, double Ek, double QSq)
   return (1 - deltaHard(QSq)) * pow(Ebeam/sqrt(Ebeam*Ek),lambda_ei) * pow(Ek/sqrt(Ebeam*Ek),lambda_ef);
 }
 
+// True when the vertex kinematics (QSq, nu) lie inside the xB and nu windows
+// of the phase-space file. A window left at its default (0, 0) is not applied.
+// Like the QSq range, the windows act on the vertex (pre-radiation) electron.
+bool gcfGenerator::in_xB_nu_window(double QSq, double nu) const
+{
+  if ((numin != 0. || numax != 0.) && (nu < numin || nu > numax))
+    return false;
+  if (xBmin != 0. || xBmax != 0.)
+    {
+      if (nu <= 0.)
+        return false;
+      double xB = QSq/(2.*mN*nu);
+      if (xB < xBmin || xB > xBmax)
+        return false;
+    }
+  return true;
+}
+
 double gcfGenerator::calcCoulombEnergy() {
   if (myInfo->get_Z() == 1 && myInfo->get_N() == 1) {
     return 0;
