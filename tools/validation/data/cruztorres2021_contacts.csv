@@ -1,0 +1,129 @@
+# Nuclear contacts published in R. Cruz-Torres et al., "Many-body factorization and
+# position-momentum equivalence of nuclear short-range correlations", Nature Phys. 17,
+# 306 (2021), doi:10.1038/s41567-020-01053-7 ("Scale and Scheme" paper).
+# Numbers copied from its Source Data file 41567_2020_1053_MOESM6_ESM.csv
+# (tables "C_{pn}^{s=1}" and "C_{pp}^{s=0}"). Only the numbers are kept here, with
+# the citation; the original file is at the doi above.
+#
+# contact: pn1 = C_pn^{s=1}, pp0 = C_pp^{s=0}. space: r or k. Units as published,
+# percent per A/2 (gcfSRC.cc multiplies them by A/2). interaction: gcfSRC enum name
+# (AV18 = AV18+UX, AV4Pc = AV4'+UIX_c, N2LO_10/12 = N2LO(1.0/1.2 fm),
+# NV2_1a = NV2+3-Ia*). Cells marked NA in the source are omitted.
+# In the source C_pp^{s=0} table the column header omits 2H, so every data column
+# sits one nucleus right of its label. The nuclei below follow the data columns
+# (2H, 3H, 3He, ...), as checked against the pp ratio table in MOESM5
+# (e.g. AV18 r: 3H/4He = 0.549/0.567 = 0.968, published 0.969). For 3H the pp0
+# column is the nn contact.
+contact,space,interaction,nucleus,value,unc
+pn1,r,AV18,2H,4.898,0.080
+pn1,r,AV18,3H,6.246,0.856
+pn1,r,AV18,3He,6.851,0.822
+pn1,r,AV18,4He,11.605,1.161
+pn1,r,AV18,6Li,10.140,1.015
+pn1,r,AV18,12C,13.135,1.324
+pn1,r,AV18,16O,11.372,1.158
+pn1,r,AV18,40Ca,11.570,1.196
+pn1,k,AV18,2H,4.764,0.007
+pn1,k,AV18,3H,6.441,0.645
+pn1,k,AV18,3He,6.249,0.625
+pn1,k,AV18,4He,12.274,1.232
+pn1,k,AV18,6Li,10.492,1.056
+pn1,k,AV18,12C,15.876,1.770
+pn1,r,AV4Pc,2H,1.186,0.034
+pn1,r,AV4Pc,3H,1.533,0.154
+pn1,r,AV4Pc,3He,1.527,0.153
+pn1,r,AV4Pc,4He,2.685,0.272
+pn1,r,AV4Pc,6Li,2.248,0.225
+pn1,r,AV4Pc,12C,2.458,0.249
+pn1,r,AV4Pc,16O,2.910,0.293
+pn1,r,AV4Pc,40Ca,3.284,0.339
+pn1,k,AV4Pc,2H,1.165,0.037
+pn1,k,AV4Pc,3H,1.515,0.152
+pn1,k,AV4Pc,3He,1.466,0.147
+pn1,k,AV4Pc,4He,2.995,0.300
+pn1,k,AV4Pc,6Li,2.205,0.222
+pn1,k,AV4Pc,12C,2.676,0.272
+pn1,k,AV4Pc,16O,2.911,0.307
+pn1,k,AV4Pc,40Ca,4.476,0.460
+pn1,r,N2LO_10,2H,4.664,0.009
+pn1,r,N2LO_10,3H,6.237,0.718
+pn1,r,N2LO_10,3He,6.113,0.719
+pn1,r,N2LO_10,4He,10.508,1.308
+pn1,r,N2LO_10,6Li,8.434,1.026
+pn1,r,N2LO_10,12C,10.434,1.044
+pn1,r,N2LO_10,16O,9.103,1.020
+pn1,k,N2LO_10,2H,4.691,0.030
+pn1,k,N2LO_10,3H,6.885,0.789
+pn1,k,N2LO_10,3He,6.703,0.702
+pn1,k,N2LO_10,4He,12.372,1.372
+pn1,k,N2LO_10,6Li,9.444,1.141
+pn1,k,N2LO_10,12C,10.643,1.094
+pn1,k,N2LO_10,16O,10.338,1.310
+pn1,r,N2LO_12,2H,4.141,0.010
+pn1,r,N2LO_12,3H,5.980,0.695
+pn1,r,N2LO_12,3He,5.705,0.870
+pn1,r,N2LO_12,4He,11.111,2.595
+pn1,r,N2LO_12,6Li,9.011,1.478
+pn1,k,N2LO_12,2H,4.244,0.032
+pn1,k,N2LO_12,3H,6.111,1.011
+pn1,k,N2LO_12,3He,5.717,0.730
+pn1,k,N2LO_12,4He,10.446,2.223
+pn1,k,N2LO_12,6Li,8.650,1.545
+pn1,r,NV2_1a,2H,3.878,0.045
+pn1,r,NV2_1a,3He,4.637,0.573
+pn1,r,NV2_1a,4He,9.200,0.928
+pn1,k,NV2_1a,2H,3.840,0.103
+pn1,k,NV2_1a,3He,4.885,0.491
+pn1,k,NV2_1a,4He,10.143,1.022
+pp0,r,AV18,3H,0.549,0.055
+pp0,r,AV18,3He,0.536,0.054
+pp0,r,AV18,4He,0.567,0.057
+pp0,r,AV18,6Li,0.415,0.042
+pp0,r,AV18,12C,0.716,0.075
+pp0,r,AV18,16O,0.676,0.072
+pp0,r,AV18,40Ca,0.723,0.081
+pp0,k,AV18,3H,0.590,0.060
+pp0,k,AV18,3He,0.570,0.058
+pp0,k,AV18,4He,0.655,0.071
+pp0,k,AV18,6Li,0.485,0.058
+pp0,k,AV18,12C,1.140,0.210
+pp0,r,AV4Pc,3H,0.544,0.055
+pp0,r,AV4Pc,3He,0.515,0.052
+pp0,r,AV4Pc,4He,0.564,0.057
+pp0,r,AV4Pc,6Li,0.380,0.038
+pp0,r,AV4Pc,12C,0.547,0.055
+pp0,r,AV4Pc,16O,0.658,0.066
+pp0,r,AV4Pc,40Ca,0.834,0.084
+pp0,k,AV4Pc,3H,0.532,0.054
+pp0,k,AV4Pc,3He,0.515,0.052
+pp0,k,AV4Pc,4He,0.542,0.055
+pp0,k,AV4Pc,6Li,0.380,0.038
+pp0,k,AV4Pc,12C,0.653,0.067
+pp0,k,AV4Pc,16O,0.784,0.084
+pp0,k,AV4Pc,40Ca,1.329,0.144
+pp0,r,N2LO_10,3H,0.282,0.032
+pp0,r,N2LO_10,3He,0.259,0.032
+pp0,r,N2LO_10,4He,0.243,0.040
+pp0,r,N2LO_10,6Li,0.173,0.020
+pp0,r,N2LO_10,12C,0.308,0.033
+pp0,r,N2LO_10,16O,0.270,0.034
+pp0,k,N2LO_10,3H,0.521,0.060
+pp0,k,N2LO_10,3He,0.454,0.069
+pp0,k,N2LO_10,4He,0.655,0.093
+pp0,k,N2LO_10,6Li,0.501,0.074
+pp0,k,N2LO_10,12C,0.870,0.095
+pp0,k,N2LO_10,16O,0.781,0.173
+pp0,r,N2LO_12,3H,0.277,0.033
+pp0,r,N2LO_12,3He,0.239,0.041
+pp0,r,N2LO_12,4He,0.263,0.059
+pp0,r,N2LO_12,6Li,0.185,0.031
+pp0,k,N2LO_12,3H,0.687,0.119
+pp0,k,N2LO_12,3He,0.547,0.079
+pp0,k,N2LO_12,4He,0.851,0.102
+pp0,k,N2LO_12,6Li,0.668,0.104
+pp0,r,NV2_1a,3He,0.310,0.031
+pp0,r,NV2_1a,4He,0.333,0.034
+pp0,r,NV2_1a,6Li,0.250,0.025
+pp0,k,NV2_1a,3He,0.336,0.034
+pp0,k,NV2_1a,4He,0.355,0.039
+pp0,k,NV2_1a,6Li,0.282,0.032
