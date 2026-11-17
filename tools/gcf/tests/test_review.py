@@ -318,6 +318,37 @@ class TestDoctor(unittest.TestCase):
                              env=dict(os.environ, PATH=tmp))
         self.assertEqual(out.returncode, 0, out.stderr)
 
+    def launcher(self, body):
+        tmp = Path(tempfile.mkdtemp(prefix="gcf-doctor-"))
+        self.addCleanup(shutil.rmtree, tmp, ignore_errors=True)
+        path = tmp / "eic-shell"
+        path.write_text("#!/bin/sh\n" + body + "\n")
+        path.chmod(0o755)
+        return str(path)
+
+    def test_a_launcher_is_not_a_working_container(self):
+        """Doctor said ok for an eic-shell whose image was gone, so no ePIC run could start."""
+        from unittest import mock
+        from gcf import doctor
+        outside = {k: v for k, v in os.environ.items() if k not in ("APPTAINER_CONTAINER", "SINGULARITY_CONTAINER")}
+        with mock.patch.dict(os.environ, outside, clear=True):
+            broken = doctor.eic_shell_check(self.launcher(
+                'echo "FATAL:   While checking container encryption: could not open image /x/eic.sif: '
+                'failed to retrieve path for /x/eic.sif" >&2; exit 255'))
+            self.assertFalse(broken["ok"])
+            self.assertFalse(broken["required"])                # only the EIC / ePIC stage needs it
+            self.assertIn("/x/eic.sif is missing", broken["message"])
+            self.assertIn("--upgrade", broken["fix"])
+            other = doctor.eic_shell_check(self.launcher('echo "no such user namespace" >&2; exit 1'))
+            self.assertFalse(other["ok"])
+            self.assertIn("no such user namespace", other["message"])
+            self.assertEqual(other["fix"], "")
+            # eic-shell runs the commands it is given on standard input
+            self.assertTrue(doctor.eic_shell_check(self.launcher("exec sh"))["ok"])
+            absent = doctor.eic_shell_check("/nonexistent/eic-shell")
+            self.assertTrue(absent["ok"])
+            self.assertIn("not found", absent["message"])
+
     def test_a_group_of_your_own_is_nobody_else(self):
         import grp
         import pwd

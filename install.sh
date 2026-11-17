@@ -179,7 +179,7 @@ trap on_exit EXIT
 [[ "$PREFIX" == /* ]] || PREFIX="$PWD/$PREFIX"
 PREFIX="${PREFIX%/}"
 
-NSTEPS=$(( 2 + (DO_FSI ? 6 : 0) + DO_TEST ))
+NSTEPS=$(( 2 + (DO_FSI ? 7 : 0) + DO_TEST ))
 
 echo "=================================================================="
 echo " GCF_with3N install"

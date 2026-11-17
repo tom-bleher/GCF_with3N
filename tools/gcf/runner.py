@@ -808,6 +808,37 @@ def container_command(eic_shell, command):
     return ["bash", "-c", 'set -o pipefail; printf "%s\\n" "$2" | "$1"', "bash", eic_shell, command]
 
 
+def container_problem(eic_shell, timeout=20):
+    """Why eic-shell can't run a command in its container: "" if it can, None if it
+    didn't answer in time. The launcher being there says nothing about its image."""
+    try:
+        out = subprocess.run(container_command(eic_shell, 'echo "[eic] probe done"'),
+                             capture_output=True, text=True, timeout=timeout)
+    except subprocess.TimeoutExpired:
+        return None
+    except OSError as e:
+        return str(e)
+    if "[eic] probe done" in out.stdout:
+        return ""
+    return " ".join((out.stderr + out.stdout).strip().splitlines()[-3:]) or f"exit code {out.returncode}"
+
+
+MISSING_IMAGE_RE = re.compile(r"could not open image (\S+?):")    # apptainer's and singularity's wording
+
+
+def container_summary(problem):
+    """The message of a container that doesn't start, without the launcher's repetition."""
+    m = MISSING_IMAGE_RE.search(problem)
+    return f"its image {m.group(1)} is missing or can't be read" if m else problem
+
+
+def container_fix(problem, eic_shell):
+    """What to do about a container that doesn't start, where its message says enough."""
+    if MISSING_IMAGE_RE.search(problem):
+        return f"{eic_shell} --upgrade   (downloads the container image)"
+    return ""
+
+
 def stop_leftover_steps(run_dir):
     """Stop what is still running of an earlier supervisor's steps. A resume of the eic
     stage plans other steps than the ones it continues, so it can't take them over, and
@@ -975,7 +1006,10 @@ def check_eic(cfg):
     lines = [l for l in out.stdout.splitlines() if l.startswith("[eic] ")]
     if "[eic] probe done" not in lines:
         tail = (out.stderr + out.stdout).strip().splitlines()[-3:]
-        return [f"[eic] eic_shell: could not run a command in the container: {' '.join(tail)}"]
+        problem = " ".join(tail)
+        fix = container_fix(problem, eic["eic_shell"])
+        return [f"[eic] eic_shell: could not run a command in the container: {container_summary(problem)}"
+                + (f". Fix: {fix}" if fix else "")]
     return [l for l in lines if l != "[eic] probe done"]
 
 

@@ -100,7 +100,7 @@ async function refreshPhysics() {
   for (const k of Object.keys(PHYSICS_ROWS)) setTableValue(k, contacts[k] ? contacts[k][0] : null, contacts[k] ? contacts[k][1] : null);
   setTableValue("kF", p.kF === undefined ? null : p.kF);
   document.getElementById("physics-preset").classList.toggle("hidden", !(m === "2N" && p.A === 12 && p.Z === 6));
-  const masses = Object.entries(p.mRes || {}).map(([k, v]) => `${k} ${Number(v).toFixed(4)}`).join(", ");
+  const masses = Object.entries(p.mRes || {}).map(([k, v]) => (k === "residual" ? "" : k + " ") + Number(v).toFixed(4)).join(", ");
   document.getElementById("physics-masses").textContent = `Masses (GeV): target ${Number(p.mA).toFixed(4)}; residual ${masses}` +
     (p.estar_max ? `. E* range used when varying the inputs: 0 to ${p.estar_max} GeV.` : ".");
 }
