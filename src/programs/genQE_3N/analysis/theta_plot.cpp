@@ -2,6 +2,7 @@
 #include <iostream>
 #include <cmath>
 #include <vector>
+#include <algorithm>
 #include "QEGenerator_3N.hh"
 #include "constants.hh"
 #include "TVector3.h"
@@ -24,6 +25,16 @@ const double k_min = 0.35/GeVfm; // p_min 350MeV/c
 const double ktot_max = 5/GeVfm; // arbitrary 
 int k_bins = 50; // Default value
 int theta_bins = 50; // Number of bins for theta
+
+// Angles between nucleons 1-2 and 2-3 when nucleon 1 has |k| = ka, nucleon 2
+// has kb and nucleon 3 has kc (ka + kb + kc = 0 as vectors), from the law of
+// cosines. Same labelling as get_rho_ptot_f1f2f3(ka, kb, kc).
+static void labelled_angles(double ka, double kb, double kc, double &theta12, double &theta23) {
+    double c12 = (kc*kc - ka*ka - kb*kb) / (2.0 * ka * kb);
+    double c23 = (ka*ka - kb*kb - kc*kc) / (2.0 * kb * kc);
+    theta12 = acos(std::max(-1.0, std::min(1.0, c12)));
+    theta23 = acos(std::max(-1.0, std::min(1.0, c23)));
+}
 
 int main(int argc, char **argv) {
     if (argc > 2) {
@@ -80,8 +91,13 @@ int main(int argc, char **argv) {
                             double p_tot = (k[a] + k[b] + k[c]) * GeVfm;
                             double weight = myGen->get_rho_ptot_f1f2f3(k[a], k[b], k[c]) / (p_tot * p_tot);
                             if (weight > 0) {
-                                int bin12 = std::min(int(theta12 / dtheta), theta_bins - 1);
-                                int bin23 = std::min(int(theta23 / dtheta), theta_bins - 1);
+                                // Bin the angles of this labelling (k[a], k[b], k[c]),
+                                // not the sorted (k1, k2, k3): theta12 of the sorted
+                                // triangle is always > 90 deg.
+                                double perm12, perm23;
+                                labelled_angles(k[a], k[b], k[c], perm12, perm23);
+                                int bin12 = std::min(int(perm12 / dtheta), theta_bins - 1);
+                                int bin23 = std::min(int(perm23 / dtheta), theta_bins - 1);
                                 heatmap[bin12][bin23] += weight;
                             }
                         }
