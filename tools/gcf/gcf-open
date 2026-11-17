@@ -41,12 +41,14 @@ ssh_dir=$HOME/.ssh
 if [ $(( ${#ssh_dir} + 45 )) -lt 100 ] && { [ -d "$ssh_dir" ] || mkdir -m 700 "$ssh_dir" 2>/dev/null; }; then
     ctl=$ssh_dir/gcf-%C
 fi
+# -n: never read stdin. Piped into `sh -s`, this script *is* stdin, and a shell that reads
+# it a line at a time (bash, macOS's /bin/sh) would lose the rest of it to ssh.
 rssh() {
     if [ -n "$ctl" ]; then
-        ssh -o ServerAliveInterval=10 -o ServerAliveCountMax=3 \
+        ssh -n -o ServerAliveInterval=10 -o ServerAliveCountMax=3 \
             -o ControlMaster=auto -o "ControlPath=$ctl" -o ControlPersist=yes "$@"
     else
-        ssh -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$@"
+        ssh -n -o ServerAliveInterval=10 -o ServerAliveCountMax=3 "$@"
     fi
 }
 
@@ -124,17 +126,17 @@ fi
 url="http://127.0.0.1:$local_port/?token=$token"
 opened=yes
 if [ -n "${BROWSER:-}" ]; then
-    $BROWSER "$url" >/dev/null 2>&1 &
+    $BROWSER "$url" </dev/null >/dev/null 2>&1 &
 elif [ "$(uname -s)" = Darwin ]; then
-    open "$url"
+    open "$url" </dev/null
 elif command -v wslview >/dev/null 2>&1; then
-    wslview "$url"
+    wslview "$url" </dev/null
 elif grep -qi microsoft /proc/version 2>/dev/null; then
-    cmd.exe /c start "" "$url" >/dev/null 2>&1
+    cmd.exe /c start "" "$url" </dev/null >/dev/null 2>&1
 elif command -v xdg-open >/dev/null 2>&1; then
-    xdg-open "$url" >/dev/null 2>&1 &
+    xdg-open "$url" </dev/null >/dev/null 2>&1 &
 elif command -v start >/dev/null 2>&1; then
-    start "$url"
+    start "$url" </dev/null
 else
     opened=
 fi
@@ -149,7 +151,7 @@ echo "The token is the password: don't share the address."
 # same kind of connection (so a password, if any, is asked once). Offered once: a "no"
 # is remembered. GCF_OPEN_SHORTCUT=yes or no answers without asking.
 shortcut_line() {
-    line="ssh"
+    line="ssh -n"
     if [ -n "$ctl" ]; then
         line="$line -o ServerAliveInterval=10 -o ServerAliveCountMax=3 -o ControlMaster=auto"
         line="$line -o ControlPath=$ctl -o ControlPersist=yes"

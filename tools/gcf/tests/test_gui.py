@@ -1630,11 +1630,13 @@ FAKE_SSH = """#!/bin/sh
 echo "$*" >> "$FAKE_SSH_LOG"
 forward=
 op=
+stdin=yes
 while [ $# -gt 0 ]; do
     case $1 in
         -L) forward=$2; shift 2 ;;
         -O) op=$2; shift 2 ;;
         -o) shift 2 ;;
+        -n|-f) stdin=; shift ;;
         -*) shift ;;
         *) break ;;
     esac
@@ -1648,6 +1650,8 @@ fi
 if [ -n "$forward" ]; then
     exec python3 "$FAKE_FORWARDER" "$forward" "$FAKE_FORWARDS"
 fi
+# Like ssh, read what comes in on stdin, for the remote command (unless -n or -f).
+[ -z "$stdin" ] || cat > /dev/null
 cd "$HOME" && sh -c "$*"
 """
 
@@ -1912,6 +1916,22 @@ class TestOpening(unittest.TestCase):
         self.assertEqual(self.opened_urls(5, count=2), [urls[0], urls[0]])
         self.assertEqual(log.read_text().count(" -L "), tunnels)
 
+    def test_the_pasted_line_works_with_bash_as_sh(self):
+        """The line is pasted as `ssh ... cat gcf-open | sh -s ...`, so the script comes in
+        on stdin. macOS's /bin/sh is bash, which reads it a line at a time: an ssh in the
+        script that read stdin would swallow the rest of it."""
+        if not shutil.which("curl") or not shutil.which("bash"):
+            self.skipTest("curl or bash is not installed")
+        home, env = self.laptop()
+        env["FAKE_MASTER"] = "1"
+        line = (f"ssh me@far cat src/GCF_with3N/tools/gcf/gcf-open | bash -s me@far --port {self.port} "
+                f"--host 127.0.0.2 --runs-dir {self.tmp / 'runs'}")
+        out = subprocess.run(["sh", "-c", line], env=env, stdin=subprocess.DEVNULL,
+                             capture_output=True, text=True, timeout=120)
+        self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
+        self.assertIn("Sent http://127.0.0.1:", out.stdout)
+        self.assertEqual(len(self.opened_urls(5)), 1, out.stdout + out.stderr)
+
     def test_the_shortcut_is_offered_and_works(self):
         """GCF_OPEN_SHORTCUT=yes answers for the person: an alias in ~/.zshrc, once, that
         opens the same page again."""
@@ -1933,7 +1953,7 @@ class TestOpening(unittest.TestCase):
         # so it finds it and opens it again.
         del env["GCF_OPEN_SHORTCUT"]
         out = subprocess.run(["sh", "-c", f"{alias} --port {self.port} --host 127.0.0.2 --runs-dir {self.tmp / 'runs'}"],
-                             env=env, capture_output=True, text=True, timeout=120)
+                             env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120)
         self.assertEqual(out.returncode, 0, out.stdout + out.stderr)
         urls = self.opened_urls(5, count=3)
         self.assertEqual(len(set(urls)), 1, urls)
