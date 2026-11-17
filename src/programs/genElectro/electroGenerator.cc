@@ -37,17 +37,18 @@ void electroGenerator::generate_event(double &weight, int &meson_type, int &bary
   weight *= 4.;
 
   // Decide what branching ratio to generate (Currently only implemented gamma p -> J/psi p and equivalent neutron channel)
+  // The J/psi is neutral, so the outgoing baryon is the same species as the struck nucleon.
   double mMeson;
   double mBaryon;
   if (lead_type == pCode)
     {
       meson_type = JpsiCode;
-      baryon_type = nCode;
+      baryon_type = pCode;
     }
   else
     {
       meson_type = JpsiCode;
-      baryon_type = pCode;
+      baryon_type = nCode;
     }
   mMeson = mJpsi;
   mBaryon = mN;
