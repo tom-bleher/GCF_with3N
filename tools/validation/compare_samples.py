@@ -241,6 +241,12 @@ def plot(results, A, B, output, weighted):
     plt.close(fig)
 
 
+def weighted_mean(x, w):
+    ok = np.isfinite(x) & np.isfinite(w)
+    total = np.sum(w[ok])
+    return float(np.sum(x[ok] * w[ok]) / total) if total > 0 else float("nan")
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n\n")[0])
     ap.add_argument("a")
@@ -280,7 +286,8 @@ def main():
             worst = min(worst, decide)
         results.append(dict(name=name, bins=bins, chi2=float(chi2), ndf=ndf, p=float(p),
                             chi2_weighted=chi2w, ndf_weighted=ndfw, p_weighted=pw,
-                            mean_a=float(np.nanmean(xa_)), mean_b=float(np.nanmean(xb_))))
+                            mean_a=float(np.nanmean(xa_)), mean_b=float(np.nanmean(xb_)),
+                            mean_a_weighted=weighted_mean(xa_, A["w"]), mean_b_weighted=weighted_mean(xb_, B["w"])))
         print(f"{name:44s} {chi2:7.1f}/{ndf:<4d} {p:9.3f}  {chi2w:7.1f}/{ndfw:<4d} {pw:9.3f}  "
               f"{np.nanmean(xa_):.4f} / {np.nanmean(xb_):.4f}")
     ok = worst >= args.alpha and abs(pull) < 4

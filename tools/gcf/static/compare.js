@@ -68,9 +68,9 @@ function compareResult(r) {
     el("p", { class: "setup" }, `Pull of Σw / attempts, A − B: ${r.pull >= 0 ? "+" : ""}${r.pull.toFixed(2)} σ.`));
   const pfmt = p => p === null ? "–" : (p <= 0.0011 ? "≤ 0.001" : p.toFixed(3));
   parts.push(el("table", { class: "compact" },
-    el("thead", {}, el("tr", {}, ...["Observable", "Weighted p", "Unweighted p", "Mean A", "Mean B"].map(h => el("th", { scope: "col" }, h)))),
+    el("thead", {}, el("tr", {}, ...["Observable", "Weighted p", "Unweighted p", "Weighted mean A", "Weighted mean B"].map(h => el("th", { scope: "col" }, h)))),
     el("tbody", {}, ...r.observables.map(o => el("tr", { class: o.p_weighted !== null && o.p_weighted <= r.alpha ? "flagged" : null },
-      el("td", {}, o.name), el("td", {}, pfmt(o.p_weighted)), el("td", {}, pfmt(o.p)), el("td", {}, fmtNum(o.mean_a)), el("td", {}, fmtNum(o.mean_b)))))));
+      el("td", {}, o.name), el("td", {}, pfmt(o.p_weighted)), el("td", {}, pfmt(o.p)), el("td", {}, fmtNum(o.mean_a_weighted)), el("td", {}, fmtNum(o.mean_b_weighted)))))));
   if (r.plot) {
     const src = tokenUrl(`api/compare/${encodeURIComponent(r.plot)}`);
     parts.push(el("a", { href: src, target: "_blank", rel: "noopener", title: "Open full size" },

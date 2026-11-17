@@ -147,6 +147,14 @@ class TestCompare(GuiCase):
         self.assertEqual(r["notes"], [])
         self.assertEqual(self.gui.request(f"api/compare/{r['plot']}")[0], 200)
 
+    def test_the_means_are_weighted_like_the_test_and_the_plots(self):
+        """They were unweighted: a mean Q2 of 4.5 GeV^2 next to a weighted distribution peaking near 1.2."""
+        r = self.compare("cmp_a", "cmp_b", stage="generate")
+        q2 = {o["name"]: o for o in r["observables"]}["Q2 [GeV^2]"]
+        self.assertLess(q2["mean_a_weighted"], 2.5)      # the cross section falls steeply with Q2
+        self.assertGreater(q2["mean_a"], 3.5)            # the events are drawn flat in Q2 over 1 to 10
+        self.assertAlmostEqual(q2["mean_a_weighted"], q2["mean_b_weighted"], delta=0.3)
+
     def test_another_cascade_model_is_flagged(self):
         """hN and hA on the same seed: the same generated events, other final states."""
         r = self.compare("cmp_a", "cmp_ha")
@@ -830,6 +838,20 @@ class TestCommands(unittest.TestCase):
 
 class TestValidation(unittest.TestCase):
     """What the config refuses as you type, and that the binary agrees."""
+
+    def test_a_rejected_setup_is_explained_by_the_generator(self):
+        """It was explained with the end of GENIE's banner ('Tel: +44...'), on the model field."""
+        from gcf import config, runner
+        harness.need_binaries()
+        for model in ("2N", "MF"):
+            cfg = config.validate({"run": {"name": "x", "stages": ["generate"]},
+                                   "generate": {"model": model, "beam": 0.4, "events": 100, "target": [12, 6]}})
+            problems = runner.check_setup(cfg)
+            self.assertEqual(len(problems), 1, problems)
+            self.assertTrue(problems[0].startswith("[generate] beam: "), problems[0])
+            self.assertIn("phase space looks empty", problems[0])
+            self.assertNotIn("Tel:", problems[0])
+            self.assertNotIn("Messenger", problems[0])
 
     def problem(self, generate=None, fsi=None, stages=("generate", "fsi")):
         from gcf import config
