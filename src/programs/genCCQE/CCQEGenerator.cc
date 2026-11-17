@@ -115,6 +115,13 @@ void CCQEGenerator::generate_event(double &weight, double &Eneutrino, int &rec_t
 	k_perp = (- b - sqrt(D))/2.;
     }
 
+  // Both roots negative: that is the phik+pi two-root case, already generated there
+  if (k_perp < 0.)
+    {
+      weight=0.;
+      return;
+    }
+
   double k_plus = (sq(mk) + sq(k_perp))/k_minus;
   double kz = (k_plus - k_minus)/2.;
   TVector3 vk(k_perp*cos(phik),k_perp*sin(phik),kz);

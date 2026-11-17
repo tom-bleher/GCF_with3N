@@ -133,6 +133,13 @@ void QEGenerator::generate_event(double &weight, int &lead_type, int &rec_type, 
 	k_perp = (- b - sqrt(D))/2.;
     }
 
+  // Both roots negative: that is the phik+pi two-root case, already generated there
+  if (k_perp < 0.)
+    {
+      weight=0.;
+      return;
+    }
+
   double k_plus = sq(k_perp)/k_minus;
   double kz = (k_plus - k_minus)/2.;
   TVector3 vk_int(k_perp*cos(phik),k_perp*sin(phik),kz);
