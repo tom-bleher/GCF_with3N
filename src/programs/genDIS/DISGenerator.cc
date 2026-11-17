@@ -85,6 +85,8 @@ void DISGenerator::generate_event(double &weight, int &lead_type, int &rec_type,
   // Constructing 4-momenta
   double pAm2_plus = mbar*alphaAm2;
   double pAm2_minus = (vAm2_perp.Mod2() + sq(mAm2))/pAm2_plus;
+  if (mAm2 == 0)
+    pAm2_minus = 0.;
   double EAm2 = 0.5*(pAm2_plus + pAm2_minus);
   double pAm2z = 0.5*(pAm2_plus - pAm2_minus);
   vAm2_target.SetXYZT(vAm2_perp.X(),vAm2_perp.Y(),pAm2z,EAm2);
@@ -107,7 +109,8 @@ void DISGenerator::generate_event(double &weight, int &lead_type, int &rec_type,
   v1_target_onshell.RotateY(rot_theta);
   v1_target_onshell.RotateZ(rot_phi);
   
-  double p1_minus = mA - pAm2_plus - pRec_plus;
+  // The nucleus at rest has P- = mA; the on-shell A-2 and recoil carry their own minus components
+  double p1_minus = mA - pAm2_minus - pRec_minus;
   double E1 = 0.5*(p1_plus + p1_minus);
   double p1z = 0.5*(p1_plus - p1_minus);
   TLorentzVector v1_target(v1_perp.X(),v1_perp.Y(),p1z,E1);
