@@ -6,6 +6,7 @@
 #include "TLorentzVector.h"
 #include "TFile.h"
 #include "TTree.h"
+#include "TH1D.h"
 
 using namespace std;
 
@@ -101,7 +102,7 @@ int main(int argc, char **argv) {
     tree->Branch("delta_jacobian", &br_delta_jacobian, "delta_jacobian/D");
 
     // Counters
-    int event_count = 0;
+    long long event_count = 0;   // attempts, including weight = 0 rejections
     int success_count = 0;
     double total_weight = 0.0;
     const int progress_interval = 10000;
@@ -179,6 +180,12 @@ int main(int argc, char **argv) {
     // ---- Write tree and close ----
     outfile->cd();
     tree->Write();
+    // Total generation attempts (including weight = 0 rejections, which are
+    // not stored in the tree), as in genQE_3N_FSI: a 1-bin histogram so hadd
+    // sums it across parallel chunks, for per-attempt weight normalization.
+    TH1D hAttempts("hAttempts", "generation attempts", 1, 0., 1.);
+    hAttempts.SetBinContent(1, (double)event_count);
+    hAttempts.Write();
     outfile->Close();
 
     // ---- Print summary ----
