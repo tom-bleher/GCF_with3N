@@ -1447,6 +1447,28 @@ class TestBrowser(GuiCase):
         self.assertEqual(self.driver.find_element(By.ID, "f-generate-beam").get_attribute("value"), "4.5")
         self.driver.execute_script("resetForm()")
 
+    def test_config_tools_and_run_name_are_usable_on_run_setup(self):
+        """Load config and Examples had ended up inside the Physics inputs tab, and the default name was cut off."""
+        self.open()
+        shown = self.driver.execute_script("""
+            const bar = document.querySelector('#form-card .actionbar .actions');
+            return [...bar.children].filter(e => e.offsetParent).map(e => e.id || e.textContent.trim());""")
+        self.assertIn("example-select", shown)
+        self.assertIn("Load config…", shown)
+        name, fits = self.driver.execute_script(
+            "const i = document.getElementById('f-run-name'); return [i.value, i.scrollWidth <= i.clientWidth];")
+        self.assertTrue(fits, f"the run name {name} does not fit its field")
+
+    def test_masses_line_names_a_lone_residual_once(self):
+        """It read 'residual residual 8.3928' for the models with one residual."""
+        from selenium.webdriver.common.by import By
+        from selenium.webdriver.support.ui import WebDriverWait
+        self.open()                                         # the default form: 3N on 12C
+        self.driver.execute_script("document.getElementById('tab-physics').click()")
+        masses = self.driver.find_element(By.ID, "physics-masses")
+        WebDriverWait(self.driver, 20).until(lambda d: "target" in masses.text)
+        self.assertRegex(masses.text, r"; residual \d")
+
     def test_scan_tab_from_form_to_table_and_chart(self):
         from selenium.webdriver.common.by import By
         from selenium.webdriver.support.ui import Select, WebDriverWait

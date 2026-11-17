@@ -100,7 +100,7 @@ async function loadConfigText(text, source, keepName) {
 }
 
 function buildConfigTools(examples) {
-  const bar = document.querySelector("#form-card .actions");
+  const bar = document.querySelector("#form-card .actionbar .actions");   // not the Physics tab's buttons
   const file = el("input", { type: "file", accept: ".toml,text/plain", class: "hidden", id: "config-file",
     onchange: async () => { if (file.files[0]) await loadConfigText(await file.files[0].text(), file.files[0].name, true); file.value = ""; } });
   const sel = el("select", { id: "example-select", "aria-label": "Fill the form from an example",

@@ -429,7 +429,7 @@ function makeField(section, o) {
   }
   const wide = (section === "fsi" && (o.key === "input" || o.key === "keep")) || o.kind === "slices"
     || (section === "eic" && (o.key === "sample" || (o.kind === "str" && !o.choices)));
-  return el("div", { class: "field" + (wide ? " wide" : "") + (o.kind === "bool" ? " check-field" : "") + (o.kind === "target" ? " target" : ""),
+  return el("div", { class: "field" + (wide ? " wide" : "") + (o.kind === "bool" ? " check-field" : "") + (o.kind === "target" || (section === "run" && o.key === "name") ? " target" : ""),
     "data-section": section, "data-key": o.key, "data-models": (o.models || []).join(","), "data-advanced": o.advanced ? "1" : "" },
     ...parts, el("span", { class: "ferr hidden" }));
 }
