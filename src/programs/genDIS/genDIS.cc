@@ -32,8 +32,11 @@ void Usage()
        << "Optional flags:\n"
        << "-v: Verbose\n"
        << "-P: Use text file to specify phase space\n"
+       << "-E: Specify E* [GeV]\n"
        << "-M: Use randomized E* according to Barack's values\n"
-       << "-O: Turn on peaking radiation\n"
+       << "-O: Turn on peaking radiation. lambda_e is evaluated at the beam energy given, so for an\n"
+       << "    ion-rest-frame beam (EIC) the radiative tail is that of the rest-frame energy, not of\n"
+       << "    the lab beam; tools/gcf2hepmc.py rejects -O output (e + q varies between events)\n"
        << "-S: Random seed (positive integer; default 0 = random, printed at start)\n"
        << "-h: Print this message and exit\n\n\n";
 }

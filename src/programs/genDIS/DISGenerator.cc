@@ -56,6 +56,11 @@ void DISGenerator::generate_event(double &weight, int &lead_type, int &rec_type,
       return;
     }
   
+  // Initial radiation
+  TVector3 vbeam_int = (doRad ? radiateElectron(vbeam) : vbeam);
+  double Ebeam_int = vbeam_int.Mag();
+  TLorentzVector vbeam_int_target(vbeam_int,Ebeam_int);
+
   // Pick random scattering quantities
   double xB = xBmin + (min(xBmax,alpha1) - xBmin)*myRand->Rndm();
   double QSq = QSqmin + (QSqmax - QSqmin)*myRand->Rndm();
@@ -63,8 +68,8 @@ void DISGenerator::generate_event(double &weight, int &lead_type, int &rec_type,
   weight *= (min(xBmax,alpha1) - xBmin) * (QSqmax - QSqmin) * (phikmax - phikmin);
   
   double nu = QSq/(2.*mN*xB);
-  double pe_Mag = Ebeam - nu;
-  double cosThetak = 1. - QSq/(2.*Ebeam*pe_Mag);
+  double pe_Mag = Ebeam_int - nu;
+  double cosThetak = 1. - QSq/(2.*Ebeam_int*pe_Mag);
   
   if (fabs(cosThetak) > 1.)
     {
@@ -73,18 +78,19 @@ void DISGenerator::generate_event(double &weight, int &lead_type, int &rec_type,
     }
   
   double thetak = acos(cosThetak);
-  TVector3 vk;
-  vk.SetMagThetaPhi(pe_Mag,thetak,phik);
-  vk_target.SetVect(vk);
-  vk_target.SetT(pe_Mag);
+  TVector3 vk_int;
+  vk_int.SetMagThetaPhi(pe_Mag,thetak,phik);
+  TLorentzVector vk_int_target(vk_int,pe_Mag);
   
-  vq_target = vbeam_target - vk_target;
+  vq_target = vbeam_int_target - vk_int_target;
   double rot_phi = vq_target.Vect().Phi() + M_PI;
   double rot_theta = M_PI - vq_target.Vect().Theta();
   
   // Constructing 4-momenta
   double pAm2_plus = mbar*alphaAm2;
   double pAm2_minus = (vAm2_perp.Mod2() + sq(mAm2))/pAm2_plus;
+  if (mAm2 == 0)
+    pAm2_minus = 0.;
   double EAm2 = 0.5*(pAm2_plus + pAm2_minus);
   double pAm2z = 0.5*(pAm2_plus - pAm2_minus);
   vAm2_target.SetXYZT(vAm2_perp.X(),vAm2_perp.Y(),pAm2z,EAm2);
@@ -123,14 +129,23 @@ void DISGenerator::generate_event(double &weight, int &lead_type, int &rec_type,
       return;
     }
   
-  double y = (Ebeam - pe_Mag)/Ebeam;
+  // Final radiation
+  TVector3 vk = (doRad ? radiateElectron(vk_int) : vk_int);
+  vk_target.SetVect(vk);
+  vk_target.SetT(vk.Mag());
+  
+  double y = (Ebeam_int - pe_Mag)/Ebeam_int;
   double xP = xB/alpha1;
   
   // Calculate the weight
   weight *= nbGeVSq*(2*sq(alpha))/(sq(QSq))*((1.-y-sq(xB*y*mN)/QSq)*myCS->F2(xP,QSq,lead_type)/xB + sq(y)*myCS->F1(xP,QSq,lead_type)/alpha1); // DIS cross section
   
+  // Radiation factors
+  if (doRad)
+    weight *= radiationFactor(Ebeam, pe_Mag, QSq);
+
   // Determine struck parton
-  ipart = myCS->getParton(xP,QSq,lead_type,gRandom->Rndm());
+  ipart = myCS->getParton(xP,QSq,lead_type,myRand->Rndm());
 	  
   
 }
