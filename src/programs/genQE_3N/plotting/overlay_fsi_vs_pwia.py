@@ -61,8 +61,14 @@ ax.legend(frameon=False, fontsize=10)
 ax.grid(alpha=0.3, lw=0.4)
 ax.set_title(r'$E_{beam}=10.6$ GeV, $\theta_e\in[11°,12°]$, $Q^2\in[4.1,4.3]$ GeV$^2$')
 
-dbl = r_fsi / r_pw
-dbl_err = dbl * np.sqrt((e_fsi / r_fsi) ** 2 + (e_pw / r_pw) ** 2)
+# (12C FSI / 4He) / (12C PWIA / 4He) = 12C FSI / 12C PWIA: the shared 4He
+# histogram cancels, and so does its error. Take the double ratio from the two
+# (independently generated) 12C histograms directly, on the bins where both
+# single ratios are shown.
+dbl, dbl_err = ratio_with_err(a_fsi, w_fsi, a_pw, w_pw)
+shown = np.isfinite(r_fsi) & np.isfinite(r_pw)
+dbl = np.where(shown, dbl, np.nan)
+dbl_err = np.where(shown, dbl_err, np.nan)
 axd.errorbar(centers, dbl, yerr=dbl_err, fmt='o', ms=4, lw=0.8, capsize=2, color='k')
 axd.axhline(1.0, color='gray', lw=0.8, ls='--')
 axd.set_xlabel(r'$\alpha_{3N}$')
