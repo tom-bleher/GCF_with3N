@@ -410,6 +410,9 @@ int main(int argc, char ** argv)
     }
 
   fini();
+  if (doCoul)
+    cout << "Coulomb correction: " << myGen->GetNCoulombDropped()
+         << " negatively charged particles (in practice pi-) below the escape energy dropped from part_* in stored events\n";
   
   return 0;
   
